@@ -1,0 +1,15 @@
+node_modules/
+dist/
+target/
+out/
+*.log
+.DS_Store
+
+# Reference clone of Proxyshop (see CLAUDE.md)
+reference/
+
+# User-provided fonts, templates, art and golden references. Never committed.
+fixtures/local/
+
+# Tauri generated
+apps/desktop/src-tauri/gen/

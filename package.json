@@ -1,0 +1,23 @@
+{
+  "name": "cardsmith",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MPL-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @cardsmith/desktop tauri dev",
+    "build": "pnpm --filter @cardsmith/desktop tauri build",
+    "test": "vitest run",
+    "typecheck": "tsc -b && pnpm --filter @cardsmith/desktop check",
+    "survey": "tsx packages/importer/src/survey/cli.ts",
+    "spike:text": "tsx packages/render/src/spike/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

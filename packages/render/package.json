@@ -1,0 +1,14 @@
+{
+  "name": "@cardsmith/render",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MPL-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "canvaskit-wasm": "^0.42.0"
+  },
+  "devDependencies": {
+    "dejavu-fonts-ttf": "^2.37.3"
+  }
+}

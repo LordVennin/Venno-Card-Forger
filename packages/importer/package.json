@@ -1,0 +1,11 @@
+{
+  "name": "@cardsmith/importer",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MPL-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "ag-psd": "^34.2.2"
+  }
+}
