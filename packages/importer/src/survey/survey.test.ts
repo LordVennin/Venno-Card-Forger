@@ -88,7 +88,7 @@ const PSD: Psd = {
       ],
     },
     { name: "Levels 1", adjustment: { type: "levels" } as never },
-    { name: "Shape", vectorFill: { type: "color", color: { r: 0, g: 0, b: 0 } }, vectorMask: { paths: [] } },
+    { name: "Shape", vectorFill: { type: "color", color: { r: 0, g: 0, b: 0 } }, vectorMask: { paths: [] }, vectorStroke: { strokeEnabled: true, fillEnabled: true } },
     { name: "Crown", placedLayer: { id: "emb", type: "raster", transform: [0, 0, 1, 0, 1, 1, 0, 1] } },
     { name: "Art", placedLayer: { id: "ext", type: "raster", external: true, transform: [0, 0, 1, 0, 1, 1, 0, 1] } },
   ],
@@ -124,7 +124,7 @@ describe("surveyPsd", () => {
 
   it("separates enabled effects from disabled ones and records their options", () => {
     expect(survey.effects).toEqual({ dropShadow: 1, stroke: 1, bevel: 1 });
-    expect(survey.effectsDisabled).toEqual({ dropShadow: 1, outerGlow: 1 });
+    expect(survey.effectsDisabled).toEqual({ "dropShadow (effect off)": 1, "outerGlow (effect off)": 1 });
     expect(survey.effectBlendModes).toEqual({
       "dropShadow: multiply": 1, "stroke: normal": 1, "bevel: screen": 1, "bevel: multiply": 1,
     });
@@ -137,7 +137,7 @@ describe("surveyPsd", () => {
     const s = emptySurvey();
     surveyPsd({ width: 1, height: 1, children: [pixel("a", { effects: { disabled: true, satin: { enabled: true } } })] }, "x", s);
     expect(s.effects).toEqual({});
-    expect(s.effectsDisabled).toEqual({ satin: 1 });
+    expect(s.effectsDisabled).toEqual({ "satin (layer style off)": 1 });
   });
 
   it("counts adjustments and smart objects (embedded vs linked)", () => {
@@ -162,7 +162,7 @@ describe("surveyPsd", () => {
       "raster mask on group": 1, "raster mask on layer": 1, "raster mask default white (reveal outside)": 1,
       "raster mask feather": 1, "vector mask on layer": 1, "clipping layer": 1, "clipping layer: pixel": 1,
     });
-    expect(survey.layerProps).toEqual({ hidden: 1, "opacity < 100%": 1 });
+    expect(survey.layerProps).toEqual({ hidden: 1, "opacity < 100%": 1, "shape stroke": 1 });
   });
 
   it("matches layer names against the known constants", () => {

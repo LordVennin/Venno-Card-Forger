@@ -39,7 +39,7 @@ export function renderMarkdown(survey: Survey): string {
 
   h("Layer effects");
   out.push("### Enabled\n", table(survey.effects, "Effect"));
-  out.push("### Present but disabled\n", table(survey.effectsDisabled, "Effect"));
+  out.push("### Defined but switched off\n", table(survey.effectsDisabled, "Effect"));
   out.push("### Blend modes used inside effects\n", table(survey.effectBlendModes, "Effect: mode"));
   out.push("### Effect options\n", table(survey.effectOptions, "Option"));
 

@@ -13,3 +13,4 @@ fixtures/local/
 
 # Tauri generated
 apps/desktop/src-tauri/gen/
+*.tsbuildinfo

@@ -45,6 +45,9 @@ importers:
 
   packages/importer:
     dependencies:
+      '@cardsmith/render':
+        specifier: workspace:*
+        version: link:../render
       ag-psd:
         specifier: ^34.2.2
         version: 34.2.2

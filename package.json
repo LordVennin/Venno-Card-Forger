@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc -b && pnpm --filter @cardsmith/desktop check",
     "survey": "tsx packages/importer/src/survey/cli.ts",
+    "composite": "tsx packages/importer/src/composite/cli.ts",
     "spike:text": "tsx packages/render/src/spike/cli.ts"
   },
   "devDependencies": {

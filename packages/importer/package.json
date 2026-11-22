@@ -6,6 +6,7 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
+    "@cardsmith/render": "workspace:*",
     "ag-psd": "^34.2.2"
   }
 }

@@ -31,7 +31,7 @@ export type Survey = {
   blendModes: Counts;
   /** Layer effects that are present AND enabled. */
   effects: Counts;
-  /** Layer effects that exist on a layer but are switched off. */
+  /** Layer effects that are defined on a layer but switched off, by effect or by the whole layer style. */
   effectsDisabled: Counts;
   /** Blend modes used inside effects, keyed "effect: mode". */
   effectBlendModes: Counts;
@@ -143,7 +143,9 @@ function surveyEffects(effects: LayerEffectsInfo, out: Survey): void {
     for (const fx of list) {
       if (fx.present === false) continue;
       if (allOff || fx.enabled === false) {
-        bump(out.effectsDisabled, key);
+        // "Layer style off" is the master eye on the layer's Effects row. Proxyshop
+        // switches some of these on at render time, so they are still in scope.
+        bump(out.effectsDisabled, `${key} (${fx.enabled === false ? "effect off" : "layer style off"})`);
         continue;
       }
       enabledOnLayer++;
@@ -290,6 +292,8 @@ function surveyProps(layer: Layer, out: Survey): void {
   if (layer.protected?.composite) bump(p, "lock: pixels");
   if (layer.protected?.all) bump(p, "lock: all");
   if (layer.linkGroup) bump(p, "linked layers");
+  if (layer.vectorStroke?.strokeEnabled) bump(p, "shape stroke");
+  if (layer.vectorFill && layer.vectorStroke?.fillEnabled === false) bump(p, "shape fill disabled");
   const full = [0, 0, 255, 255];
   const narrowed = (range: number[]) => range.some((v, i) => v !== full[i]);
   if (layer.blendingRanges?.ranges.some((r) => narrowed(r.sourceRange) || narrowed(r.destRange))) {

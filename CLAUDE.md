@@ -81,14 +81,18 @@ Proxyshop drives Photoshop over COM. Port the **decisions** it makes, not the Ph
 
 ## Commands
 
-Fill these in during Phase 0, once they exist.
-
 ```
 pnpm install
 pnpm dev              # run the Tauri app
-pnpm test             # unit tests
-pnpm test:golden      # pixel-diff tests against tests/golden/
-pnpm render <doc> -o <png>
-pnpm survey <dir-of-psds>   # importer feature survey
-pnpm import <psd> -o <template-dir>
+pnpm test             # unit tests (Vitest)
+pnpm typecheck        # tsc -b for packages, svelte-check for the app
+pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
+pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
+pnpm spike:text [-o <png>]                  # Phase 0 CanvasKit text-fit spike
 ```
+
+Not built yet (Phases 1 and 2): `pnpm test:golden`, `pnpm render <doc> -o <png>`, `pnpm import <psd> -o <template-dir>`.
+
+`pnpm dev` needs the Tauri Linux libraries: `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`.
+
+Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the PSDs, `survey/` the survey output, `golden/` the reference images.
