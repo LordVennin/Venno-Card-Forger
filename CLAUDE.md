@@ -90,7 +90,10 @@ Proxyshop drives Photoshop over COM. Port the **decisions** it makes, not the Ph
 ```
 pnpm install
 pnpm dev              # run the Tauri app
-pnpm test             # unit tests (Vitest)
+cargo test --workspace   # Rust core tests (also: pnpm test:rust)
+cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <png>   # headless render (Rust)
+cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
+pnpm test             # TypeScript unit tests (Vitest)
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
 pnpm render <doc.json | file.cardsmith> -o <png>   # headless render
 pnpm render --samples <dir>                        # write the built-in sample documents and their renders

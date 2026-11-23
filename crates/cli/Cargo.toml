@@ -1,0 +1,14 @@
+[package]
+name = "cardsmith-cli"
+description = "Headless Cardsmith: render documents and write the sample documents."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "cardsmith"
+path = "src/main.rs"
+
+[dependencies]
+cardsmith-core = { path = "../core" }
