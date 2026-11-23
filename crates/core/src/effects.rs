@@ -43,6 +43,21 @@ pub fn effect_reach(effect: &Effect) -> i32 {
     reach.ceil() as i32
 }
 
+/// How far an effect can be influenced by, or paint away from, a change in the
+/// layer's alpha, in any direction. A region re-render must see this much of
+/// the layer around the region it redraws.
+pub fn effect_extent(effect: &Effect) -> i32 {
+    let extent = match effect {
+        Effect::DropShadow { distance, size, .. } | Effect::InnerShadow { distance, size, .. } => distance + size * 1.6,
+        // Blurred effects have a tail: three box passes reach 1.5 × size.
+        Effect::OuterGlow { size, .. } => size * 1.6,
+        Effect::Stroke { size, .. } => *size,
+        Effect::Bevel { size, soften, .. } => size + soften * 1.6,
+        Effect::ColorOverlay { .. } | Effect::GradientOverlay { .. } => 0.0,
+    };
+    extent.ceil() as i32 + 2
+}
+
 /// Unit vector pointing from the surface toward the light, in y-down pixel space.
 fn light_dir(angle: f64) -> (f64, f64) {
     let r = angle.to_radians();

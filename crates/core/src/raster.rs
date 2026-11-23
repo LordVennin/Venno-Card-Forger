@@ -58,6 +58,7 @@ impl Raster {
 }
 
 /// A decoded image: straight RGBA, row-major.
+#[derive(Clone)]
 pub struct Image {
     pub w: i32,
     pub h: i32,

@@ -11,8 +11,8 @@
 //!     the layer, overlays, inner shadow, bevel and stroke over it. Fill
 //!     opacity fades the layer's pixels only. Opacity fades the lot.
 
-use crate::doc::{BlendMode, Color, Doc, Fill, FillRule, Layer, Outside, Path, ShapeLayer, StrokeAlign};
-use crate::effects::{effect_reach, ordered, EffectContext, Shape, Stamp};
+use crate::doc::{BlendMode, Color, Doc, Effect, Fill, FillRule, Layer, Outside, Path, ShapeLayer, StrokeAlign};
+use crate::effects::{effect_extent, effect_reach, ordered, EffectContext, Shape, Stamp};
 use crate::field::blur;
 use crate::raster::{composite, cross_fade, multiply_alpha, place_image, resample, stamp, Image, Raster, Region};
 use crate::serialize::AssetBytes;
@@ -28,9 +28,23 @@ pub struct RenderResult {
     pub warnings: Vec<String>,
 }
 
+/// Renders documents, keeping decoded images and parsed paths between calls.
+///
+/// One renderer serves one document session. Painted layers live here as
+/// decoded images (see [`Renderer::image_mut`]).
+#[derive(Default)]
+pub struct Renderer {
+    images: HashMap<String, Option<Rc<Image>>>,
+    paths: HashMap<String, Option<Rc<tiny_skia::Path>>>,
+    /// Keyed by what is being filled: see `RenderPass::fill_key` and `stroke_key`.
+    coverage: HashMap<String, Coverage>,
+}
+
 struct RenderPass<'a> {
     assets: &'a AssetBytes,
-    images: HashMap<String, Option<Rc<Image>>>,
+    cache: &'a mut Renderer,
+    /// The whole document. Layers are cut off at its edge.
+    doc: Region,
     warnings: Vec<String>,
 }
 
@@ -74,13 +88,83 @@ fn fill_rule(path: &Path) -> tiny_skia::FillRule {
     }
 }
 
-/// Anti-aliased coverage (0..255) of a path over `region`.
-fn coverage(path: &tiny_skia::Path, rule: tiny_skia::FillRule, region: &Region) -> Vec<u8> {
-    let Some(mut mask) = tiny_skia::Mask::new(region.w as u32, region.h as u32) else {
-        return vec![0; region.area()];
-    };
-    mask.fill_path(path, rule, true, tiny_skia::Transform::from_translate(-region.x as f32, -region.y as f32));
-    mask.data().to_vec()
+/// Side of a coverage tile in pixels.
+const TILE: i32 = 256;
+
+enum Tile {
+    Empty,
+    Full,
+    Mixed(Box<[u8]>),
+}
+
+/// Anti-aliased coverage of one path, rasterized in fixed tiles on the document grid.
+///
+/// A tile is always rasterized the same way whatever region asked for it, so a
+/// partial render is bit-identical to the same part of a full render. Tiles
+/// that are entirely inside or outside the path cost no memory.
+struct Coverage {
+    path: Rc<tiny_skia::Path>,
+    rule: tiny_skia::FillRule,
+    tiles: HashMap<(i32, i32), Tile>,
+}
+
+impl Coverage {
+    fn new(path: Rc<tiny_skia::Path>, rule: tiny_skia::FillRule) -> Coverage {
+        Coverage { path, rule, tiles: HashMap::new() }
+    }
+
+    fn tile(&mut self, tx: i32, ty: i32) -> &Tile {
+        let (path, rule) = (&self.path, self.rule);
+        self.tiles.entry((tx, ty)).or_insert_with(|| {
+            let b = path.bounds();
+            let (x, y) = ((tx * TILE) as f32, (ty * TILE) as f32);
+            if b.right() <= x || b.bottom() <= y || b.left() >= x + TILE as f32 || b.top() >= y + TILE as f32 {
+                return Tile::Empty;
+            }
+            let Some(mut mask) = tiny_skia::Mask::new(TILE as u32, TILE as u32) else { return Tile::Empty };
+            mask.fill_path(path, rule, true, tiny_skia::Transform::from_translate(-x, -y));
+            let data = mask.data();
+            if data.iter().all(|&v| v == 0) {
+                Tile::Empty
+            } else if data.iter().all(|&v| v == 255) {
+                Tile::Full
+            } else {
+                Tile::Mixed(data.into())
+            }
+        })
+    }
+
+    /// Coverage (0..255) over `region`, row-major.
+    fn over(&mut self, region: &Region) -> Vec<u8> {
+        let mut out = vec![0u8; region.area()];
+        if region.area() == 0 {
+            return out;
+        }
+        let width = region.w as usize;
+        for ty in region.y.div_euclid(TILE)..=(region.y + region.h - 1).div_euclid(TILE) {
+            for tx in region.x.div_euclid(TILE)..=(region.x + region.w - 1).div_euclid(TILE) {
+                let bounds = Region::new(tx * TILE, ty * TILE, TILE, TILE);
+                let Some(area) = region.intersect(&bounds) else { continue };
+                match self.tile(tx, ty) {
+                    Tile::Empty => {}
+                    Tile::Full => {
+                        for y in area.y..area.y + area.h {
+                            let start = region.index(area.x, y);
+                            out[start..start + area.w as usize].fill(255);
+                        }
+                    }
+                    Tile::Mixed(data) => {
+                        for y in area.y..area.y + area.h {
+                            let from = bounds.index(area.x, y);
+                            let to = (y - region.y) as usize * width + (area.x - region.x) as usize;
+                            out[to..to + area.w as usize].copy_from_slice(&data[from..from + area.w as usize]);
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 impl<'a> RenderPass<'a> {
@@ -91,30 +175,57 @@ impl<'a> RenderPass<'a> {
     }
 
     fn image(&mut self, id: &str, used_by: &str) -> Option<Rc<Image>> {
-        if !self.images.contains_key(id) {
+        if !self.cache.images.contains_key(id) {
             let bytes = self.assets.get(id);
             let decoded = bytes.and_then(|b| decode_image(b)).map(Rc::new);
-            if decoded.is_none() {
-                self.warn(if bytes.is_some() { format!("Asset \"{id}\" is not a readable image.") } else { format!("Asset \"{id}\" has no data.") });
-            }
-            self.images.insert(id.to_string(), decoded);
+            self.cache.images.insert(id.to_string(), decoded);
         }
-        let image = self.images[id].clone();
+        let image = self.cache.images[id].clone();
         if image.is_none() {
+            self.warn(if self.assets.contains_key(id) { format!("Asset \"{id}\" is not a readable image.") } else { format!("Asset \"{id}\" has no data.") });
             self.warn(format!("Layer \"{used_by}\" was skipped: its image is unavailable."));
         }
         image
     }
 
-    fn path(&mut self, source: &Path) -> Option<tiny_skia::Path> {
+    fn path(&mut self, source: &Path) -> Option<Rc<tiny_skia::Path>> {
+        if let Some(cached) = self.cache.paths.get(&source.d) {
+            return cached.clone();
+        }
         match build_path(source) {
-            Ok(path) => path,
+            Ok(path) => {
+                let path = path.map(Rc::new);
+                self.cache.paths.insert(source.d.clone(), path.clone());
+                path
+            }
+            // Not cached, so the warning is reported on every render.
             Err(()) => {
                 let head: String = source.d.chars().take(40).collect();
                 self.warn(format!("A vector path could not be parsed: \"{head}\""));
                 None
             }
         }
+    }
+
+    /// Coverage of a path's fill over `region`. `None` if the path is unusable or empty.
+    fn fill_coverage(&mut self, source: &Path, region: &Region) -> Option<Vec<u8>> {
+        let key = format!("{}|{}", if source.fill_rule == Some(FillRule::Evenodd) { "eo" } else { "nz" }, source.d);
+        if !self.cache.coverage.contains_key(&key) {
+            let path = self.path(source)?;
+            self.cache.coverage.insert(key.clone(), Coverage::new(path, fill_rule(source)));
+        }
+        Some(self.cache.coverage.get_mut(&key)?.over(region))
+    }
+
+    /// Coverage of a path stroked `width` pixels wide (centered on the path) over `region`.
+    fn stroke_coverage(&mut self, source: &Path, width: f32, region: &Region) -> Option<Vec<u8>> {
+        let key = format!("s{}|{}", width.to_bits(), source.d);
+        if !self.cache.coverage.contains_key(&key) {
+            let path = self.path(source)?;
+            let outline = path.stroke(&tiny_skia::Stroke { width, ..Default::default() }, 1.0)?;
+            self.cache.coverage.insert(key.clone(), Coverage::new(Rc::new(outline), tiny_skia::FillRule::Winding));
+        }
+        Some(self.cache.coverage.get_mut(&key)?.over(region))
     }
 
     // ---- tree ---------------------------------------------------------------
@@ -160,7 +271,19 @@ impl<'a> RenderPass<'a> {
             return;
         }
 
-        let Some(mut content) = self.content(layer, &target.region) else { return };
+        // Effects look at the layer's alpha around each pixel, so when only part of the
+        // document is being drawn, the layer is built over a wider region. A gradient
+        // overlay is positioned by the layer's full bounds, so it needs all of it.
+        let content_region = if effects.is_empty() {
+            target.region
+        } else if effects.iter().any(|e| matches!(e, Effect::GradientOverlay { .. })) {
+            self.doc
+        } else {
+            let margin = effects.iter().map(|e| effect_extent(e)).max().unwrap_or(0);
+            let r = target.region;
+            Region::new(r.x - margin, r.y - margin, r.w + margin * 2, r.h + margin * 2).intersect(&self.doc).unwrap_or(r)
+        };
+        let Some(mut content) = self.content(layer, &content_region) else { return };
         if let Some(mask) = self.mask_coverage(layer, &content.region) {
             multiply_alpha(&mut content, &mask);
         }
@@ -245,17 +368,15 @@ impl<'a> RenderPass<'a> {
         let b = path.bounds();
         let (x0, y0) = ((b.left() - grow).floor() as i32, (b.top() - grow).floor() as i32);
         let area = region.intersect(&Region::new(x0, y0, (b.right() + grow).ceil() as i32 - x0, (b.bottom() + grow).ceil() as i32 - y0))?;
-        let rule = fill_rule(&layer.path);
         let mut out = Raster::new(area);
         let Fill::Solid { color } = &layer.fill;
-        let fill = coverage(&path, rule, &area);
+        let fill = self.fill_coverage(&layer.path, &area)?;
         ink(&mut out, &fill, color);
         if let Some(stroke) = stroke {
             let inside = stroke.align == StrokeAlign::Inside;
             // An inside stroke is a double-width stroke with the outer half clipped away.
-            let pen = tiny_skia::Stroke { width: stroke.width as f32 * if inside { 2.0 } else { 1.0 }, ..Default::default() };
-            if let Some(outline) = path.stroke(&pen, 1.0) {
-                let mut edge = coverage(&outline, tiny_skia::FillRule::Winding, &area);
+            let width = stroke.width as f32 * if inside { 2.0 } else { 1.0 };
+            if let Some(mut edge) = self.stroke_coverage(&layer.path, width, &area) {
                 if inside {
                     edge.iter_mut().zip(&fill).for_each(|(e, &f)| *e = ((*e as u32 * f as u32 + 127) / 255) as u8);
                 }
@@ -274,10 +395,7 @@ impl<'a> RenderPass<'a> {
         let mut out: Option<Vec<u8>> = None;
 
         if let Some(vector) = base.vector_mask.as_ref().filter(|v| v.enabled != Some(false)) {
-            let mut cov = match self.path(&vector.path) {
-                Some(path) => coverage(&path, fill_rule(&vector.path), region),
-                None => vec![0; region.area()],
-            };
+            let mut cov = self.fill_coverage(&vector.path, region).unwrap_or_else(|| vec![0; region.area()]);
             if vector.inverted == Some(true) {
                 cov.iter_mut().for_each(|c| *c = 255 - *c);
             }
@@ -289,12 +407,16 @@ impl<'a> RenderPass<'a> {
         let density = mask.density.unwrap_or(1.0) as f32;
         let n = region.area();
         let outside = if mask.outside == Some(Outside::Reveal) { 255.0 } else { 0.0 };
-        let mut gray = vec![outside; n];
+        let feather = mask.feather.unwrap_or(0.0) as f32;
+        // A feathered mask is blurred, so it is built over a wider region and cropped afterwards.
+        let margin = if feather > 0.0 { (feather * 2.0).ceil() as i32 + 2 } else { 0 };
+        let wide = Region::new(region.x - margin, region.y - margin, region.w + margin * 2, region.h + margin * 2);
+        let mut gray = vec![outside; wide.area()];
         let (ox, oy) = (mask.offset.x.round() as i32, mask.offset.y.round() as i32);
-        if let Some(area) = region.intersect(&Region::new(ox, oy, image.w, image.h)) {
+        if let Some(area) = wide.intersect(&Region::new(ox, oy, image.w, image.h)) {
             for y in area.y..area.y + area.h {
                 let mut si = ((y - oy) as usize * image.w as usize + (area.x - ox) as usize) * 4;
-                let mut di = region.index(area.x, y);
+                let mut di = wide.index(area.x, y);
                 for _ in 0..area.w {
                     // Luma, so a mask that is not strictly gray still behaves sensibly.
                     let px = &image.data[si..si + 3];
@@ -304,14 +426,18 @@ impl<'a> RenderPass<'a> {
                 }
             }
         }
-        let feather = mask.feather.unwrap_or(0.0) as f32;
         if feather > 0.0 {
             // Blur the difference from the outside value, so the outside extends past the region
             // and the region's own border is not darkened. `sign` keeps the difference non-negative.
             let sign = if outside > 0.0 { -1.0 } else { 1.0 };
             let delta: Vec<f32> = gray.iter().map(|&v| sign * (v - outside) / 255.0).collect();
-            let soft = blur(&delta, region.w as usize, region.h as usize, feather / 2.0);
-            gray = soft.iter().map(|&v| outside + sign * v * 255.0).collect();
+            let soft = blur(&delta, wide.w as usize, wide.h as usize, feather / 2.0);
+            let mut cropped = Vec::with_capacity(n);
+            for y in region.y..region.y + region.h {
+                let start = wide.index(region.x, y);
+                cropped.extend(soft[start..start + region.w as usize].iter().map(|&v| outside + sign * v * 255.0));
+            }
+            gray = cropped;
         }
         let mut result = out.unwrap_or_else(|| vec![255; n]);
         for (r, &g) in result.iter_mut().zip(&gray) {
@@ -387,13 +513,50 @@ fn shape_of(content: &Raster, reach: i32) -> Option<Shape> {
     Some(Shape { region: Region::new(bounds.x - reach, bounds.y - reach, rw as i32, rh as i32), alpha, bounds })
 }
 
-/// Render a whole document.
+impl Renderer {
+    pub fn new() -> Renderer {
+        Renderer::default()
+    }
+
+    /// Render the part of the document inside `region`. The result is exactly
+    /// what a full render would show there.
+    pub fn render_region(&mut self, doc: &Doc, assets: &AssetBytes, region: Region) -> (Raster, Vec<String>) {
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let mut target = Raster::new(region.intersect(&doc_region).unwrap_or(Region::new(region.x, region.y, 0, 0)));
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new() };
+        // The root is always a plain container, whatever its own properties say.
+        pass.draw_children(&mut target, &doc.root.children);
+        (target, pass.warnings)
+    }
+
+    pub fn render(&mut self, doc: &Doc, assets: &AssetBytes) -> RenderResult {
+        let (target, warnings) = self.render_region(doc, assets, Region::new(0, 0, doc.width as i32, doc.height as i32));
+        RenderResult { width: doc.width, height: doc.height, pixels: target.data, warnings }
+    }
+
+    /// Put a decoded image in the cache under an asset id, replacing what the
+    /// asset bytes would decode to. This is how painted layers are stored.
+    pub fn set_image(&mut self, id: &str, image: Image) {
+        self.images.insert(id.to_string(), Some(Rc::new(image)));
+    }
+
+    /// The decoded image for an asset, for editing in place. Decodes it first if needed.
+    pub fn image_mut(&mut self, id: &str, assets: &AssetBytes) -> Option<&mut Image> {
+        if !self.images.contains_key(id) {
+            let decoded = assets.get(id).and_then(|b| decode_image(b)).map(Rc::new);
+            self.images.insert(id.to_string(), decoded);
+        }
+        self.images.get_mut(id)?.as_mut().map(Rc::make_mut)
+    }
+
+    pub fn image(&self, id: &str) -> Option<&Image> {
+        self.images.get(id)?.as_deref()
+    }
+}
+
+/// Render a whole document once. To render repeatedly, keep a [`Renderer`].
 pub fn render(doc: &Doc, assets: &AssetBytes) -> RenderResult {
-    let mut pass = RenderPass { assets, images: HashMap::new(), warnings: Vec::new() };
-    let mut target = Raster::new(Region::new(0, 0, doc.width as i32, doc.height as i32));
-    // The root is always a plain container, whatever its own properties say.
-    pass.draw_children(&mut target, &doc.root.children);
-    RenderResult { width: doc.width, height: doc.height, pixels: target.data, warnings: pass.warnings }
+    Renderer::new().render(doc, assets)
 }
 
 /// FNV-1a hash of a pixel buffer. For comparing renders across builds.

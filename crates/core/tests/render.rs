@@ -355,3 +355,34 @@ fn the_sample_documents_render_without_warnings_and_survive_a_save() {
         assert_eq!(render(&doc, &assets).pixels, direct.pixels, "{} changed across save and load", sample.name);
     }
 }
+
+// ---- region rendering -----------------------------------------------------------
+
+/// Rendering part of a document must give exactly the pixels a full render has
+/// there. Incremental repainting (brush strokes, edits) depends on it.
+#[test]
+fn a_region_render_equals_the_same_crop_of_a_full_render() {
+    use cardsmith_core::raster::Region;
+    use cardsmith_core::render::Renderer;
+    for sample in cardsmith_core::samples::samples() {
+        let mut renderer = Renderer::new();
+        let full = renderer.render(&sample.doc, &sample.assets);
+        let (w, h) = (full.width as i32, full.height as i32);
+        // Regions chosen to cut through shapes, effects, masks, groups and the document edge.
+        let regions = [
+            Region::new(0, 0, 64, 64), Region::new(30, 20, 50, 40), Region::new(100, 90, 120, 110), Region::new(213, 187, 33, 71),
+            Region::new(w - 70, h - 60, 70, 60), Region::new(120, 105, 3, 3), Region::new(0, 100, w, 1), Region::new(205, 0, 1, h),
+            Region::new(-20, -20, 60, 60), Region::new(w - 10, 40, 50, 50),
+        ];
+        for region in regions {
+            let (part, _) = renderer.render_region(&sample.doc, &sample.assets, region);
+            assert!(part.region.w > 0 && part.region.h > 0);
+            for y in part.region.y..part.region.y + part.region.h {
+                for x in part.region.x..part.region.x + part.region.w {
+                    let i = ((y * w + x) * 4) as usize;
+                    assert_eq!(part.pixel(x, y), full.pixels[i..i + 4], "{} differs at ({x},{y}) in region {region:?}", sample.name);
+                }
+            }
+        }
+    }
+}
