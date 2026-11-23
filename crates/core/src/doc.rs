@@ -404,8 +404,20 @@ pub struct TextRun {
     pub italic: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bold: Option<bool>,
+    /// PostScript name of the font for this run, if not the layer's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font: Option<String>,
+    /// Font size in pixels for this run, if not the layer's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<f64>,
+    /// Color for this run, if not the layer's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<Color>,
+    /// Tracking for this run, if not the layer's, in thousandths of the font size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracking: Option<f64>,
+    /// Set on runs that draw (part of) a card symbol, e.g. "{W}". The run's
+    /// text is the symbol font's characters; this records what they stand for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 }
@@ -424,6 +436,7 @@ pub enum TextAlign {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TextStyle {
     pub font: String,
     pub size: f64,
@@ -431,8 +444,15 @@ pub struct TextStyle {
     /// Line height as a multiple of size. Omit for the font's natural leading.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub leading: Option<f64>,
+    /// Extra space after every character, in thousandths of the font size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tracking: Option<f64>,
+    /// Horizontal stretch of the glyphs. Default 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_x: Option<f64>,
+    /// Extra space above each paragraph after the first, in pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paragraph_spacing: Option<f64>,
     pub align: TextAlign,
 }
 
@@ -444,16 +464,32 @@ pub enum FitMode {
     ShrinkWidth,
 }
 
-/// Declared now so documents can carry text; rendered from Phase 3.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VerticalAlign {
+    Top,
+    Center,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TextLayer {
     #[serde(flatten)]
     pub base: LayerBase,
+    /// For box text, the box the text wraps and is fitted in. For point text,
+    /// the area it may occupy when a fit mode is set.
     #[serde(rename = "box")]
     pub bounds: Rect,
+    /// Present for point text: where the first line's baseline starts (or its
+    /// center or end, by alignment). Point text does not wrap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Vec2>,
     pub content: RichText,
     pub style: TextStyle,
     pub fit: FitMode,
+    /// Where box text sits in its box when it is shorter than the box. Default top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vertical_align: Option<VerticalAlign>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

@@ -33,9 +33,9 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: { u
 type DocLayer = { kind: string; name: string; visible: boolean; effectsEnabled?: boolean; box?: { x: number; y: number; w: number; h: number }; children?: DocLayer[]; effects?: { enabled: boolean; size?: number; distance?: number }[] };
 
 /**
- * Areas to leave out of the comparison: where visible text layers are. Text is
- * not drawn until Phase 3, so those pixels cannot match yet. Remove this when
- * it is.
+ * Where visible text layers are. These areas are left out of the comparison
+ * only when the fonts are missing (no fixtures/local/fonts), because text
+ * cannot be drawn without them.
  */
 function textRegions(layers: DocLayer[], visible = true, regions: string[] = []): string[] {
   for (const layer of layers) {
@@ -56,6 +56,10 @@ if (wanted.length === 0) {
   console.log(`No imported templates in ${imported}. Nothing to test (run \`pnpm import:psd\` first).`);
   process.exit(0);
 }
+
+const fonts = join(repo, "fixtures/local/fonts");
+const haveFonts = existsSync(fonts) && readdirSync(fonts).some((f) => /\.(ttf|otf)$/i.test(f));
+if (!haveFonts) console.log(`No fonts in ${fonts}: text areas are left out of the comparison.`);
 
 mkdirSync(out, { recursive: true });
 execFileSync("cargo", ["build", "-q", "--release", "-p", "cardsmith-cli"], { cwd: repo, stdio: "inherit" });
@@ -102,7 +106,7 @@ for (const name of wanted) {
     if (stateName !== "default") writeFileSync(stateDoc, JSON.stringify(doc));
     const reference = join(golden, `${name}.${stateName}.png`);
     const render = join(out, `${name}.${stateName}.png`);
-    execFileSync(cardsmith, ["render", stateDoc, "-o", render], { stdio: ["ignore", "ignore", "ignore"] });
+    execFileSync(cardsmith, ["render", stateDoc, "-o", render, ...(haveFonts ? ["--fonts", fonts] : [])], { stdio: ["ignore", "ignore", "ignore"] });
 
     if (values.update === `${name}.${stateName}`) {
       mkdirSync(golden, { recursive: true });
@@ -116,7 +120,7 @@ for (const name of wanted) {
       continue;
     }
 
-    const text = textRegions(doc.root.children);
+    const text = haveFonts ? [] : textRegions(doc.root.children);
     const unverified = (state.unverified ?? []).map((u) => u.region);
     const ignore = [...text, ...unverified];
     let result: { psnr: number | null; maxDiff: number; differing: number; compared: number; worstBlock: { x: number; y: number; meanError: number } };
@@ -136,7 +140,7 @@ for (const name of wanted) {
       `${ok ? "✓" : "✗"} ${label}: PSNR ${Number.isFinite(psnr) ? psnr.toFixed(1) + " dB" : "∞"} (min ${limits.minPsnr}), ` +
         `worst block ${result.worstBlock.meanError.toFixed(1)} at (${result.worstBlock.x}, ${result.worstBlock.y}) (max ${limits.maxBlockError}), ` +
         `${((100 * result.differing) / result.compared).toFixed(2)}% of pixels differ, largest difference ${result.maxDiff}/255, ` +
-        `${text.length} text area${text.length === 1 ? "" : "s"} left out` +
+        (haveFonts ? "text included" : `no fonts, so ${text.length} text area${text.length === 1 ? "" : "s"} left out`) +
         (unverified.length ? `, ${unverified.length} unverified area${unverified.length === 1 ? "" : "s"} left out` : ""),
     );
     for (const u of state.unverified ?? []) console.log(`    unverified ${u.region}: ${u.why}`);

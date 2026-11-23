@@ -2,21 +2,25 @@
 
 What `pnpm test:golden` does not yet match, and why. Remove an entry when it is fixed.
 
-Measured on 2026-11-24. Default states are compared with the composites embedded in the PSDs; named states with exports the owner made in Photopea.
+Measured with text included (fonts loaded). Default states are compared with the composites embedded in the PSDs; named states with exports the owner made in Photopea. With text left out the figures were 107, 83, 83, 85, 72 and 41.3 dB: the drop is text edge pixels, see "Text edges".
 
 | Template and state | Reference | PSNR | Status |
 |---|---|---:|---|
-| `normal` default | PSD composite | 107 dB | Matches |
-| `normal` white legendary creature | Photopea export | 83 dB | Matches |
-| `normal-extended` default | PSD composite | 83 dB | Matches |
-| `normal-extended` white legendary creature | Photopea export | 85 dB | Matches |
-| `borderless-vector` default | PSD composite | 72 dB | Matches; see "Anti-aliasing" |
-| `borderless-vector` frame | Photopea export | 41.3 dB | Matches within its limits; see "Fine detail of bevels" |
+| `normal` default | PSD composite | 44.7 dB | Matches within limits |
+| `normal` white legendary creature | Photopea export | 42.0 dB | Matches within limits |
+| `normal-extended` default | PSD composite | 43.1 dB | Matches within limits |
+| `normal-extended` white legendary creature | Photopea export | 41.8 dB | Matches within limits |
+| `borderless-vector` default | PSD composite | 41.7 dB | Matches within limits; see "Anti-aliasing" |
+| `borderless-vector` frame | Photopea export | 38.5 dB | Matches within its limits; see "Fine detail of bevels" and "Text edges" |
 
 ## Open
 
-### Text is not drawn
-Text layers are imported (box, font, size, leading, tracking, alignment, color, runs) but not rendered until Phase 3. The golden runner leaves the area of every visible text layer out of the comparison. That exclusion comes out when text rendering lands.
+### Text edges
+Text is drawn from the fonts in `fixtures/local/fonts` (the golden runner leaves text areas out only when that folder is empty). Across the three templates all 62 text layers have their ink within 1.4 px of where Photoshop recorded it, and baselines sit on whole pixels as Photoshop's do. What differs is the edge pixels: Photoshop's "sharp" anti-aliasing and its text blending gamma (1.45) make white text about 3% heavier than ours. Matching that was tried (applying the gamma) and removed only a tenth of the difference, so it is not done.
+
+One layer disagrees: `borderless-vector`, the first `Rules Text - Creature Flip`, whose stored bounds are 103 px lower than its own text box and transform put it. Its box has a negative top (`boxBounds` starts at -46.9) unlike every other rules box. It is hidden by default and repositioned by the card engine anyway.
+
+Not supported in text, each with an importer warning: faux bold and faux italic, baseline shift, all caps and small caps set as a style (small-caps fonts are fine), warps, vertical text, justified paragraphs, rotation.
 
 ### Effects are checked against Photopea, not Photoshop
 The frame state exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers and vector masks, and matches Photopea at 41.3 dB. The owner also compared the P/T box against cards they made in Proxyshop (real Photoshop) and confirmed Photopea's rendering of it. Photopea is still not Photoshop, so this is good evidence, not proof. What the comparison settled:

@@ -227,6 +227,21 @@ pub extern "C" fn cs_redo() -> u32 {
     with(|s| s.session.redo() as u32)
 }
 
+/// Load a font file (TTF or OTF bytes) for text layers to use. The PostScript
+/// names it provides go to the output buffer as a JSON array.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_add_font(ptr: *const u8, len: usize) -> u32 {
+    let data = bytes(ptr, len).to_vec();
+    attempt(|s| {
+        let names = s.session.add_font(data).map_err(|e| e.to_string())?;
+        s.out = serde_json::to_vec(&names).unwrap_or_default();
+        Ok(())
+    })
+}
+
 // ---- painting --------------------------------------------------------------------
 
 /// Add an empty, document-sized pixel layer on top. Its id goes to the output buffer.

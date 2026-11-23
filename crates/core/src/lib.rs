@@ -21,6 +21,7 @@ pub mod render;
 pub mod samples;
 pub mod serialize;
 pub mod session;
+pub mod text;
 pub mod tree;
 
 pub use error::{Error, Result};

@@ -17,11 +17,12 @@
 //! part of a document gives exactly the pixels a full render has there, and
 //! redrawing after a small change is mostly compositing cached tiles.
 
-use crate::doc::{BlendMode, Color, Doc, Effect, Fill, FillRule, GroupLayer, Layer, Outside, Path, ShapeLayer, StrokeAlign};
+use crate::doc::{BlendMode, Color, Doc, Effect, Fill, FillRule, GroupLayer, Layer, Outside, Path, ShapeLayer, StrokeAlign, TextLayer};
 use crate::effects::{effect_extent, ordered, EffectContext, Shape};
 use crate::field::blur;
 use crate::raster::{composite, cross_fade, multiply_alpha, place_image, resample, stamp, Cover, Image, Ink, Raster, Region};
 use crate::serialize::AssetBytes;
+use crate::text::{layout_text, Fonts, TextLayout};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -130,6 +131,14 @@ struct StampTile {
     above: bool,
 }
 
+/// A text layer's layout and the coverage of each of its colors, valid while
+/// the layer's text and the loaded fonts stay the same.
+struct TextCache {
+    fingerprint: u64,
+    layout: TextLayout,
+    coverage: Vec<Coverage>,
+}
+
 /// A layer's effect tiles, valid while the layer's fingerprint stays the same.
 struct EffectCache {
     fingerprint: u64,
@@ -155,6 +164,9 @@ pub struct Renderer {
     fingerprints: HashMap<String, u64>,
     /// Layers being painted on right now: their effects are recomputed, not cached.
     live: HashSet<String>,
+    /// The fonts text layers are drawn with. Supplied by the user, not stored in documents.
+    fonts: Fonts,
+    texts: HashMap<String, TextCache>,
 }
 
 struct RenderPass<'a> {
@@ -529,10 +541,7 @@ impl<'a> RenderPass<'a> {
                 return Some(out);
             }
             Layer::Shape(shape) => return self.shape(shape, region),
-            Layer::Text(text) => {
-                self.warn(format!("Text layer \"{}\" was skipped: text rendering arrives in Phase 3.", text.base.name));
-                return None;
-            }
+            Layer::Text(text) => return self.text(text, region),
             Layer::Pixel(l) => (&l.asset, &l.transform),
             Layer::Fill(l) => (&l.asset, &l.transform),
             Layer::Art(l) => (l.asset.as_ref()?, &l.transform),
@@ -543,6 +552,52 @@ impl<'a> RenderPass<'a> {
         } else {
             resample(&image, transform, region)
         }
+    }
+
+    /// A text layer's layout, from the cache when its text and the fonts are unchanged.
+    fn text_cache(&mut self, layer: &TextLayer) -> &mut TextCache {
+        let mut hash = Fnv::new();
+        hash.json(&(&layer.bounds, &layer.origin, &layer.content, &layer.style, &layer.fit, &layer.vertical_align));
+        hash.write(&self.cache.fonts.version().to_le_bytes());
+        let fingerprint = hash.0;
+        let stale = self.cache.texts.get(&layer.base.id).is_none_or(|c| c.fingerprint != fingerprint);
+        if stale {
+            let layout = layout_text(layer, &self.cache.fonts);
+            let coverage = layout.parts.iter().map(|(_, path)| Coverage::new(Rc::new(path.clone()), tiny_skia::FillRule::Winding)).collect();
+            self.cache.texts.insert(layer.base.id.clone(), TextCache { fingerprint, layout, coverage });
+        }
+        let missing = self.cache.texts[&layer.base.id].layout.missing.clone();
+        for font in missing {
+            self.warn(format!("Text layer \"{}\" needs the font \"{font}\", which is not loaded.", layer.base.name));
+        }
+        self.cache.texts.get_mut(&layer.base.id).expect("just inserted")
+    }
+
+    /// Where a text layer's ink is, padded for anti-aliasing.
+    fn text_bounds(&mut self, layer: &TextLayer) -> Option<Region> {
+        let ink = self.text_cache(layer).layout.ink?;
+        let (x0, y0) = (ink[0].floor() as i32 - 1, ink[1].floor() as i32 - 1);
+        Some(Region::new(x0, y0, ink[2].ceil() as i32 + 1 - x0, ink[3].ceil() as i32 + 1 - y0))
+    }
+
+    fn text(&mut self, layer: &TextLayer, region: &Region) -> Option<Raster> {
+        let area = region.intersect(&self.text_bounds(layer)?)?;
+        let cache = self.text_cache(layer);
+        let mut out = Raster::new(area);
+        let mut first = true;
+        for ((color, _), coverage) in cache.layout.parts.iter().zip(cache.coverage.iter_mut()) {
+            let cov = coverage.over(&area);
+            if first {
+                ink(&mut out, &cov, color);
+                first = false;
+            } else {
+                // Later colors go over earlier ones: a symbol's glyph over its disc.
+                let mut over = Raster::new(area);
+                ink(&mut over, &cov, color);
+                composite(&mut out, &over, 1.0, BlendMode::Normal, false);
+            }
+        }
+        Some(out)
     }
 
     fn shape(&mut self, layer: &ShapeLayer, region: &Region) -> Option<Raster> {
@@ -590,7 +645,7 @@ impl<'a> RenderPass<'a> {
         let own = match layer {
             Layer::Group(group) => group.children.iter().filter(|l| l.base().visible).fold(None, |acc, child| union(acc, self.layer_bounds(child))),
             Layer::Shape(shape) => self.shape_bounds(shape, 0.0),
-            Layer::Text(_) => None,
+            Layer::Text(text) => self.text_bounds(text),
             Layer::Pixel(_) | Layer::Fill(_) | Layer::Art(_) => {
                 let (asset, m) = match layer {
                     Layer::Pixel(l) => (&l.asset, &l.transform),
@@ -749,6 +804,36 @@ impl Renderer {
         self.fingerprint_group(&doc.root, &mut fingerprints);
         self.effects.retain(|id, cache| fingerprints.get(id) == Some(&cache.fingerprint));
         self.fingerprints = fingerprints;
+        // Layouts of text layers that no longer exist.
+        let mut alive = HashSet::new();
+        crate::tree::walk(&doc.root, &mut |layer| {
+            if matches!(layer, Layer::Text(_)) {
+                alive.insert(layer.id());
+            }
+        });
+        self.texts.retain(|id, _| alive.contains(id.as_str()));
+    }
+
+    /// The fonts text is drawn with. After adding one, call [`Renderer::sync`].
+    pub fn fonts_mut(&mut self) -> &mut Fonts {
+        &mut self.fonts
+    }
+
+    pub fn fonts(&self) -> &Fonts {
+        &self.fonts
+    }
+
+    /// The ink bounds of every visible-or-not text layer, by layer id, as
+    /// (left, top, right, bottom) in document pixels. For checking layout
+    /// against a reference.
+    pub fn text_ink_bounds(&mut self, doc: &Doc) -> Vec<(String, Option<[f64; 4]>)> {
+        let mut out = Vec::new();
+        crate::tree::walk(&doc.root, &mut |layer| {
+            if let Layer::Text(text) = layer {
+                out.push((text.base.id.clone(), layout_text(text, &self.fonts).ink));
+            }
+        });
+        out
     }
 
     /// Hash everything that decides what a layer looks like, and record the
@@ -779,7 +864,10 @@ impl Renderer {
                     }
                 }
                 Layer::Shape(l) => content.json(&(&l.path, &l.fill, &l.stroke)),
-                Layer::Text(l) => content.json(&(&l.bounds, &l.content, &l.style, &l.fit)),
+                Layer::Text(l) => {
+                    content.json(&(&l.bounds, &l.origin, &l.content, &l.style, &l.fit, &l.vertical_align));
+                    content.write(&self.fonts.version().to_le_bytes());
+                }
             }
             let base = layer.base();
             content.json(&(&base.mask, &base.vector_mask));

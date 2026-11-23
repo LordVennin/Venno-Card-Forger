@@ -13,6 +13,8 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # Pure Rust, so they build for WebAssembly: path rasterization, SVG path parsing, image codecs.
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 kurbo = "0.11"
+# Text shaping and font parsing (re-exports ttf-parser).
+rustybuzz = "0.20"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [dev-dependencies]

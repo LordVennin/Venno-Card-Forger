@@ -1,11 +1,12 @@
 {
-  "//": "Limits for pnpm test:golden. minPsnr is in dB over the compared pixels; maxBlockError is the mean error (0..255) allowed in the worst 64 px block. Change one only with the reason in the commit message (CLAUDE.md rule 5). borderless-vector.frame allows a block error of 9: its reference is a Photopea export, and the two renderers draw the fine streaks of a chiselled bevel on curved ends differently.",
+  "//": "Limits for pnpm test:golden. minPsnr is in dB over the compared pixels; maxBlockError is the mean error (0..255) allowed in the worst 64 px block. Change one only with the reason in the commit message (CLAUDE.md rule 5). maxBlockError is 7 because text is now compared: glyphs land within a pixel of Photoshop's, but Photoshop's 'sharp' anti-aliasing and text gamma give different edge pixels, and the small collector text is nearly all edges. borderless-vector.frame allows a block error of 9 and a PSNR of 38: its reference is a Photopea export, which draws both the fine streaks of a chiselled bevel on curved ends and text edges differently from us and from Photoshop.",
   "default": {
     "minPsnr": 40,
-    "maxBlockError": 6
+    "maxBlockError": 7
   },
   "templates": {
     "borderless-vector.frame": {
+      "minPsnr": 38,
       "maxBlockError": 9
     }
   }

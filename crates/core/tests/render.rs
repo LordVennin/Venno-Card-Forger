@@ -76,14 +76,14 @@ fn draws_pixel_layers_through_their_transform() {
 fn reports_text_layers_and_missing_images_instead_of_failing() {
     let text: Layer = serde_json::from_value(json!({
         "kind": "text", "id": "t", "name": "Rules", "visible": true, "opacity": 1, "blend": "normal", "clip": false,
-        "box": { "x": 0, "y": 0, "w": 8, "h": 8 }, "content": { "runs": [] },
+        "box": { "x": 0, "y": 0, "w": 8, "h": 8 }, "content": { "runs": [{ "text": "Flying" }] },
         "style": { "font": "x", "size": 1, "color": [1, 0, 0, 1], "align": "left" }, "fit": "none"
     }))
     .unwrap();
     let r = render8(vec![full("bg", WHITE), text, with(pixel("p", "gone", IDENTITY), |b| b.name = "Art".into())]);
     assert_eq!(px(&r, 4, 4), [255, 255, 255, 255]);
     let warnings = r.warnings.join("\n");
-    assert!(warnings.contains("Text layer \"Rules\" was skipped"), "{warnings}");
+    assert!(warnings.contains("Text layer \"Rules\" needs the font \"x\", which is not loaded."), "{warnings}");
     assert!(warnings.contains("Asset \"gone\" has no data"), "{warnings}");
 
     let bad = scene(8, 8, vec![pixel("p", "junk", IDENTITY)], &[("junk", vec![1, 2, 3])]);

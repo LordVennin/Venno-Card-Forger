@@ -491,6 +491,18 @@ impl Session {
         self.push(Step::Paint { label: label.to_string(), asset: active.asset, offset: active.offset, patches, margin: active.margin });
     }
 
+    // ---- fonts ------------------------------------------------------------------
+
+    /// Load a font file for text layers to use, and redraw. Returns the
+    /// PostScript names it provides.
+    pub fn add_font(&mut self, bytes: Vec<u8>) -> Result<Vec<String>> {
+        let names = self.renderer.fonts_mut().add(bytes)?;
+        self.below = None;
+        self.renderer.sync(&self.doc);
+        self.redraw(self.whole());
+        Ok(names)
+    }
+
     // ---- saving -------------------------------------------------------------------
 
     /// The document as `.cardsmith` bytes, with painted layers encoded.

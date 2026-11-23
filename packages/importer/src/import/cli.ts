@@ -37,7 +37,7 @@ const writes: Promise<void>[] = [];
 let images = 0;
 let imageBytes = 0;
 
-const { doc, warnings } = convertPsd(psd, {
+const { doc, warnings, textInk } = convertPsd(psd, {
   emit(path, png) {
     images++;
     imageBytes += png.length;
@@ -79,6 +79,7 @@ await writeFile(
       layers,
       warnings,
       bindings,
+      textInk,
     },
     null,
     2,

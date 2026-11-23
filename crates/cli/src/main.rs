@@ -1,4 +1,4 @@
-//! cardsmith render <doc.json | file.cardsmith> -o <out.png>
+//! cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]
 //! cardsmith samples <dir>
 //! cardsmith hashes        print a hash of each sample render
 //! cardsmith bench         time editing on the card-sized sample
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -32,6 +32,23 @@ fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
         }
     }
     Ok((doc, assets))
+}
+
+/// Load every font file in a folder into a renderer. Files that are not fonts are skipped.
+fn load_fonts(renderer: &mut cardsmith_core::render::Renderer, dir: &str) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{dir}: {e}"))?;
+    let mut paths: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    paths.sort();
+    for path in paths {
+        let is_font = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc"));
+        if is_font {
+            if let Ok(bytes) = std::fs::read(&path) {
+                // A file that will not parse is reported by the renderer as a missing font, by name.
+                let _ = renderer.fonts_mut().add(bytes);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -115,10 +132,16 @@ fn run(args: &[String]) -> Result<(), String> {
             let mut input = None;
             let mut out = None;
             let mut raw = None;
+            let mut fonts = None;
+            let mut text_bounds = None;
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
                     "-o" | "--out" => out = rest.next(),
+                    // A folder of font files for text layers.
+                    "--fonts" => fonts = rest.next(),
+                    // Also write each text layer's ink bounds as JSON, for checking layout.
+                    "--text-bounds" => text_bounds = rest.next(),
                     // Also write the pixels as bare RGBA bytes, for tools that compare them.
                     "--raw" => raw = rest.next(),
                     _ => input = Some(arg),
@@ -126,9 +149,17 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             let (Some(input), Some(out)) = (input, out) else { return Err(USAGE.into()) };
             let (doc, assets) = load(Path::new(input))?;
+            let mut renderer = cardsmith_core::render::Renderer::new();
+            if let Some(dir) = fonts {
+                load_fonts(&mut renderer, dir)?;
+            }
             let started = Instant::now();
-            let r = render(&doc, &assets);
+            let r = renderer.render(&doc, &assets);
             let elapsed = started.elapsed().as_millis();
+            if let Some(file) = text_bounds {
+                let bounds: serde_json::Map<String, serde_json::Value> = renderer.text_ink_bounds(&doc).into_iter().map(|(id, ink)| (id, serde_json::json!(ink))).collect();
+                write(Path::new(file), serde_json::to_string(&bounds).unwrap_or_default().as_bytes())?;
+            }
             write(Path::new(out), &encode_png(r.width, r.height, &r.pixels).map_err(|e| e.to_string())?)?;
             if let Some(raw) = raw {
                 write(Path::new(raw), &r.pixels)?;

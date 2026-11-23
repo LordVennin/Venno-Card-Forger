@@ -180,7 +180,21 @@ export type Stroke = { color: Color; width: number; align: "center" | "inside" }
 
 export type ShapeLayer = LayerBase & { kind: "shape"; path: Path; fill: Fill; stroke?: Stroke };
 
-export type TextRun = { text: string; italic?: boolean; bold?: boolean; font?: string; symbol?: string };
+export type TextRun = {
+  text: string;
+  italic?: boolean;
+  bold?: boolean;
+  /** PostScript name of the font for this run, if not the layer's. */
+  font?: string;
+  /** Font size in pixels for this run, if not the layer's. */
+  size?: number;
+  /** Color for this run, if not the layer's. */
+  color?: Color;
+  /** Tracking for this run, if not the layer's, in thousandths of the font size. */
+  tracking?: number;
+  /** Set on runs that draw (part of) a card symbol, e.g. "{W}". */
+  symbol?: string;
+};
 export type RichText = { runs: TextRun[] };
 export type TextStyle = {
   font: string;
@@ -188,18 +202,27 @@ export type TextStyle = {
   color: Color;
   /** Line height as a multiple of size. Omit for the font's natural leading. */
   leading?: number;
+  /** Extra space after every character, in thousandths of the font size. */
   tracking?: number;
+  /** Horizontal stretch of the glyphs. Default 1. */
+  scaleX?: number;
+  /** Extra space above each paragraph after the first, in pixels. */
+  paragraphSpacing?: number;
   align: "left" | "center" | "right";
 };
 export type FitMode = "none" | "shrinkHeight" | "shrinkWidth";
 
-/** Declared now so documents can carry text; rendered from Phase 3. */
 export type TextLayer = LayerBase & {
   kind: "text";
+  /** For box text, the box the text wraps and is fitted in. For point text, the area it may occupy when a fit mode is set. */
   box: Rect;
+  /** Present for point text: where the first line's baseline starts (or its center or end, by alignment). */
+  origin?: Vec2;
   content: RichText;
   style: TextStyle;
   fit: FitMode;
+  /** Where box text sits in its box when it is shorter than the box. Default "top". */
+  verticalAlign?: "top" | "center";
 };
 
 export type ArtFrameLayer = LayerBase & {

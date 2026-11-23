@@ -21,7 +21,12 @@ export type ConvertOptions = {
   release?(layer: PsdLayer): void;
 };
 
-export type ConvertResult = { doc: Doc; warnings: string[] };
+export type ConvertResult = {
+  doc: Doc;
+  warnings: string[];
+  /** Where Photoshop drew each text layer's ink, by layer id: [left, top, right, bottom]. For checking our layout. */
+  textInk: Record<string, [number, number, number, number]>;
+};
 
 /** A 1×1 transparent image, for layers that have a mask or a role but no pixels of their own. */
 const EMPTY = "empty";
@@ -37,6 +42,7 @@ function grayOf(data: PixelData): Uint8Array {
 
 export function convertPsd(psd: Psd, options: ConvertOptions): ConvertResult {
   const warnings: string[] = [];
+  const textInk: ConvertResult["textInk"] = {};
   const doc: Doc = {
     version: 1,
     width: psd.width,
@@ -140,6 +146,7 @@ export function convertPsd(psd: Psd, options: ConvertOptions): ConvertResult {
       result = { ...base, kind: "group", passThrough, children } satisfies GroupLayer;
     } else if (layer.text) {
       result = { ...base, kind: "text", ...convertText(layer, warn) };
+      textInk[id] = [layer.left ?? 0, layer.top ?? 0, layer.right ?? 0, layer.bottom ?? 0];
     } else if (isShape) {
       const fill = layer.vectorFill!;
       if (fill.type !== "color") warn(`${fill.type} shape fills are not supported; using black`);
@@ -185,57 +192,83 @@ export function convertPsd(psd: Psd, options: ConvertOptions): ConvertResult {
   };
 
   doc.root.children = (psd.children ?? []).map((layer) => convert(layer, ""));
-  return { doc, warnings };
+  return { doc, warnings, textInk };
 }
 
 /** The text-specific fields of a text layer. Photoshop's text data is converted, not rendered. */
 function convertText(layer: PsdLayer, warn: Warn) {
   const text = layer.text!;
-  const style = text.style ?? {};
   const t = text.transform ?? [1, 0, 0, 1, 0, 0];
   if (Math.abs(t[1]!) > 1e-6 || Math.abs(t[2]!) > 1e-6) warn("rotated or skewed text is not supported; drawn upright");
   if (text.warp && text.warp.style !== "none") warn(`text warp (${text.warp.style}) is not supported`);
   if (text.orientation === "vertical") warn("vertical text is not supported");
   // The text's own scale multiplies every size in it.
-  const scale = Math.abs(t[3] ?? 1);
-  const size = (style.fontSize ?? 12) * scale;
+  const sx = Math.abs(t[0] ?? 1);
+  const sy = Math.abs(t[3] ?? 1);
 
-  // Box text carries its box; point text is positioned by the layer's bounds.
-  const box =
-    text.shapeType === "box" && text.boxBounds
-      ? { x: t[4]! + text.boxBounds[0]! * Math.abs(t[0] ?? 1), y: t[5]! + text.boxBounds[1]! * scale, w: (text.boxBounds[2]! - text.boxBounds[0]!) * Math.abs(t[0] ?? 1), h: (text.boxBounds[3]! - text.boxBounds[1]!) * scale }
-      : { x: layer.left ?? 0, y: layer.top ?? 0, w: (layer.right ?? 0) - (layer.left ?? 0), h: (layer.bottom ?? 0) - (layer.top ?? 0) };
+  // The style of each run is the layer's style with the run's differences on top.
+  // Either may be missing a field, so the base style is the first run's.
+  const styled = (text.styleRuns?.length ? text.styleRuns : [{ length: text.text.length, style: {} }]).map((run) => ({ length: run.length, style: { ...(text.style ?? {}), ...run.style } }));
+  const first = styled.find((run) => run.length > 0)?.style ?? text.style ?? {};
+  const baseFont = first.font?.name ?? "";
+  const baseSize = (first.fontSize ?? 12) * sy;
+  const baseColor = color(first.fillColor);
+  if (!baseFont) warn("the text has no font");
 
-  // One run per style run, with whatever differs from the layer's base style.
   const runs: TextRun[] = [];
-  const baseFont = style.font?.name ?? "";
   let at = 0;
-  for (const run of text.styleRuns?.length ? text.styleRuns : [{ length: text.text.length, style: {} }]) {
+  for (const run of styled) {
     const part = text.text.slice(at, at + run.length);
     at += run.length;
     if (!part) continue;
     const font = run.style.font?.name ?? baseFont;
+    const size = (run.style.fontSize ?? 12) * sy;
+    const fill = color(run.style.fillColor);
     const out: TextRun = { text: part.replace(/\r/g, "\n") };
     if (font !== baseFont) out.font = font;
-    if (/Italic|It$|Obl/i.test(font) || run.style.fauxItalic || style.fauxItalic) out.italic = true;
-    if (/Bold|Semibold/i.test(font) || run.style.fauxBold || style.fauxBold) out.bold = true;
+    if (Math.abs(size - baseSize) > 1e-6) out.size = size;
+    if (fill.some((v, i) => v !== baseColor[i])) out.color = fill;
+    if ((run.style.tracking ?? 0) !== (first.tracking ?? 0)) out.tracking = run.style.tracking ?? 0;
+    if (/Italic|It$|Obl/i.test(font) || run.style.fauxItalic) out.italic = true;
+    if (/Bold|Semibold/i.test(font) || run.style.fauxBold) out.bold = true;
+    if (run.style.fauxItalic || run.style.fauxBold) warn("faux bold and faux italic are not drawn");
+    if (run.style.baselineShift) warn("baseline shift is not supported");
+    if (run.style.fontCaps) warn("all caps and small caps are not supported");
     const last = runs[runs.length - 1];
-    if (last && last.font === out.font && last.italic === out.italic && last.bold === out.bold) last.text += out.text;
+    const same = last && last.font === out.font && last.size === out.size && last.tracking === out.tracking && last.italic === out.italic && last.bold === out.bold && JSON.stringify(last.color) === JSON.stringify(out.color);
+    if (same) last.text += out.text;
     else runs.push(out);
   }
+  // Photoshop ends the text with a paragraph mark that draws nothing.
+  const tail = runs[runs.length - 1];
+  if (tail) {
+    tail.text = tail.text.replace(/\n$/, "");
+    if (!tail.text) runs.pop();
+  }
   const content: RichText = { runs };
-  const justification = text.paragraphStyle?.justification ?? "left";
+  const paragraph = { ...(text.paragraphStyle ?? {}), ...(text.paragraphStyleRuns?.[0]?.style ?? {}) };
+  const justification = paragraph.justification ?? "left";
   if (!["left", "center", "right"].includes(justification)) warn(`paragraph justification "${justification}" is not supported; using left`);
+  const spacing = ((paragraph.spaceBefore ?? 0) + (paragraph.spaceAfter ?? 0)) * sy;
+  const stretch = ((first.horizontalScale ?? 1) * sx) / sy;
+
+  // Box text carries its box. Point text hangs from the start of its first baseline.
+  const ink = { x: layer.left ?? 0, y: layer.top ?? 0, w: (layer.right ?? 0) - (layer.left ?? 0), h: (layer.bottom ?? 0) - (layer.top ?? 0) };
+  const isBox = text.shapeType === "box" && !!text.boxBounds;
+  const box = isBox ? { x: t[4]!, y: t[5]!, w: (text.boxBounds![2]! - text.boxBounds![0]!) * sx, h: (text.boxBounds![3]! - text.boxBounds![1]!) * sy } : ink;
 
   return {
     box,
+    ...(isBox ? {} : { origin: { x: t[4]!, y: t[5]! } }),
     content,
     style: {
       font: baseFont,
-      size,
-      color: color(style.fillColor),
-      ...(style.autoLeading === false && style.leading && style.fontSize ? { leading: style.leading / style.fontSize } : {}),
-      ...(style.tracking ? { tracking: style.tracking } : {}),
+      size: baseSize,
+      color: baseColor,
+      ...(first.autoLeading === false && first.leading && first.fontSize ? { leading: first.leading / first.fontSize } : {}),
+      ...(first.tracking ? { tracking: first.tracking } : {}),
+      ...(Math.abs(stretch - 1) > 1e-6 ? { scaleX: stretch } : {}),
+      ...(spacing ? { paragraphSpacing: spacing } : {}),
       align: (justification === "center" || justification === "right" ? justification : "left") as "left" | "center" | "right",
     },
     fit: "none" as const,
