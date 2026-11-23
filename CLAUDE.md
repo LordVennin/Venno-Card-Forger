@@ -16,7 +16,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 |---|---|
 | App shell | Tauri 2 (Rust backend, web frontend) |
 | Frontend | TypeScript, Vite, a light UI framework (Svelte or React, decided in Phase 0) |
-| Rendering | CanvasKit (Skia WASM). The same render core runs in the app and headless in Node for tests and batch rendering |
+| Rendering | Our own typed-array compositor (`packages/render/src/raster.ts`), with CanvasKit (Skia WASM) for path coverage, image decoding and text. CPU only. The same render core runs in the app and headless in Node for tests and batch rendering |
 | Text | CanvasKit Paragraph API. Mana symbols are inline placeholders |
 | PSD parsing | `ag-psd`, used only in the importer |
 | Heavy compute (Rust side) | PatchMatch fill, ONNX Runtime (`ort` crate) for LaMa/MI-GAN, stable-diffusion.cpp as a sidecar binary, model downloads, file IO |
@@ -86,13 +86,23 @@ pnpm install
 pnpm dev              # run the Tauri app
 pnpm test             # unit tests (Vitest)
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
+pnpm render <doc.json | file.cardsmith> -o <png>   # headless render
+pnpm render --samples <dir>                        # write the built-in sample documents and their renders
+pnpm test:parity            # Node vs frontend pixel diff, in headless Chromium (skips if Playwright is absent)
+pnpm test:parity --app      # the same, inside the real Tauri window (needs a display; xvfb-run -a works)
 pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
 pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
 pnpm spike:text [-o <png>]                  # Phase 0 CanvasKit text-fit spike
 ```
 
-Not built yet (Phases 1 and 2): `pnpm test:golden`, `pnpm render <doc> -o <png>`, `pnpm import <psd> -o <template-dir>`.
+Not built yet (Phase 2): `pnpm test:golden`, `pnpm import <psd> -o <template-dir>`.
 
 `pnpm dev` needs the Tauri Linux libraries: `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`.
 
 Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the PSDs, `survey/` the survey output, `golden/` the reference images.
+
+## Where things are
+
+- `packages/doc`: types (`types.ts`), commands and `History` (`commands.ts`), JSON and `.cardsmith` save/load (`serialize.ts`).
+- `packages/render`: `render.ts` walks the layer tree; `raster.ts` is the compositor (no CanvasKit); `field.ts` is the distance field and blur; `effects.ts` turns effects into coverage stamps; `samples.ts` holds the sample documents used by tests, the app and the parity check.
+- Do not composite through CanvasKit surfaces. Its CPU backend is about ten times slower than `raster.ts` (see the Decisions log).

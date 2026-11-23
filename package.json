@@ -10,6 +10,7 @@
     "dev": "pnpm --filter @cardsmith/desktop tauri dev",
     "build": "pnpm --filter @cardsmith/desktop tauri build",
     "test": "vitest run",
+    "test:parity": "pnpm --filter @cardsmith/desktop exec tsx scripts/parity.ts",
     "typecheck": "tsc -b && pnpm --filter @cardsmith/desktop check",
     "render": "tsx packages/render/src/cli.ts",
     "survey": "tsx packages/importer/src/survey/cli.ts",
