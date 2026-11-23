@@ -66,10 +66,13 @@ fn run(args: &[String]) -> Result<(), String> {
         Some("render") => {
             let mut input = None;
             let mut out = None;
+            let mut raw = None;
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
                     "-o" | "--out" => out = rest.next(),
+                    // Also write the pixels as bare RGBA bytes, for tools that compare them.
+                    "--raw" => raw = rest.next(),
                     _ => input = Some(arg),
                 }
             }
@@ -79,6 +82,9 @@ fn run(args: &[String]) -> Result<(), String> {
             let r = render(&doc, &assets);
             let elapsed = started.elapsed().as_millis();
             write(Path::new(out), &encode_png(r.width, r.height, &r.pixels).map_err(|e| e.to_string())?)?;
+            if let Some(raw) = raw {
+                write(Path::new(raw), &r.pixels)?;
+            }
             for warning in &r.warnings {
                 eprintln!("warning: {warning}");
             }

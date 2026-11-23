@@ -24,7 +24,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 | Card data | Scryfall API and Scryfall bulk data |
 | Symbols | Mana font (open license) for mana symbols. Scryfall `/sets` SVGs and Keyrune for set symbols |
 
-**Migration in progress (SPEC Phase 1R):** the core is ported to `crates/core` and the app runs it through `crates/wasm`. `packages/doc` and `packages/render` are the TypeScript originals; the app now uses `packages/doc` only for its type definitions. Do not add features to the TypeScript renderer. It is removed in Phase 1R task 7.
+`packages/doc` is only the TypeScript description of the document JSON, for the UI and the importer. The Rust core is the implementation and rejects anything that does not match `crates/core/src/doc.rs`, so change the two together.
 
 ## Repository layout (target)
 
@@ -32,6 +32,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 crates/core/           Rust core: doc model, commands, compositor, effects, renderer, brush, text
 crates/cli/            Native binary: render, samples, batch
 crates/wasm/           WebAssembly bindings used by the app
+packages/doc/          TypeScript types for the document JSON (no logic)
 apps/desktop/          Tauri app (src-tauri/ = Rust shell, src/ = Svelte UI)
 packages/importer/     PSD -> template package converter + feature survey (TypeScript, offline)
 packages/cards/        Card model, Scryfall client, frame logic, layouts
@@ -83,7 +84,7 @@ Proxyshop drives Photoshop over COM. Port the **decisions** it makes, not the Ph
 - Read the current phase in `docs/SPEC.md`. Break it into tasks, do them in order, and run the tests after each one.
 - Commit small. Every commit leaves `pnpm test` green.
 - When you hit an open question from the spec, don't guess silently. Write the decision you made under "Decisions log" at the bottom of `docs/SPEC.md`.
-- Visual debugging: `pnpm render <doc.json> -o out.png` renders headless. `pnpm test:golden --update <name>` updates one reference, and only after a human has confirmed the new output is correct.
+- Visual debugging: `cargo run --release -p cardsmith-cli -- render <doc.json> -o out.png` renders headless. `pnpm test:golden --update <name>` updates one reference, and only after a human has confirmed the new output is correct.
 
 ## Commands
 
@@ -94,14 +95,13 @@ cargo test --workspace   # Rust core tests (also: pnpm test:rust)
 cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <png>   # headless render (Rust)
 cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
-pnpm test             # TypeScript unit tests (Vitest)
+pnpm test             # TypeScript unit tests (Vitest): the importer and survey
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
 pnpm build:wasm             # build crates/wasm and copy it into the app (pnpm dev does this for you)
 pnpm test:parity            # native vs WASM-in-Node vs WASM-in-Chromium frame hashes, plus brush timings in the frontend (frontend part skips without Playwright)
 pnpm test:parity --app      # the same, with the frontend running in the real Tauri window (needs a display; xvfb-run -a works)
 pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
 pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
-pnpm spike:text [-o <png>]                  # Phase 0 CanvasKit text-fit spike
 ```
 
 Not built yet (Phase 2): `pnpm test:golden`, `pnpm import <psd> -o <template-dir>`.
@@ -115,5 +115,5 @@ Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the
 - `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree; tile caches for path coverage and effects), `paint.rs` (brush engine), `session.rs` (an open document: edits, strokes, undo, incremental redraw, the on-screen view), `samples.rs` (sample documents, including the card-sized one). Tests are in `crates/core/tests` and beside the modules.
 - **Two invariants the tests enforce, and that every renderer change must keep:** drawing a region gives exactly the pixels a full render has there, and a session's incrementally updated frame always equals a fresh full render.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
-- `crates/cli`: `cardsmith render | samples | hashes`.
+- `crates/cli`: `cardsmith render | samples | hashes | bench`.
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

@@ -15,10 +15,8 @@
     "test:rust": "cargo test --workspace",
     "test:parity": "pnpm --filter @cardsmith/desktop exec tsx scripts/parity.ts",
     "typecheck": "pnpm build:wasm && tsc -b && pnpm --filter @cardsmith/desktop check",
-    "render": "tsx packages/render/src/cli.ts",
     "survey": "tsx packages/importer/src/survey/cli.ts",
     "composite": "tsx packages/importer/src/composite/cli.ts",
-    "spike:text": "tsx packages/render/src/spike/cli.ts",
     "build:wasm": "cargo build --release -p cardsmith-wasm --target wasm32-unknown-unknown && mkdir -p apps/desktop/src/wasm && cp target/wasm32-unknown-unknown/release/cardsmith_wasm.wasm apps/desktop/src/wasm/cardsmith.wasm"
   },
   "devDependencies": {

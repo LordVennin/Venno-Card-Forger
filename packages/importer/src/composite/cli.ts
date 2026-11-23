@@ -10,8 +10,8 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { readPsd } from "ag-psd";
-import { loadCanvasKit } from "@cardsmith/render";
 import { initHeadlessPsd } from "../headless.js";
+import { encodePng } from "../png.js";
 import { findPsds } from "../survey/run.js";
 
 const { values, positionals } = parseArgs({
@@ -28,7 +28,6 @@ const target = resolve(input);
 const files = (await stat(target)).isDirectory() ? await findPsds(target) : [target];
 const outDir = resolve(values.out);
 await mkdir(outDir, { recursive: true });
-const ck = await loadCanvasKit();
 initHeadlessPsd();
 
 let failed = 0;
@@ -45,20 +44,7 @@ for (const file of files) {
     if (!data || !(data.data instanceof Uint8ClampedArray || data.data instanceof Uint8Array)) {
       throw new Error("no 8-bit composite image (was the PSD saved without Maximize Compatibility?)");
     }
-    const image = ck.MakeImage(
-      {
-        width: data.width,
-        height: data.height,
-        colorType: ck.ColorType.RGBA_8888,
-        alphaType: ck.AlphaType.Unpremul,
-        colorSpace: ck.ColorSpace.SRGB,
-      },
-      data.data,
-      data.width * 4,
-    );
-    const png = image?.encodeToBytes();
-    image?.delete();
-    if (!png) throw new Error("PNG encode failed");
+    const png = encodePng(data.width, data.height, new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength));
     const out = `${outDir}/${name}.default.png`;
     await writeFile(out, png);
     console.error(`${basename(file)} -> ${out} (${data.width}x${data.height})`);

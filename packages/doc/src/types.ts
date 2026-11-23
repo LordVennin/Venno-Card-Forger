@@ -1,6 +1,8 @@
 /**
- * The document model (SPEC §2). Plain JSON all the way down: no classes, no
- * functions, no typed arrays. Binary data lives in assets and is referenced by id.
+ * The document format (SPEC §2), as the Rust core reads and writes it
+ * (`crates/core/src/doc.rs`). Keep the two in step: the core rejects anything
+ * that does not match. Plain JSON all the way down; binary data lives in
+ * assets and is referenced by id.
  */
 
 export type LayerId = string;

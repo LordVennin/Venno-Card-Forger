@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "packages/doc" }, { "path": "packages/render" }, { "path": "packages/importer" }]
+  "references": [{ "path": "packages/doc" }, { "path": "packages/importer" }]
 }
