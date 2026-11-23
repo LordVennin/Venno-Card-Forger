@@ -10,15 +10,15 @@ use crate::doc::{AssetKind, AssetRef, Doc, GroupLayer, Layer};
 use crate::effects::effect_extent;
 use crate::paint::{crop, paste, Brush, Stroke};
 use crate::raster::{Image, Raster, Region};
-use crate::render::{encode_png, hash, Renderer};
+use crate::render::{can_split_at, encode_png, hash, Renderer, Split};
 use crate::serialize::{save_cardsmith, AssetBytes};
 use crate::{err, Result};
 use std::collections::BTreeSet;
 
 enum Step {
     Edit { label: String, edit: Edit, inverse: Edit },
-    /// A brush stroke: the pixels of one image region before and after it.
-    Paint { label: String, asset: String, offset: (i32, i32), region: Region, before: Vec<u8>, after: Vec<u8>, margin: i32 },
+    /// A brush stroke: the blocks of one image it touched, each as it was before and after.
+    Paint { label: String, asset: String, offset: (i32, i32), patches: Vec<(Region, Vec<u8>, Vec<u8>)>, margin: i32 },
 }
 
 impl Step {
@@ -36,6 +36,53 @@ struct ActiveStroke {
     offset: (i32, i32),
     /// How far beyond the painted pixels the document can change (layer effects).
     margin: i32,
+}
+
+/// The flattened layers beneath the layer being painted, kept per tile so a
+/// stroke does not recomposite them on every move.
+struct Below {
+    layer: String,
+    ancestors: Vec<String>,
+    tiles: std::collections::HashMap<(i32, i32), Raster>,
+}
+
+/// Side of a `Below` tile in pixels.
+const BELOW_TILE: i32 = 256;
+
+/// What an edit can change on screen.
+enum Reach {
+    Everything,
+    Layers(Vec<String>),
+}
+
+impl Reach {
+    fn of(edit: &Edit) -> Reach {
+        match edit {
+            Edit::SetLayerProps { id, .. } | Edit::RemoveLayer { id } | Edit::MoveLayer { id, .. } => Reach::Layers(vec![id.clone()]),
+            Edit::AddLayer { layer, .. } => Reach::Layers(vec![layer.id().to_string()]),
+            Edit::SetAsset { .. } | Edit::SetDocProps { .. } => Reach::Everything,
+            Edit::Batch { edits } => {
+                let mut all = Vec::new();
+                for edit in edits {
+                    match Reach::of(edit) {
+                        Reach::Everything => return Reach::Everything,
+                        Reach::Layers(ids) => all.extend(ids),
+                    }
+                }
+                Reach::Layers(all)
+            }
+        }
+    }
+}
+
+fn union(a: Option<Region>, b: Option<Region>) -> Option<Region> {
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let (x, y) = (a.x.min(b.x), a.y.min(b.y));
+            Some(Region::new(x, y, (a.x + a.w).max(b.x + b.w) - x, (a.y + a.h).max(b.y + b.h) - y))
+        }
+        (a, b) => a.or(b),
+    }
 }
 
 /// The part of the document shown on screen: `scale` screen pixels per
@@ -62,6 +109,8 @@ pub struct Session {
     /// View-space area changed by the last call that redrew anything.
     dirty_view: Region,
     stroke: Option<ActiveStroke>,
+    /// Present while its layer is the one being painted and nothing beneath it has changed.
+    below: Option<Below>,
     /// Image assets whose pixels differ from their encoded bytes.
     painted: BTreeSet<String>,
 }
@@ -84,8 +133,10 @@ impl Session {
             view_pixels: Vec::new(),
             dirty_view: Region::new(0, 0, 0, 0),
             stroke: None,
+            below: None,
             painted: BTreeSet::new(),
         };
+        session.renderer.sync(&session.doc);
         session.redraw(whole);
         session
     }
@@ -103,7 +154,32 @@ impl Session {
     /// Re-render one region of the document into the frame, then into the view.
     fn redraw(&mut self, region: Region) {
         let Some(region) = region.intersect(&self.whole()) else { return };
-        let (part, warnings) = self.renderer.render_region(&self.doc, &self.assets, region);
+        let (part, warnings) = match (&mut self.below, &self.stroke) {
+            // Mid-stroke: start from the cached layers beneath, then draw the painted layer and what is above it.
+            (Some(below), Some(_)) => {
+                let mut part = Raster::new(region);
+                for ty in region.y.div_euclid(BELOW_TILE)..=(region.y + region.h - 1).div_euclid(BELOW_TILE) {
+                    for tx in region.x.div_euclid(BELOW_TILE)..=(region.x + region.w - 1).div_euclid(BELOW_TILE) {
+                        let (doc, assets, renderer) = (&self.doc, &self.assets, &mut self.renderer);
+                        let tile = below.tiles.entry((tx, ty)).or_insert_with(|| {
+                            let mut tile = Raster::new(Region::new(tx * BELOW_TILE, ty * BELOW_TILE, BELOW_TILE, BELOW_TILE));
+                            renderer.draw_onto(doc, assets, &mut tile, Some(Split { layer: &below.layer, ancestors: &below.ancestors, below: true }));
+                            tile
+                        });
+                        let Some(area) = region.intersect(&tile.region) else { continue };
+                        let width = area.w as usize * 4;
+                        for y in area.y..area.y + area.h {
+                            let (from, to) = (tile.region.index(area.x, y) * 4, part.region.index(area.x, y) * 4);
+                            part.data[to..to + width].copy_from_slice(&tile.data[from..from + width]);
+                        }
+                    }
+                }
+                let split = Split { layer: &below.layer, ancestors: &below.ancestors, below: false };
+                let warnings = self.renderer.draw_onto(&self.doc, &self.assets, &mut part, Some(split));
+                (part, warnings)
+            }
+            _ => self.renderer.draw_region(&self.doc, &self.assets, region),
+        };
         if region == self.whole() {
             self.warnings = warnings;
         }
@@ -214,30 +290,78 @@ impl Session {
         self.undone.clear();
     }
 
+    /// The area the layers named by `reach` can affect right now. `None` means "nothing".
+    fn area(&mut self, reach: &Reach) -> Option<Region> {
+        match reach {
+            Reach::Everything => Some(self.whole()),
+            Reach::Layers(ids) => {
+                let root = self.doc.root.base.id.clone();
+                ids.iter().fold(None, |acc, id| {
+                    if *id == root {
+                        return Some(self.whole());
+                    }
+                    union(acc, self.renderer.layer_reach(&self.doc, &self.assets, id))
+                })
+            }
+        }
+    }
+
+    /// Apply an edit and redraw what it could have changed: where the affected
+    /// layers were before, and where they are after. Returns the inverse edit.
+    fn apply_and_redraw(&mut self, edit: &Edit) -> Result<Edit> {
+        self.below = None;
+        let reach = Reach::of(edit);
+        let before = self.area(&reach);
+        let inverse = apply(&mut self.doc, edit)?;
+        self.renderer.sync(&self.doc);
+        let size = (self.doc.width as i32, self.doc.height as i32);
+        if size != (self.frame.region.w, self.frame.region.h) {
+            // The document was resized: start the frame again.
+            self.frame = Raster::new(Region::new(0, 0, size.0, size.1));
+            self.redraw(self.whole());
+            self.set_view(self.view);
+            return Ok(inverse);
+        }
+        let after = self.area(&reach);
+        if let Some(dirty) = union(before, after) {
+            self.redraw(dirty);
+        } else {
+            self.dirty_view = Region::new(0, 0, 0, 0);
+        }
+        Ok(inverse)
+    }
+
     /// Apply a structural edit. A refused edit changes nothing.
     pub fn execute(&mut self, edit: Edit, label: &str) -> Result<()> {
         if self.stroke.is_some() {
             return Err(err!("Finish the brush stroke first"));
         }
-        let inverse = apply(&mut self.doc, &edit)?;
+        let inverse = self.apply_and_redraw(&edit)?;
         self.push(Step::Edit { label: label.to_string(), edit, inverse });
-        self.redraw(self.whole());
         Ok(())
     }
 
     fn replay(&mut self, step: &Step, forward: bool) {
         match step {
             Step::Edit { edit, inverse, .. } => {
-                apply(&mut self.doc, if forward { edit } else { inverse }).expect("a recorded edit always applies");
-                self.redraw(self.whole());
+                self.apply_and_redraw(if forward { edit } else { inverse }).expect("a recorded edit always applies");
             }
-            Step::Paint { asset, offset, region, before, after, margin, .. } => {
+            Step::Paint { asset, offset, patches, margin, .. } => {
+                self.below = None;
                 if let Some(image) = self.renderer.image_mut(asset, &self.assets) {
-                    paste(image, region, if forward { after } else { before });
+                    for (region, before, after) in patches {
+                        paste(image, region, if forward { after } else { before });
+                    }
                 }
                 // The pixels no longer match the encoded bytes, whichever way this went.
                 self.painted.insert(asset.clone());
-                self.redraw(Region::new(region.x + offset.0 - margin, region.y + offset.1 - margin, region.w + margin * 2, region.h + margin * 2));
+                self.renderer.sync(&self.doc);
+                let mut dirty_view = None;
+                for (region, _, _) in patches {
+                    self.redraw(Region::new(region.x + offset.0 - margin, region.y + offset.1 - margin, region.w + margin * 2, region.h + margin * 2));
+                    dirty_view = union(dirty_view, Some(self.dirty_view).filter(|d| d.area() > 0));
+                }
+                self.dirty_view = dirty_view.unwrap_or(Region::new(0, 0, 0, 0));
             }
         }
     }
@@ -318,6 +442,22 @@ impl Session {
         }
         let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's image is unavailable"))?;
         self.stroke = Some(ActiveStroke { stroke: Stroke::new(image, brush), asset, offset, margin });
+        // While the stroke runs, effects on this layer and on the groups around it change with
+        // every dab, so they are computed fresh instead of read from the cache.
+        let mut live = Vec::new();
+        if let Some(path) = crate::tree::locate(&self.doc, layer_id) {
+            let mut layer = &self.doc.root.children[path[0]];
+            for &i in &path[1..] {
+                live.push(layer.id().to_string());
+                layer = &layer.children()[i];
+            }
+            live.push(layer.id().to_string());
+        }
+        self.renderer.set_live(&live);
+        // Keep the cached layers beneath from the previous stroke on this layer, if nothing else has changed.
+        if self.below.as_ref().is_none_or(|b| b.layer != layer_id) {
+            self.below = can_split_at(&self.doc, layer_id).map(|ancestors| Below { layer: layer_id.to_string(), ancestors, tiles: Default::default() });
+        }
         Ok(())
     }
 
@@ -335,19 +475,20 @@ impl Session {
     /// Finish the stroke and record it for undo.
     pub fn stroke_end(&mut self, label: &str) {
         let Some(active) = self.stroke.take() else { return };
-        let Some(region) = active.stroke.dirty() else { return };
+        self.renderer.set_live(&[]);
+        self.renderer.sync(&self.doc);
         let Some(image) = self.renderer.image(&active.asset) else { return };
-        let step = Step::Paint {
-            label: label.to_string(),
-            before: crop(active.stroke.before(), image.w, &region),
-            after: crop(&image.data, image.w, &region),
-            asset: active.asset.clone(),
-            offset: active.offset,
-            region,
-            margin: active.margin,
-        };
-        self.painted.insert(active.asset);
-        self.push(step);
+        let patches: Vec<(Region, Vec<u8>, Vec<u8>)> = active
+            .stroke
+            .patches(image)
+            .into_iter()
+            .map(|region| (region, crop(active.stroke.before(), image.w, &region), crop(&image.data, image.w, &region)))
+            .collect();
+        if patches.is_empty() {
+            return;
+        }
+        self.painted.insert(active.asset.clone());
+        self.push(Step::Paint { label: label.to_string(), asset: active.asset, offset: active.offset, patches, margin: active.margin });
     }
 
     // ---- saving -------------------------------------------------------------------

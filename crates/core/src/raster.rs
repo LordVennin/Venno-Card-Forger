@@ -192,9 +192,18 @@ pub fn composite(dst: &mut Raster, src: &Raster, opacity: f32, blend: BlendMode,
 }
 
 /// What a stamp paints with: one color (0..255, alpha 0..1), or a gradient.
+#[derive(Clone)]
 pub enum Ink {
     Solid([f32; 4]),
-    Gradient(GradientInk),
+    Gradient(std::rc::Rc<GradientInk>),
+}
+
+/// How much of each pixel a stamp covers.
+pub enum Cover<'a> {
+    /// One byte per pixel of the stamp's region, 0..255.
+    Map(&'a [u8]),
+    /// Every pixel fully.
+    Full,
 }
 
 /// A gradient sampled into a lookup table. Stops interpolate in straight sRGB,
@@ -248,8 +257,8 @@ impl GradientInk {
     }
 }
 
-/// Paint `ink` onto `dst` through a coverage map (0..1) laid over `region`.
-pub fn stamp(dst: &mut Raster, region: &Region, coverage: &[f32], ink: &Ink, opacity: f32, blend: BlendMode) {
+/// Paint `ink` onto `dst` through a coverage map laid over `region`.
+pub fn stamp(dst: &mut Raster, region: &Region, coverage: &Cover, ink: &Ink, opacity: f32, blend: BlendMode) {
     let Some(area) = dst.region.intersect(region) else { return };
     if opacity <= 0.0 {
         return;
@@ -258,13 +267,16 @@ pub fn stamp(dst: &mut Raster, region: &Region, coverage: &[f32], ink: &Ink, opa
         let mut di = dst.region.index(area.x, y) * 4;
         let mut ci = region.index(area.x, y);
         for x in area.x..area.x + area.w {
-            let cov = coverage[ci];
-            if cov > 0.0 {
+            let cov = match coverage {
+                Cover::Map(map) => map[ci],
+                Cover::Full => 255,
+            };
+            if cov != 0 {
                 let c = match ink {
                     Ink::Solid(c) => *c,
                     Ink::Gradient(g) => g.at(x, y),
                 };
-                let a = cov * c[3] * opacity;
+                let a = cov as f32 / 255.0 * c[3] * opacity;
                 if a > 0.0 {
                     mix(&mut dst.data[di..di + 4], [c[0], c[1], c[2]], a, blend, false);
                 }
@@ -441,10 +453,13 @@ mod tests {
     #[test]
     fn stamp_paints_through_coverage_clipped_to_the_destination() {
         let mut dst = filled(0, 0, 4, 1, [0, 0, 0, 255]);
-        stamp(&mut dst, &Region::new(2, 0, 4, 1), &[1.0, 0.5, 1.0, 1.0], &Ink::Solid([255.0, 255.0, 255.0, 1.0]), 1.0, Normal);
+        let white = Ink::Solid([255.0, 255.0, 255.0, 1.0]);
+        stamp(&mut dst, &Region::new(2, 0, 4, 1), &Cover::Map(&[255, 128, 255, 255]), &white, 1.0, Normal);
         assert_eq!(dst.pixel(1, 0), [0, 0, 0, 255]);
         assert_eq!(dst.pixel(2, 0), [255, 255, 255, 255]);
         assert_eq!(dst.pixel(3, 0), [128, 128, 128, 255]);
+        stamp(&mut dst, &Region::new(0, 0, 1, 1), &Cover::Full, &white, 0.5, Normal);
+        assert_eq!(dst.pixel(0, 0), [128, 128, 128, 255]);
     }
 
     #[test]

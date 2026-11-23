@@ -8,6 +8,10 @@
 
 use crate::raster::{Image, Region};
 use serde::Deserialize;
+use std::collections::BTreeSet;
+
+/// Undo data is kept per block of this many pixels, so a long thin stroke stores only what it crossed.
+pub const PATCH: i32 = 256;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -40,6 +44,8 @@ pub struct Stroke {
     coverage: Vec<u8>,
     /// Everything this stroke has touched, in image pixels.
     dirty: Option<Region>,
+    /// The `PATCH`-sized blocks of the image the stroke has touched.
+    patches: BTreeSet<(i32, i32)>,
     last: Option<(f32, f32)>,
     /// Distance travelled since the last dab.
     carry: f32,
@@ -58,12 +64,18 @@ fn union(a: Option<Region>, b: Region) -> Region {
 
 impl Stroke {
     pub fn new(image: &Image, brush: Brush) -> Stroke {
-        Stroke { brush, before: image.data.clone(), coverage: vec![0; image.w as usize * image.h as usize], dirty: None, last: None, carry: 0.0 }
+        Stroke { brush, before: image.data.clone(), coverage: vec![0; image.w as usize * image.h as usize], dirty: None, patches: BTreeSet::new(), last: None, carry: 0.0 }
     }
 
     /// Everything the stroke has changed so far, in image pixels.
     pub fn dirty(&self) -> Option<Region> {
         self.dirty
+    }
+
+    /// The blocks of the image the stroke has touched, each cut to the image.
+    pub fn patches(&self, image: &Image) -> Vec<Region> {
+        let whole = Region::new(0, 0, image.w, image.h);
+        self.patches.iter().filter_map(|&(px, py)| Region::new(px * PATCH, py * PATCH, PATCH, PATCH).intersect(&whole)).collect()
     }
 
     /// The image's pixels before the stroke, for undo.
@@ -103,6 +115,11 @@ impl Stroke {
     fn dab(&mut self, image: &mut Image, cx: f32, cy: f32, radius: f32) -> Option<Region> {
         let area = Region::new((cx - radius - 1.0).floor() as i32, (cy - radius - 1.0).floor() as i32, (radius * 2.0 + 3.0).ceil() as i32, (radius * 2.0 + 3.0).ceil() as i32)
             .intersect(&Region::new(0, 0, image.w, image.h))?;
+        for py in area.y.div_euclid(PATCH)..=(area.y + area.h - 1).div_euclid(PATCH) {
+            for px in area.x.div_euclid(PATCH)..=(area.x + area.w - 1).div_euclid(PATCH) {
+                self.patches.insert((px, py));
+            }
+        }
         let inner = radius * self.brush.hardness.clamp(0.0, 1.0);
         let fade = radius - inner;
         let opacity = self.brush.opacity.clamp(0.0, 1.0);
@@ -271,7 +288,15 @@ mod tests {
         assert!(dirty.x >= 0 && dirty.y >= 0 && dirty.x + dirty.w <= 30 && dirty.y + dirty.h <= 30);
         assert_ne!(image.data, original);
         let before = crop(stroke.before(), 30, &dirty);
+        let painted = image.data.clone();
         paste(&mut image, &dirty, &before);
+        assert_eq!(image.data, original);
+        // The touched blocks cover the same change.
+        image.data = painted;
+        for patch in stroke.patches(&image) {
+            let before = crop(stroke.before(), 30, &patch);
+            paste(&mut image, &patch, &before);
+        }
         assert_eq!(image.data, original);
     }
 }

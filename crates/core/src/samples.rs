@@ -173,6 +173,99 @@ fn effects_sample() -> Sample {
     Sample { name: "effects", doc, assets: AssetBytes::new() }
 }
 
+/// A card-sized stand-in (3264×4440, about 45 layers) for measuring edit
+/// speed. It is not a real template: just the same kinds of layers in about
+/// the same places, with the effects a frame uses.
+pub fn card() -> Sample {
+    let (w, h) = (3264u32, 4440u32);
+    let mut doc = Doc::empty(w, h, 1200.0);
+    let mut assets = AssetBytes::new();
+    // Low-resolution "art", scaled up 4× by its layer.
+    assets.insert("art".into(), image(720, 540, |x, y| {
+        let (fx, fy) = (x as f32 / 720.0, y as f32 / 540.0);
+        let wave = ((fx * 9.0).sin() * (fy * 7.0).cos() * 0.5 + 0.5) * 255.0;
+        [(40.0 + fx * 160.0) as u8, (wave * 0.6 + 40.0) as u8, (200.0 - fy * 150.0) as u8, 255]
+    }));
+    doc.assets.insert("art".into(), AssetRef { kind: AssetKind::Image, path: "assets/art.png".into(), width: Some(720), height: Some(540) });
+
+    let on = json!({ "enabled": true, "blend": "normal", "opacity": 1 });
+    let fx = |own: serde_json::Value| {
+        let mut merged = on.as_object().unwrap().clone();
+        merged.extend(own.as_object().unwrap().clone());
+        serde_json::Value::Object(merged)
+    };
+    let black = json!([0, 0, 0, 1]);
+    let bevel = |size: f64| json!({
+        "type": "bevel", "enabled": true, "style": "inner", "technique": "chiselHard", "direction": "up", "depth": 1, "size": size, "soften": 4, "angle": 120, "altitude": 30,
+        "highlight": { "color": [1, 1, 1, 1], "blend": "screen", "opacity": 0.6 },
+        "shadow": { "color": [0, 0, 0, 1], "blend": "multiply", "opacity": 0.6 }
+    });
+    let shadow = |distance: f64, size: f64| fx(json!({ "type": "dropShadow", "color": black, "blend": "multiply", "opacity": 0.75, "angle": 120, "distance": distance, "spread": 0.1, "size": size }));
+    let outline = |size: f64| fx(json!({ "type": "stroke", "color": [0.05, 0.05, 0.05, 1], "size": size, "position": "outside" }));
+    let styled = |layer: Layer, effects_json: serde_json::Value| with(layer, |b| b.effects = effects(effects_json));
+    let plate: Color = [0.86, 0.82, 0.72, 1.0];
+    let gold: Color = [0.80, 0.66, 0.34, 1.0];
+
+    // Alternatives a card engine would switch between: present but hidden, as in a real template.
+    let hidden = |prefix: &str, d: &str| -> Vec<Layer> {
+        ["W", "U", "B", "R", "G"].iter().enumerate().map(|(i, c)| with(shape(&format!("{prefix}-{c}"), d, [0.2 * i as f64, 0.5, 0.6, 1.0]), |b| b.visible = false)).collect()
+    };
+    let text_lines = |prefix: &str, x: f64, y: f64, width: f64, count: usize| -> Vec<Layer> {
+        (0..count).map(|i| shape(&format!("{prefix}-{i}"), &round_rect(x, y + i as f64 * 96.0, width - (i % 3) as f64 * 240.0, 44.0, 10.0), [0.08, 0.08, 0.08, 1.0])).collect()
+    };
+    let frame_d = round_rect(150.0, 150.0, 2964.0, 4140.0, 120.0);
+    let mut pinlines = vec![styled(shape("pinlines-gold", &frame_d, gold), json!([bevel(28.0), outline(10.0)]))];
+    pinlines.extend(hidden("pinlines", &frame_d));
+    let mut backgrounds = vec![styled(shape("background-gold", &round_rect(200.0, 200.0, 2864.0, 4040.0, 90.0), [0.62, 0.52, 0.30, 1.0]), json!([fx(json!({
+        "type": "gradientOverlay", "style": "linear", "angle": 90, "scale": 1, "blend": "softLight", "opacity": 0.8,
+        "gradient": { "stops": [{ "offset": 0, "color": [0, 0, 0, 1] }, { "offset": 1, "color": [1, 1, 1, 1] }] }
+    }))]))];
+    backgrounds.extend(hidden("background", &round_rect(200.0, 200.0, 2864.0, 4040.0, 90.0)));
+    let symbols: Vec<Layer> = (0..5)
+        .map(|i| styled(shape(&format!("mana-{i}"), &circle(2780.0 - i as f64 * 190.0, 420.0, 80.0), [0.75, 0.75, 0.72, 1.0]), json!([shadow(10.0, 8.0)])))
+        .collect();
+
+    doc.root.children = vec![
+        shape("border", &rect_path(0.0, 0.0, w as f64, h as f64), [0.0, 0.0, 0.0, 1.0]),
+        with(group("Background", true, backgrounds), |b| b.name = "Background".into()),
+        with(pixel("art", "art", [4.0, 0.0, 192.0, 0.0, 4.0, 520.0]), |b| {
+            b.name = "Art".into();
+            b.vector_mask = Some(VectorMask { path: Path { d: round_rect(260.0, 560.0, 2744.0, 2000.0, 40.0), fill_rule: None }, enabled: None, inverted: None });
+        }),
+        with(shape("art-shade", &rect_path(260.0, 560.0, 2744.0, 2000.0), [0.3, 0.3, 0.4, 1.0]), |b| {
+            b.blend = BlendMode::SoftLight;
+            b.opacity = 0.5;
+        }),
+        with(group("Pinlines", true, pinlines), |b| {
+            b.name = "Pinlines".into();
+            // A frame is a ring: everything inside the inner outline is cut away.
+            b.vector_mask = Some(VectorMask { path: Path { d: round_rect(240.0, 240.0, 2784.0, 3960.0, 70.0), fill_rule: None }, enabled: None, inverted: Some(true) });
+        }),
+        styled(shape("art-frame", &round_rect(250.0, 550.0, 2764.0, 2020.0, 44.0), [0.0, 0.0, 0.0, 0.0]), json!([outline(14.0), fx(json!({ "type": "innerShadow", "color": black, "blend": "multiply", "opacity": 0.6, "angle": 120, "distance": 10, "choke": 0, "size": 24 }))])),
+        group("Name & Title Boxes", true, vec![
+            styled(shape("name-box", &round_rect(230.0, 270.0, 2804.0, 250.0, 60.0), plate), json!([shadow(12.0, 16.0), bevel(16.0), outline(8.0)])),
+            styled(shape("type-box", &round_rect(230.0, 2600.0, 2804.0, 230.0, 60.0), plate), json!([shadow(12.0, 16.0), bevel(16.0), outline(8.0)])),
+            with(shape("box-tint", &rect_path(230.0, 270.0, 2804.0, 2560.0), gold), |b| {
+                b.clip = true;
+                b.blend = BlendMode::Overlay;
+                b.opacity = 0.4;
+            }),
+        ]),
+        styled(shape("textbox", &round_rect(260.0, 2860.0, 2744.0, 1180.0, 30.0), [0.93, 0.91, 0.85, 1.0]), json!([fx(json!({ "type": "innerShadow", "color": black, "blend": "multiply", "opacity": 0.5, "angle": 120, "distance": 8, "choke": 0, "size": 20 })), outline(8.0)])),
+        styled(shape("pt-box", &round_rect(2360.0, 3960.0, 620.0, 260.0, 70.0), plate), json!([shadow(14.0, 18.0), bevel(18.0), outline(8.0)])),
+        group("Text and Icons", true, [
+            vec![shape("card-name", &round_rect(300.0, 340.0, 1300.0, 110.0, 20.0), [0.05, 0.05, 0.05, 1.0])],
+            symbols,
+            vec![shape("typeline", &round_rect(300.0, 2665.0, 1500.0, 100.0, 20.0), [0.05, 0.05, 0.05, 1.0])],
+            vec![styled(shape("set-symbol", &circle(2880.0, 2715.0, 80.0), gold), json!([outline(8.0), fx(json!({ "type": "gradientOverlay", "style": "linear", "angle": 90, "scale": 1, "gradient": { "stops": [{ "offset": 0, "color": [0.6, 0.45, 0.15, 1] }, { "offset": 0.5, "color": [1, 0.92, 0.6, 1] }, { "offset": 1, "color": [0.6, 0.45, 0.15, 1] }] } }))]))],
+            text_lines("rules", 340.0, 2950.0, 2500.0, 9),
+            vec![shape("pt-text", &round_rect(2470.0, 4035.0, 400.0, 110.0, 20.0), [0.05, 0.05, 0.05, 1.0])],
+            vec![shape("collector", &round_rect(300.0, 4250.0, 900.0, 50.0, 10.0), [0.9, 0.9, 0.9, 1.0]), shape("artist", &round_rect(300.0, 4330.0, 700.0, 50.0, 10.0), [0.9, 0.9, 0.9, 1.0])],
+        ].into_iter().flatten().collect()),
+    ];
+    Sample { name: "card", doc, assets }
+}
+
 pub fn samples() -> Vec<Sample> {
     vec![compositing(), effects_sample()]
 }

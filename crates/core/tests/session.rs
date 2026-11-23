@@ -216,3 +216,40 @@ fn saving_keeps_painted_pixels() {
     assert!(reopened.frame() == s.frame());
     assert_eq!(frame_px(&reopened, 60, 40), [255, 0, 0, 255]);
 }
+
+#[test]
+fn painting_between_layers_is_exact_whether_or_not_the_stack_can_be_split() {
+    // The painted layer sits in the middle of the stack, inside nested groups, under a multiply layer.
+    let build = |outer_opacity: f64| {
+        let mut doc = scene_doc();
+        doc.assets.insert("ink".into(), AssetRef { kind: AssetKind::Image, path: "assets/ink.png".into(), width: None, height: None });
+        let inner = group("inner", true, vec![rect("under", 30.0, 20.0, 40.0, 30.0, [0.0, 0.6, 0.0, 1.0]), pixel("ink", "ink", IDENTITY), rect("over", 50.0, 25.0, 30.0, 30.0, [0.0, 0.0, 1.0, 0.5])]);
+        doc.root.children.push(patch(group("outer", true, vec![inner]), json!({ "opacity": outer_opacity })));
+        doc.root.children.push(patch(rect("tint", 0.0, 0.0, 120.0, 80.0, [1.0, 0.8, 0.8, 1.0]), json!({ "blend": "multiply" })));
+        let mut assets = AssetBytes::new();
+        assets.insert("ink".into(), png(120, 80, |_, _| [0, 0, 0, 0]));
+        Session::new(doc, assets)
+    };
+    // At full opacity the groups are plain containers and the stack is split at the layer.
+    // At 50% the outer group is composited as a unit, so the whole stack is redrawn.
+    for opacity in [1.0, 0.5] {
+        let mut s = build(opacity);
+        for round in 0..2 {
+            s.stroke_begin("ink", Brush { erase: round == 1, ..red(14.0) }).unwrap();
+            for (x, y) in [(20.0, 20.0), (70.0, 45.0), (110.0, 30.0 + round as f32 * 20.0)] {
+                s.stroke_to(x, y, 1.0);
+            }
+            s.stroke_end("Stroke");
+            assert_frame_is_exact(&mut s);
+        }
+        // An edit beneath the painted layer, then more painting: the cached layers beneath must not be reused.
+        s.execute(Edit::SetLayerProps { id: "under".into(), props: json!({ "visible": false }).as_object().unwrap().clone() }, "Hide").unwrap();
+        s.stroke_begin("ink", red(10.0)).unwrap();
+        s.stroke_to(45.0, 35.0, 1.0);
+        s.stroke_end("Stroke");
+        assert_frame_is_exact(&mut s);
+        s.undo();
+        s.undo();
+        assert_frame_is_exact(&mut s);
+    }
+}

@@ -64,6 +64,7 @@ name = "cardsmith-cli"
 version = "0.0.0"
 dependencies = [
  "cardsmith-core",
+ "serde_json",
 ]
 
 [[package]]

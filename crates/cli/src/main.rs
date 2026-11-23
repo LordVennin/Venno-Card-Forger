@@ -1,6 +1,7 @@
 //! cardsmith render <doc.json | file.cardsmith> -o <out.png>
 //! cardsmith samples <dir>
 //! cardsmith hashes        print a hash of each sample render
+//! cardsmith bench         time editing on the card-sized sample
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -13,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -60,6 +61,7 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        Some("bench") => bench(),
         Some("render") => {
             let mut input = None;
             let mut out = None;
@@ -84,6 +86,53 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         _ => Err(USAGE.into()),
     }
+}
+
+/// Time the operations that matter for editing, on the card-sized sample.
+fn bench() -> Result<(), String> {
+    use cardsmith_core::paint::Brush;
+    use cardsmith_core::session::{Session, View};
+    let timed = |label: &str, f: &mut dyn FnMut()| {
+        let started = Instant::now();
+        f();
+        println!("{label:<52} {:>8.1} ms", started.elapsed().as_secs_f64() * 1000.0);
+    };
+    let sample = cardsmith_core::samples::card();
+    let layers = { let mut n = 0; cardsmith_core::tree::walk(&sample.doc.root, &mut |_| n += 1); n };
+    println!("card sample: {}×{}, {layers} layers", sample.doc.width, sample.doc.height);
+    let mut session = None;
+    timed("open and render everything", &mut || session = Some(Session::new(sample.doc.clone(), sample.assets.clone())));
+    let mut s = session.unwrap();
+    timed("fit-to-window view (980×1333)", &mut || s.set_view(View { scale: 0.3, x: 0.0, y: 0.0, w: 980, h: 1333 }));
+    let mut layer = String::new();
+    timed("add a paint layer (full redraw)", &mut || layer = s.add_paint_layer("Paint").unwrap());
+
+    for (size, hardness) in [(32.0, 1.0), (128.0, 0.8), (256.0, 0.5), (600.0, 0.0)] {
+        let brush = Brush { size, hardness, color: [200, 30, 30], ..Brush::default() };
+        let begin = Instant::now();
+        s.stroke_begin(&layer, brush).map_err(|e| e.to_string())?;
+        let begin = begin.elapsed().as_secs_f64() * 1000.0;
+        // A diagonal stroke across the art and the frame, in mouse-sized steps.
+        let mut times = Vec::new();
+        for i in 0..60 {
+            let started = Instant::now();
+            s.stroke_to(500.0 + i as f32 * 36.0, 700.0 + i as f32 * 40.0, 1.0);
+            times.push(started.elapsed().as_secs_f64() * 1000.0);
+        }
+        s.stroke_end("Brush");
+        times.sort_by(f64::total_cmp);
+        println!(
+            "brush {size:>4.0} px: begin {begin:>5.1} ms, per move: median {:>5.1}, 95th {:>5.1}, worst {:>5.1} ms",
+            times[times.len() / 2], times[times.len() * 95 / 100], times[times.len() - 1]
+        );
+    }
+    timed("undo last stroke", &mut || { s.undo(); });
+    timed("redo", &mut || { s.redo(); });
+    timed("toggle a layer (full redraw)", &mut || {
+        let props = serde_json::json!({ "visible": false }).as_object().unwrap().clone();
+        s.execute(cardsmith_core::commands::Edit::SetLayerProps { id: "art-shade".into(), props }, "Hide").unwrap();
+    });
+    Ok(())
 }
 
 fn main() -> ExitCode {

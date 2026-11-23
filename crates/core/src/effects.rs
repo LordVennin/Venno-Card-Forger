@@ -15,7 +15,7 @@ pub struct Shape {
     /// May extend past the document: outside it, alpha is zero.
     pub region: Region,
     pub alpha: Vec<f32>,
-    /// Tight bounds of the non-transparent pixels.
+    /// The layer's bounds in the document. Gradients are laid out across these.
     pub bounds: Region,
 }
 
@@ -30,18 +30,6 @@ pub struct Stamp<'a> {
 /// zero at about `size`; a Gaussian of size/2 is the usual match. Calibrated
 /// against golden references in Phase 2.
 const SIGMA_PER_SIZE: f32 = 0.5;
-
-/// How far outside the layer's alpha an effect can paint, in pixels.
-pub fn effect_reach(effect: &Effect) -> i32 {
-    let reach = match effect {
-        Effect::DropShadow { distance, size, .. } => distance + size * 1.6 + 2.0,
-        Effect::OuterGlow { size, .. } => size * 1.6 + 2.0,
-        Effect::Stroke { size, position, .. } if *position != StrokePosition::Inside => size + 2.0,
-        Effect::Bevel { style: BevelStyle::Outer, size, soften, .. } => size + soften * 1.6 + 2.0,
-        _ => 0.0,
-    };
-    reach.ceil() as i32
-}
 
 /// How far an effect can be influenced by, or paint away from, a change in the
 /// layer's alpha, in any direction. A region re-render must see this much of
@@ -155,7 +143,7 @@ impl<'a> EffectContext<'a> {
                 if stops.is_empty() {
                     return Vec::new();
                 }
-                let ink = Ink::Gradient(GradientInk::new(&stops, radial, start, end));
+                let ink = Ink::Gradient(std::rc::Rc::new(GradientInk::new(&stops, radial, start, end)));
                 vec![Stamp { coverage: Cow::Borrowed(alpha), ink, blend: *blend, opacity: *opacity as f32 }]
             }
 
