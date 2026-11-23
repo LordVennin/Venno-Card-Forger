@@ -72,6 +72,8 @@ export type Effect =
       /** 1 = the gradient spans the layer's bounds exactly. */
       scale: number;
       reverse?: boolean;
+      /** Shift of the gradient's center, as a fraction of the layer's width and height. */
+      offset?: Vec2;
     })
   | (EffectPaint & {
       type: "stroke";

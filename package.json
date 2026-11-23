@@ -17,7 +17,8 @@
     "typecheck": "pnpm build:wasm && tsc -b && pnpm --filter @cardsmith/desktop check",
     "survey": "tsx packages/importer/src/survey/cli.ts",
     "composite": "tsx packages/importer/src/composite/cli.ts",
-    "build:wasm": "cargo build --release -p cardsmith-wasm --target wasm32-unknown-unknown && mkdir -p apps/desktop/src/wasm && cp target/wasm32-unknown-unknown/release/cardsmith_wasm.wasm apps/desktop/src/wasm/cardsmith.wasm"
+    "build:wasm": "cargo build --release -p cardsmith-wasm --target wasm32-unknown-unknown && mkdir -p apps/desktop/src/wasm && cp target/wasm32-unknown-unknown/release/cardsmith_wasm.wasm apps/desktop/src/wasm/cardsmith.wasm",
+    "import:psd": "tsx packages/importer/src/import/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

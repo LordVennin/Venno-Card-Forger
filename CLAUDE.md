@@ -102,13 +102,15 @@ pnpm test:parity            # native vs WASM-in-Node vs WASM-in-Chromium frame h
 pnpm test:parity --app      # the same, with the frontend running in the real Tauri window (needs a display; xvfb-run -a works)
 pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
 pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
+
+pnpm import:psd <psd> -o <template-dir>     # convert a PSD into a template package (doc.json, assets/, manifest.json)
 ```
 
-Not built yet (Phase 2): `pnpm test:golden`, `pnpm import <psd> -o <template-dir>`.
+Not built yet (Phase 2): `pnpm test:golden`.
 
 `pnpm dev` needs the Tauri Linux libraries (`libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`) and the Rust WASM target (`rustup target add wasm32-unknown-unknown`).
 
-Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the PSDs, `survey/` the survey output, `golden/` the reference images.
+Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the PSDs, `imported/` the template packages made from them, `survey/` the survey output, `golden/` the reference images.
 
 ## Where things are
 

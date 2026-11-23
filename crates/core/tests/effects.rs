@@ -87,6 +87,15 @@ fn gradient_reverses_scales_and_stays_inside_the_layer() {
 }
 
 #[test]
+fn gradient_offset_shifts_the_center_by_a_fraction_of_the_bounds() {
+    // The square is 20 px wide; a quarter of that moves the midpoint 5 px to the right.
+    let plain = gradient(json!({}));
+    let shifted = gradient(json!({ "offset": { "x": 0.25, "y": 0 } }));
+    near(px(&shifted, 25, 20), px(&plain, 20, 20));
+    near(px(&shifted, 20, 20), px(&plain, 15, 20));
+}
+
+#[test]
 fn radial_gradient_starts_at_the_center() {
     let r = gradient(json!({ "style": "radial" }));
     assert!(px(&r, 20, 20)[0] > 230);

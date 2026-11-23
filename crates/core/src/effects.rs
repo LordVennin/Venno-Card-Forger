@@ -126,10 +126,11 @@ impl<'a> EffectContext<'a> {
                 vec![Stamp { coverage: Cow::Borrowed(alpha), ink: solid(color), blend: *blend, opacity: *opacity as f32 }]
             }
 
-            Effect::GradientOverlay { blend, opacity, gradient, style, angle, scale, reverse, .. } => {
+            Effect::GradientOverlay { blend, opacity, gradient, style, angle, scale, reverse, offset, .. } => {
                 let (lx, ly) = light_dir(*angle);
-                let cx = bounds.x as f64 + bounds.w as f64 / 2.0;
-                let cy = bounds.y as f64 + bounds.h as f64 / 2.0;
+                let shift = offset.unwrap_or(crate::doc::Vec2 { x: 0.0, y: 0.0 });
+                let cx = bounds.x as f64 + bounds.w as f64 * (0.5 + shift.x);
+                let cy = bounds.y as f64 + bounds.h as f64 * (0.5 + shift.y);
                 // The gradient line crosses the bounds' center and spans their projection onto its direction.
                 let half = ((bounds.w as f64 * lx).abs() + (bounds.h as f64 * ly).abs()) / 2.0 * scale;
                 let radial = *style == GradientStyle::Radial;

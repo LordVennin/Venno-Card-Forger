@@ -20,8 +20,8 @@ Read this section as the scope. The generated tables below it are the evidence.
 
 - Color overlay and most drop shadows are defined on layers whose whole layer style is switched off. Proxyshop turns some of these on at render time, so they are in scope even though the default state does not show them. The engine needs a "layer style enabled" flag separate from each effect's own flag.
 - Not present, so not built: inner glow, satin, pattern overlay, gradient or pattern strokes, noise gradients.
-- **Effect scale.** Every layer with effects has an effects scale of 16.667 (1200 DPI ÷ 72). The importer must multiply effect sizes, distances and spreads by it.
-- No effect uses the global light angle, but the files store one (90° and 102°).
+- **Effect scale.** Every layer with effects records an effects scale of 16.667 (1200 DPI ÷ 72). It is metadata, not a multiplier: the sizes in the file are already document pixels (confirmed in Phase 2 by rendering against the composites).
+- Some effects use the document's global light (90° in one file, 102° in the other two, with altitudes of 30° and 21°). The importer resolves it to a plain angle on each effect.
 
 **Masks and clipping.**
 - Vector masks on layers (73) and on groups (8), some with several subpaths, some disabled.

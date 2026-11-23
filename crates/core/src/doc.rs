@@ -149,6 +149,9 @@ pub enum Effect {
         scale: f64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reverse: Option<bool>,
+        /// Shift of the gradient's center, as a fraction of the layer's width and height.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        offset: Option<Vec2>,
     },
     Stroke {
         enabled: bool,
