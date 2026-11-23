@@ -1,0 +1,195 @@
+{
+ "//": "The rules-text suite for pnpm test:text. Rules text is the cards' own; the flavor lines were written for this suite and are not from the cards. The box is the rules text area of the normal template: its width, and the height of the textbox reference less the 64 px Proxyshop leaves spare.",
+ "box": {
+  "w": 2486,
+  "h": 1177
+ },
+ "size": 150,
+ "dpi": 1200,
+ "font": "PlantinMTPro-Regular",
+ "cards": [
+  {
+   "name": "Serra Angel",
+   "rules": "Flying, vigilance",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Llanowar Elves",
+   "rules": "{T}: Add {G}.",
+   "flavor": "\"The mountain keeps what it is given.\"\n—Miners' saying"
+  },
+  {
+   "name": "Lightning Bolt",
+   "rules": "Lightning Bolt deals 3 damage to any target.",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Grizzly Bears",
+   "rules": "",
+   "flavor": "The first settlers named the valley for its silence. The second wave, arriving after the bells were hung, could not imagine why."
+  },
+  {
+   "name": "Storm Crow",
+   "rules": "Flying (This creature can't be blocked except by creatures with flying or reach.)",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Counterspell",
+   "rules": "Counter target spell."
+  },
+  {
+   "name": "Giant Growth",
+   "rules": "Target creature gets +3/+3 until end of turn.",
+   "flavor": "\"The mountain keeps what it is given.\"\n—Miners' saying"
+  },
+  {
+   "name": "Baneslayer Angel",
+   "rules": "Flying, first strike, lifelink, protection from Demons and from Dragons",
+   "flavor": "The first settlers named the valley for its silence. The second wave, arriving after the bells were hung, could not imagine why."
+  },
+  {
+   "name": "Birds of Paradise",
+   "rules": "Flying\n{T}: Add one mana of any color."
+  },
+  {
+   "name": "Sol Ring",
+   "rules": "{T}: Add {C}{C}.",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Kessig Wolf Run",
+   "rules": "{T}: Add {C}.\n{X}{R}{G}, {T}: Target creature gets +X/+0 and gains trample until end of turn."
+  },
+  {
+   "name": "Boros Reckoner",
+   "rules": "Whenever Boros Reckoner is dealt damage, it deals that much damage to any target.\n{R/W}: Boros Reckoner gains first strike until end of turn."
+  },
+  {
+   "name": "Dismember",
+   "rules": "({B/P} can be paid for with either {B} or 2 life.)\nTarget creature gets -5/-5 until end of turn."
+  },
+  {
+   "name": "Spectral Procession",
+   "rules": "Create three 1/1 white Spirit creature tokens with flying.",
+   "flavor": "\"The mountain keeps what it is given.\"\n—Miners' saying"
+  },
+  {
+   "name": "Rimewind Cryomancer",
+   "rules": "{1}, {T}: Counter target activated ability unless its controller pays {1}. Activate only if you control four or more snow permanents."
+  },
+  {
+   "name": "Aether Hub",
+   "rules": "When Aether Hub enters the battlefield, you get {E} (an energy counter).\n{T}: Add {C}.\n{T}, Pay {E}: Add one mana of any color."
+  },
+  {
+   "name": "Pili-Pala",
+   "rules": "{2}, {Q}: Add one mana of any color. ({Q} is the untap symbol.)",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Tezzeret's Gambit",
+   "rules": "({U/P} can be paid for with either {U} or 2 life.)\nDraw two cards, then proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)"
+  },
+  {
+   "name": "Emrakul, the Promised End",
+   "rules": "This spell costs {1} less to cast for each card type among cards in your graveyard.\nWhen you cast this spell, you gain control of target opponent during that player's next turn. After that turn, that player takes an extra turn.\nFlying, trample, protection from instants"
+  },
+  {
+   "name": "Lotus Cobra",
+   "rules": "Landfall — Whenever a land enters the battlefield under your control, add one mana of any color.",
+   "flavor": "It had waited a long time to be found."
+  },
+  {
+   "name": "Agent of the Fates",
+   "rules": "Deathtouch\nHeroic — Whenever you cast a spell that targets Agent of the Fates, each opponent sacrifices a creature."
+  },
+  {
+   "name": "Tireless Tracker",
+   "rules": "Landfall — Whenever a land enters the battlefield under your control, investigate. (Create a Clue token. It's an artifact with \"{2}, Sacrifice this artifact: Draw a card.\")\nWhenever you sacrifice a Clue, put a +1/+1 counter on Tireless Tracker."
+  },
+  {
+   "name": "Capital Punishment",
+   "rules": "Council's dilemma — Starting with you, each player votes for death or taxes. Each opponent sacrifices a creature for each death vote and discards a card for each taxes vote."
+  },
+  {
+   "name": "Battlefield Thaumaturge",
+   "rules": "Each instant and sorcery spell you cast costs {1} less to cast for each creature it targets.\nHeroic — Whenever you cast a spell that targets Battlefield Thaumaturge, Battlefield Thaumaturge gains hexproof until end of turn.",
+   "flavor": "\"The mountain keeps what it is given.\"\n—Miners' saying"
+  },
+  {
+   "name": "Abzan Charm",
+   "rules": "Choose one —\n• Exile target creature with power 3 or greater.\n• You draw two cards and you lose 2 life.\n• Distribute two +1/+1 counters among one or two target creatures."
+  },
+  {
+   "name": "Kolaghan's Command",
+   "rules": "Choose two —\n• Return target creature card from your graveyard to your hand.\n• Target player discards a card.\n• Destroy target artifact.\n• Kolaghan's Command deals 2 damage to any target."
+  },
+  {
+   "name": "Baleful Beholder",
+   "rules": "When Baleful Beholder enters the battlefield, choose one —\n• Antimagic Cone — Each opponent sacrifices an enchantment.\n• Fear Ray — Creatures you control gain menace until end of turn. (A creature with menace can't be blocked except by two or more creatures.)"
+  },
+  {
+   "name": "Mirrodin Besieged",
+   "rules": "As Mirrodin Besieged enters the battlefield, choose Mirran or Phyrexian.\n• Mirran — Whenever you cast an artifact spell, create a 1/1 colorless Myr artifact creature token.\n• Phyrexian — At the beginning of your end step, draw a card, then discard a card. Then if there are fifteen or more artifact cards in your graveyard, target opponent loses the game."
+  },
+  {
+   "name": "Cryptic Command",
+   "rules": "Choose two —\n• Counter target spell.\n• Return target permanent to its owner's hand.\n• Tap all creatures your opponents control.\n• Draw a card."
+  },
+  {
+   "name": "Questing Beast",
+   "rules": "Vigilance, deathtouch, haste\nQuesting Beast can't be blocked by creatures with power 2 or less.\nCombat damage that would be dealt by creatures you control can't be prevented.\nWhenever Questing Beast deals combat damage to an opponent, it deals that much damage to target planeswalker that player controls."
+  },
+  {
+   "name": "Animate Dead",
+   "rules": "Enchant creature card in a graveyard\nWhen Animate Dead enters the battlefield, if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with Animate Dead.\" Return enchanted creature card to the battlefield under your control and attach Animate Dead to it. When Animate Dead leaves the battlefield, that creature's controller sacrifices it.\nEnchanted creature gets -1/-0."
+  },
+  {
+   "name": "Chains of Mephistopheles",
+   "rules": "If a player would draw a card except the first one they draw in their draw step each turn, that player discards a card instead. If the player discards a card this way, they draw a card. If the player doesn't discard a card this way, they mill a card.",
+   "flavor": "The first settlers named the valley for its silence. The second wave, arriving after the bells were hung, could not imagine why."
+  },
+  {
+   "name": "Sylvan Library",
+   "rules": "At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library."
+  },
+  {
+   "name": "Dance of the Dead",
+   "rules": "Enchant creature card in a graveyard\nWhen Dance of the Dead enters the battlefield, if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with Dance of the Dead.\" Put enchanted creature card onto the battlefield tapped under your control and attach Dance of the Dead to it. When Dance of the Dead leaves the battlefield, that creature's controller sacrifices it.\nEnchanted creature gets +1/+1 and doesn't untap during its controller's untap step.\nAt the beginning of the upkeep of enchanted creature's controller, that player may pay {1}{B}. If the player does, untap that creature."
+  },
+  {
+   "name": "Tivit, Seller of Secrets",
+   "rules": "Flying, ward {3}\nCouncil's dilemma — Whenever Tivit enters the battlefield or deals combat damage to a player, starting with you, each player votes for evidence or bribery. For each evidence vote, investigate. For each bribery vote, create a Treasure token. (The votes can be for different choices or for the same choice.)\nWhile voting, you may vote an additional time."
+  },
+  {
+   "name": "Mulldrifter",
+   "rules": "Flying\nWhen Mulldrifter enters the battlefield, draw two cards.\nEvoke {2}{U} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters the battlefield.)"
+  },
+  {
+   "name": "Snapcaster Mage",
+   "rules": "Flash\nWhen Snapcaster Mage enters the battlefield, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to its mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)"
+  },
+  {
+   "name": "Walking Ballista",
+   "rules": "Walking Ballista enters the battlefield with X +1/+1 counters on it.\n{4}: Put a +1/+1 counter on Walking Ballista.\nRemove a +1/+1 counter from Walking Ballista: It deals 1 damage to any target."
+  },
+  {
+   "name": "Loyalty Lines",
+   "rules": "+1: Draw a card, then discard a card.\n−2: Create a 2/2 blue Illusion creature token.\n−7: You get an emblem with \"Whenever you draw a card, target opponent mills five cards.\""
+  },
+  {
+   "name": "Balloon Stand",
+   "rules": "Visit — Choose one.\n• Create a 1/1 red Balloon creature token with flying.\n• Sacrifice a Balloon. If you do, target creature gains flying until end of turn."
+  },
+  {
+   "name": "Flavor Only, Long",
+   "rules": "",
+   "flavor": "There are those who say the lighthouse was built to guide ships. *They are wrong.* It was built so that something far out in the dark would know where the shore ended, and stay on its own side of the line."
+  },
+  {
+   "name": "Italic Title in Flavor",
+   "rules": "Draw a card.",
+   "flavor": "She read *The Long Road Home* twice, and believed it less each time."
+  }
+ ]
+}

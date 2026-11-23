@@ -4,6 +4,7 @@
 //! a structural edit or a brush stroke, goes through it, is undoable, and
 //! leaves the rendered frame up to date by redrawing only what changed.
 
+use crate::text::Fonts;
 use crate::commands::{apply, Edit};
 use crate::doc::build::pixel;
 use crate::doc::{AssetKind, AssetRef, Doc, GroupLayer, Layer};
@@ -119,6 +120,11 @@ const HISTORY_LIMIT: usize = 200;
 
 impl Session {
     pub fn new(doc: Doc, assets: AssetBytes) -> Session {
+        Session::with_fonts(doc, assets, Fonts::new())
+    }
+
+    /// Open a document with fonts already loaded, so its text is drawn in the first frame.
+    pub fn with_fonts(doc: Doc, assets: AssetBytes, fonts: Fonts) -> Session {
         let whole = Region::new(0, 0, doc.width as i32, doc.height as i32);
         let view = View { scale: 1.0, x: 0.0, y: 0.0, w: doc.width, h: doc.height };
         let mut session = Session {
@@ -136,9 +142,15 @@ impl Session {
             below: None,
             painted: BTreeSet::new(),
         };
+        *session.renderer.fonts_mut() = fonts;
         session.renderer.sync(&session.doc);
         session.redraw(whole);
         session
+    }
+
+    /// The fonts loaded into this session.
+    pub fn fonts(&self) -> &Fonts {
+        self.renderer.fonts()
     }
 
     pub fn doc(&self) -> &Doc {

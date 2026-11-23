@@ -12,6 +12,7 @@ use rustybuzz::ttf_parser::{self, GlyphId};
 use std::rc::Rc;
 
 /// One face of a loaded font file.
+#[derive(Clone)]
 struct FontFace {
     /// PostScript name, as text layers refer to it.
     name: String,
@@ -23,7 +24,9 @@ struct FontFace {
 
 /// The fonts available for rendering. Fonts are not part of a document: the
 /// user supplies them, and a document only names the ones it needs.
-#[derive(Default)]
+///
+/// Cloning is cheap: the font files themselves are shared.
+#[derive(Default, Clone)]
 pub struct Fonts {
     faces: Vec<FontFace>,
     /// Changes whenever a font is added, so cached layouts can be told apart.
@@ -87,7 +90,7 @@ impl Fonts {
 
 /// The result of laying out one text layer.
 pub struct TextLayout {
-    /// Glyph outlines in document pixels, one path per color, in paint order.
+    /// Glyph outlines in document pixels, in paint order: one path per stretch of glyphs of one color.
     pub parts: Vec<(Color, tiny_skia::Path)>,
     /// Bounds of the ink, in document pixels: (left, top, right, bottom).
     pub ink: Option<[f64; 4]>,
@@ -96,6 +99,9 @@ pub struct TextLayout {
     /// The factor the text was shrunk by to fit (1 when it was not).
     pub scale: f64,
     pub lines: usize,
+    /// Bounds of each paragraph's ink, in order (None for an empty paragraph).
+    /// The card engine places the flavor divider between two of these.
+    pub paragraph_ink: Vec<Option<[f64; 4]>>,
 }
 
 /// A shaped glyph, measured at the layer's own sizes (before any fitting).
@@ -125,6 +131,14 @@ struct Line {
     size: f64,
     /// First line of a paragraph (other than the first paragraph).
     new_paragraph: bool,
+    /// Which paragraph the line belongs to, and whether it is that paragraph's first line.
+    paragraph: usize,
+    first: bool,
+}
+
+/// The left indent of a line, in pixels.
+fn indent_of(layer: &TextLayer, paragraph: usize, first: bool) -> f64 {
+    layer.content.paragraphs.get(paragraph).map_or(0.0, |p| p.indent.unwrap_or(0.0) + if first { p.first_line_indent.unwrap_or(0.0) } else { 0.0 })
 }
 
 struct Shaped {
@@ -191,8 +205,9 @@ fn shape(layer: &TextLayer, fonts: &Fonts, faces: &[rustybuzz::Face]) -> Shaped 
     Shaped { glyphs, paragraphs, missing }
 }
 
-/// Break paragraphs into lines no wider than `limit` (None: never wrap).
-fn break_lines(shaped: &Shaped, limit: Option<f64>, default_size: f64) -> Vec<Line> {
+/// Break paragraphs into lines. `limit` gives the width available to a line of
+/// a paragraph (first line or not), in unfitted pixels; None means never wrap.
+fn break_lines(shaped: &Shaped, limit: Option<&dyn Fn(usize, bool) -> f64>, default_size: f64) -> Vec<Line> {
     let g = &shaped.glyphs;
     let mut lines = Vec::new();
     for (p, &(start, end)) in shaped.paragraphs.iter().enumerate() {
@@ -202,9 +217,10 @@ fn break_lines(shaped: &Shaped, limit: Option<f64>, default_size: f64) -> Vec<Li
             // Take glyphs until the line is full, remembering the last place it could break.
             let (mut i, mut width, mut trimmed) = (line_start, 0.0, 0.0);
             let mut last_break: Option<(usize, f64)> = None;
+            let room = limit.map(|f| f(p, first));
             while i < end {
                 let glyph = &g[i];
-                if !glyph.space && limit.is_some_and(|l| width + glyph.advance > l + 1e-6) && i > line_start {
+                if !glyph.space && room.is_some_and(|l| width + glyph.advance > l + 1e-6) && i > line_start {
                     break;
                 }
                 width += glyph.advance;
@@ -222,7 +238,7 @@ fn break_lines(shaped: &Shaped, limit: Option<f64>, default_size: f64) -> Vec<Li
                 last_break.unwrap_or((i, trimmed))
             };
             let size = g[line_start..line_end].iter().map(|x| x.size).fold(0.0, f64::max);
-            lines.push(Line { start: line_start, end: line_end, width: line_width, size: if size > 0.0 { size } else { default_size }, new_paragraph: first && p > 0 });
+            lines.push(Line { start: line_start, end: line_end, width: line_width, size: if size > 0.0 { size } else { default_size }, new_paragraph: first && p > 0, paragraph: p, first });
             first = false;
             line_start = line_end;
             if line_start >= end {
@@ -239,15 +255,25 @@ struct Placed {
     /// (x of the line's first glyph, baseline y) per line.
     origins: Vec<(f64, f64)>,
     ink: Option<[f64; 4]>,
+    paragraph_ink: Vec<Option<[f64; 4]>>,
+}
+
+fn union(a: Option<[f64; 4]>, b: [f64; 4]) -> Option<[f64; 4]> {
+    Some(match a {
+        None => b,
+        Some(a) => [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])],
+    })
 }
 
 fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Placed {
     let style = &layer.style;
     let b: &Rect = &layer.bounds;
     let wraps = layer.origin.is_none();
-    let lines = break_lines(shaped, wraps.then(|| b.w / s), style.size);
+    // Indents and paragraph spacing are fixed lengths: fitting shrinks the type, not them.
+    let room = |p: usize, first: bool| (b.w - indent_of(layer, p, first)) / s;
+    let lines = break_lines(shaped, if wraps { Some(&room) } else { None }, style.size);
     let leading = |line: &Line| line.size * style.leading.unwrap_or(1.2) * s;
-    let gap = style.paragraph_spacing.unwrap_or(0.0) * s;
+    let gap = |line: &Line| layer.content.paragraphs.get(line.paragraph).and_then(|p| p.space_before).or(style.paragraph_spacing).unwrap_or(0.0);
 
     let mut origins = Vec::with_capacity(lines.len());
     let mut y = match layer.origin {
@@ -257,15 +283,17 @@ fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Place
     };
     for (i, line) in lines.iter().enumerate() {
         if i > 0 {
-            y += leading(line) + if line.new_paragraph { gap } else { 0.0 };
+            y += leading(line) + if line.new_paragraph { gap(line) } else { 0.0 };
         }
         let width = line.width * s;
-        let x = match (layer.origin, style.align) {
-            (Some(o), TextAlign::Left) => o.x,
+        let indent = indent_of(layer, line.paragraph, line.first);
+        let align = layer.content.paragraphs.get(line.paragraph).and_then(|p| p.align).unwrap_or(style.align);
+        let x = match (layer.origin, align) {
+            (Some(o), TextAlign::Left) => o.x + indent,
             (Some(o), TextAlign::Center) => o.x - width / 2.0,
             (Some(o), TextAlign::Right) => o.x - width,
-            (None, TextAlign::Left) => b.x,
-            (None, TextAlign::Center) => b.x + (b.w - width) / 2.0,
+            (None, TextAlign::Left) => b.x + indent,
+            (None, TextAlign::Center) => b.x + indent + (b.w - indent - width) / 2.0,
             (None, TextAlign::Right) => b.x + b.w - width,
         };
         // Photoshop sets every baseline on a whole pixel.
@@ -273,6 +301,7 @@ fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Place
     }
 
     let mut ink: Option<[f64; 4]> = None;
+    let mut paragraph_ink = vec![None; shaped.paragraphs.len()];
     for (line, &(x0, y0)) in lines.iter().zip(&origins) {
         let mut pen = x0;
         for glyph in &shaped.glyphs[line.start..line.end] {
@@ -281,15 +310,13 @@ fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Place
                 let gx = pen + glyph.offset.0 * s;
                 let gy = y0 - glyph.offset.1 * s;
                 let rect = [gx + bb[0] * k * glyph.sx, gy - bb[3] * k, gx + bb[2] * k * glyph.sx, gy - bb[1] * k];
-                ink = Some(match ink {
-                    None => rect,
-                    Some(a) => [a[0].min(rect[0]), a[1].min(rect[1]), a[2].max(rect[2]), a[3].max(rect[3])],
-                });
+                ink = union(ink, rect);
+                paragraph_ink[line.paragraph] = union(paragraph_ink[line.paragraph], rect);
             }
             pen += glyph.advance * s;
         }
     }
-    Placed { lines, origins, ink }
+    Placed { lines, origins, ink, paragraph_ink }
 }
 
 /// Feeds a glyph outline into a path, scaled and moved into document pixels.
@@ -325,7 +352,7 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
     let faces: Vec<rustybuzz::Face> = fonts.faces.iter().filter_map(|f| rustybuzz::Face::from_slice(&f.bytes, f.index)).collect();
     if faces.len() != fonts.faces.len() {
         // Cannot happen: every stored face parsed when it was added.
-        return TextLayout { parts: Vec::new(), ink: None, missing: Vec::new(), scale: 1.0, lines: 0 };
+        return TextLayout { parts: Vec::new(), ink: None, missing: Vec::new(), scale: 1.0, lines: 0, paragraph_ink: Vec::new() };
     }
     let shaped = shape(layer, fonts, &faces);
     let b = &layer.bounds;
@@ -342,43 +369,56 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
         .unwrap_or(0.7);
 
     let at = |s: f64| place(layer, &shaped, first_ascent, s);
-    let height = |p: &Placed| p.ink.map_or(0.0, |i| i[3] - i[1]);
-    let width = |p: &Placed| p.ink.map_or(0.0, |i| i[2] - i[0]);
 
+    // Does the text, at this scale, stick out of its box in the direction being fitted?
+    let overflows = |p: &Placed| match (layer.fit, p.ink) {
+        // Shrink to width: the ink must stay between the left and right edges of the box.
+        (FitMode::ShrinkWidth, Some(i)) => b.w > 0.0 && (i[0] < b.x - 1e-6 || i[2] > b.x + b.w + 1e-6),
+        (FitMode::ShrinkHeight, Some(i)) => b.h > 0.0 && i[3] - i[1] > b.h + 1e-6,
+        _ => false,
+    };
     let mut scale = 1.0;
     let mut placed = at(1.0);
-    match layer.fit {
-        FitMode::None => {}
-        FitMode::ShrinkWidth => {
-            let w = width(&placed);
-            if b.w > 0.0 && w > b.w {
-                scale = b.w / w;
-                placed = at(scale);
+    if overflows(&placed) {
+        const SMALLEST: f64 = 0.02;
+        match layer.fit_step.filter(|step| *step > 0.0 && layer.style.size > 0.0) {
+            Some(step) => {
+                // Down in whole steps until it fits, then half a step back up if that fits too.
+                let step = step / layer.style.size;
+                while scale - step > SMALLEST && overflows(&at(scale)) {
+                    scale -= step;
+                }
+                if !overflows(&at(scale + step / 2.0)) {
+                    scale += step / 2.0;
+                }
             }
-        }
-        FitMode::ShrinkHeight => {
-            if b.h > 0.0 && height(&placed) > b.h {
-                // The largest scale at which the text is no taller than the box.
-                let (mut lo, mut hi) = (0.02, 1.0);
+            None => {
+                // The largest scale at which it fits.
+                let (mut lo, mut hi) = (SMALLEST, 1.0);
                 for _ in 0..24 {
                     let mid = (lo + hi) / 2.0;
-                    if height(&at(mid)) > b.h {
+                    if overflows(&at(mid)) {
                         hi = mid;
                     } else {
                         lo = mid;
                     }
                 }
                 scale = lo;
-                placed = at(scale);
             }
         }
+        placed = at(scale);
     }
 
     // Box text can be centered vertically in its box.
     let mut shift = 0.0;
+    if layer.fit == FitMode::ShrinkWidth && layer.origin.is_some() {
+        // A shrunken name or type line moves up a little so it stays centered in its bar (Proxyshop: 0.3 of the size lost).
+        shift = -(0.3 * layer.style.size * (1.0 - scale)).round();
+    }
     if layer.origin.is_none() && layer.vertical_align == Some(VerticalAlign::Center) {
         if let Some(ink) = placed.ink {
-            shift = b.y + (b.h - (ink[3] - ink[1])) / 2.0 - ink[1];
+            // A whole number of pixels, so baselines stay on the pixel grid.
+            shift = (b.y + (b.h - (ink[3] - ink[1])) / 2.0 - ink[1]).round();
         }
     }
 
@@ -387,13 +427,12 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
         let mut pen = x0;
         for glyph in &shaped.glyphs[line.start..line.end] {
             if glyph.bbox.is_some() {
-                let slot = match builders.iter().position(|(c, _)| *c == glyph.color) {
-                    Some(i) => i,
-                    None => {
-                        builders.push((glyph.color, tiny_skia::PathBuilder::new()));
-                        builders.len() - 1
-                    }
-                };
+                // A new part whenever the color changes, so glyphs keep their paint
+                // order: a symbol's glyph is drawn over its disc, whatever came before.
+                if builders.last().is_none_or(|(c, _)| *c != glyph.color) {
+                    builders.push((glyph.color, tiny_skia::PathBuilder::new()));
+                }
+                let slot = builders.len() - 1;
                 let k = glyph.k * scale;
                 let mut outline = Outline {
                     path: &mut builders[slot].1,
@@ -413,5 +452,6 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
         missing: shaped.missing,
         scale,
         lines: placed.lines.len(),
+        paragraph_ink: placed.paragraph_ink.iter().map(|ink| ink.map(|i| [i[0], i[1] + shift, i[2], i[3] + shift])).collect(),
     }
 }

@@ -108,6 +108,26 @@
   }
 
   /** Run something that changes the document, then show the result. */
+  /** Load the chosen font files into the core. Text that was waiting for them is drawn. */
+  async function loadFonts(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const files = [...(input.files ?? [])];
+    input.value = "";
+    const loaded: string[] = [];
+    const refused: string[] = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      try {
+        loaded.push(...core!.addFont(bytes));
+      } catch {
+        refused.push(file.name);
+      }
+    }
+    blit(core!.dirty());
+    refresh();
+    status = `Loaded ${loaded.length} font${loaded.length === 1 ? "" : "s"}` + (refused.length ? `; not usable: ${refused.join(", ")}` : "");
+  }
+
   function run(label: string, action: () => void) {
     const started = performance.now();
     try {
@@ -273,6 +293,9 @@
     {#each samples as sample, i}
       <button class:active={i === current} disabled={busy} onclick={() => open(i)}>{sample}</button>
     {/each}
+    <label class="file" title="Load font files (TTF, OTF) so text layers can be drawn. Fonts are never stored in documents.">
+      Fonts… <input type="file" accept=".ttf,.otf,.ttc" multiple onchange={loadFonts} />
+    </label>
     <span class="divider"></span>
     <button class:active={!erase} onclick={() => (erase = false)} title="Brush (B)">Brush</button>
     <button class:active={erase} onclick={() => (erase = true)} title="Eraser (E)">Eraser</button>
@@ -357,6 +380,8 @@
   .divider { width: 1px; align-self: stretch; background: #50545c; margin-inline: 4px; }
   label { display: flex; align-items: center; gap: 4px; color: #b5b7bd; }
   input[type="range"] { width: 70px; }
+  label.file { cursor: pointer; }
+  label.file input { display: none; }
   output { min-width: 2.6em; color: #e6e6e6; font-variant-numeric: tabular-nums; }
   .zoom { text-align: right; }
   button {

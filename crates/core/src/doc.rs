@@ -422,9 +422,31 @@ pub struct TextRun {
     pub symbol: Option<String>,
 }
 
+/// Settings for one paragraph that differ from the layer's style. Lengths are
+/// in pixels and do not shrink when the text is fitted to its box.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ParagraphStyle {
+    /// Space above this paragraph, instead of the style's `paragraphSpacing`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_before: Option<f64>,
+    /// Left indent of every line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indent: Option<f64>,
+    /// Added to the indent of the first line. Negative for a hanging indent, as bullet lists use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_line_indent: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub align: Option<TextAlign>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct RichText {
     pub runs: Vec<TextRun>,
+    /// Per-paragraph settings, in order. Paragraphs are separated by "\n" in
+    /// the runs' text; ones past the end of this list use the layer's style.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paragraphs: Vec<ParagraphStyle>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -487,6 +509,12 @@ pub struct TextLayer {
     pub content: RichText,
     pub style: TextStyle,
     pub fit: FitMode,
+    /// How the size is searched when shrinking: down from the layer's size in
+    /// steps of this many pixels until the text fits, then half a step back up
+    /// if that still fits (Proxyshop's search, which is what card renders are
+    /// compared against). Without it, the largest size that fits is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fit_step: Option<f64>,
     /// Where box text sits in its box when it is shorter than the box. Default top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vertical_align: Option<VerticalAlign>,

@@ -3,6 +3,7 @@
 //! cardsmith hashes        print a hash of each sample render
 //! cardsmith bench         time editing on the card-sized sample
 //! cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]
+//! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -170,8 +171,130 @@ fn run(args: &[String]) -> Result<(), String> {
             eprintln!("{}×{} in {elapsed} ms -> {out}", r.width, r.height);
             Ok(())
         }
+        Some("text") => {
+            let mut input = None;
+            let mut out = None;
+            let mut fonts = None;
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "-o" | "--out" => out = rest.next(),
+                    "--fonts" => fonts = rest.next(),
+                    _ => input = Some(arg),
+                }
+            }
+            let (Some(input), Some(out), Some(fonts)) = (input, out, fonts) else { return Err(USAGE.into()) };
+            text_suite(Path::new(input), Path::new(out), fonts)
+        }
         _ => Err(USAGE.into()),
     }
+}
+
+/// Render every card of a rules-text suite into its own image, plus one sheet
+/// of them all, and write what was measured to results.json.
+///
+/// The suite file gives the text box (`box.w`, `box.h`), the font and size,
+/// the document resolution, and a list of cards with `name`, `rules` and
+/// optionally `flavor`. Each card is formatted the way the card engine will
+/// (symbols, italics, bullets, flavor spacing), shrunk to fit the box in
+/// Proxyshop's steps, and centered vertically.
+fn text_suite(input: &Path, out: &Path, fonts: &str) -> Result<(), String> {
+    use cardsmith_cards::rules_text::{format_rules_text, RulesFormat};
+    use cardsmith_core::doc::{build::shape, Layer};
+    use cardsmith_core::text::layout_text;
+    use serde_json::{json, Value};
+
+    let suite: Value = serde_json::from_str(&std::fs::read_to_string(input).map_err(|e| format!("{}: {e}", input.display()))?).map_err(|e| format!("{}: {e}", input.display()))?;
+    let number = |v: &Value, what: &str| v.as_f64().ok_or(format!("{}: {what} must be a number", input.display()));
+    let (w, h) = (number(&suite["box"]["w"], "box.w")?, number(&suite["box"]["h"], "box.h")?);
+    let size = number(&suite["size"], "size")?;
+    let dpi = number(&suite["dpi"], "dpi")?;
+    let font = suite["font"].as_str().ok_or("font must be a string")?;
+    let cards = suite["cards"].as_array().ok_or("cards must be a list")?;
+    let mut renderer = cardsmith_core::render::Renderer::new();
+    load_fonts(&mut renderer, fonts)?;
+
+    const PAD: f64 = 48.0;
+    let (width, height) = ((w + PAD * 2.0) as u32, (h + PAD * 2.0) as u32);
+    let mut results = Vec::new();
+    let mut images = Vec::new();
+    for card in cards {
+        let name = card["name"].as_str().ok_or("every card needs a name")?;
+        let slug: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>().split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
+        let (rules, flavor) = (card["rules"].as_str().unwrap_or(""), card["flavor"].as_str().unwrap_or(""));
+        let format = RulesFormat { divider: !rules.is_empty() && !flavor.is_empty(), ..RulesFormat::for_dpi(dpi) };
+        let formatted = format_rules_text(rules, flavor, &format);
+        let layer: Layer = serde_json::from_value(json!({
+            "kind": "text", "id": "rules", "name": "Rules Text", "visible": true, "opacity": 1, "blend": "normal", "clip": false,
+            "box": { "x": PAD, "y": PAD, "w": w, "h": h },
+            "content": formatted.content,
+            "style": { "font": font, "size": size, "color": [0, 0, 0, 1], "leading": 1, "align": "left" },
+            "fit": "shrinkHeight", "fitStep": 0.4 * dpi / 72.0, "verticalAlign": "center"
+        }))
+        .map_err(|e| e.to_string())?;
+        let Layer::Text(text) = &layer else { unreachable!() };
+        let layout = layout_text(text, renderer.fonts());
+
+        let mut doc = Doc::empty(width, height, dpi);
+        doc.root.children.push(shape("paper", &format!("M0 0H{width}V{height}H0Z"), [1.0, 1.0, 1.0, 1.0]));
+        // Stands in for the flavor divider: a line midway between the rules and the flavor text.
+        let mut divider = None;
+        if let Some(at) = formatted.flavor_paragraph {
+            let above = layout.paragraph_ink[..at].iter().rev().flatten().next();
+            let below = layout.paragraph_ink[at..].iter().flatten().next();
+            if let (Some(above), Some(below)) = (above, below) {
+                let y = ((above[3] + below[1]) / 2.0).round();
+                doc.root.children.push(shape("divider", &format!("M{PAD} {}H{}V{}H{PAD}Z", y - 2.0, PAD + w, y + 2.0), [0.0, 0.0, 0.0, 0.35]));
+                divider = Some(y);
+            }
+        }
+        doc.root.children.push(layer.clone());
+        let r = renderer.render(&doc, &AssetBytes::new());
+        write(&out.join(format!("{slug}.png")), &encode_png(r.width, r.height, &r.pixels).map_err(|e| e.to_string())?)?;
+
+        // Fits when it is no taller than the box. Sideways, a glyph may overhang a little, as an italic "f" does.
+        let overhang = size * 0.2;
+        let fits = layout.ink.is_none_or(|i| i[0] >= PAD - overhang && i[2] <= PAD + w + overhang && i[1] >= PAD - 1.0 && i[3] <= PAD + h + 1.0);
+        results.push(json!({
+            "name": name, "file": format!("{slug}.png"), "scale": layout.scale, "size": size * layout.scale, "lines": layout.lines,
+            "ink": layout.ink, "fits": fits, "divider": divider, "unknownSymbols": formatted.unknown_symbols, "missingFonts": layout.missing,
+        }));
+        eprintln!("{name}: {} lines at {:.1} px{}", layout.lines, size * layout.scale, if fits { "" } else { " — DOES NOT FIT" });
+        images.push(r);
+    }
+
+    // One sheet of every card at a quarter size, four across.
+    const SHRINK: u32 = 4;
+    const ACROSS: u32 = 4;
+    let (cw, ch) = (width / SHRINK, height / SHRINK);
+    let rows = (images.len() as u32).div_ceil(ACROSS);
+    let (sw, sh) = (cw * ACROSS + (ACROSS + 1) * 8, ch * rows + (rows + 1) * 8);
+    let mut sheet = vec![96u8; (sw * sh * 4) as usize];
+    sheet.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+    for (n, image) in images.iter().enumerate() {
+        let (ox, oy) = (8 + (n as u32 % ACROSS) * (cw + 8), 8 + (n as u32 / ACROSS) * (ch + 8));
+        for y in 0..ch {
+            for x in 0..cw {
+                let mut sum = [0u32; 4];
+                for sy in 0..SHRINK {
+                    for sx in 0..SHRINK {
+                        let i = (((y * SHRINK + sy) * image.width + x * SHRINK + sx) * 4) as usize;
+                        for c in 0..4 {
+                            sum[c] += image.pixels[i + c] as u32;
+                        }
+                    }
+                }
+                let o = (((oy + y) * sw + ox + x) * 4) as usize;
+                for c in 0..4 {
+                    sheet[o + c] = (sum[c] / (SHRINK * SHRINK)) as u8;
+                }
+            }
+        }
+    }
+    if !images.is_empty() {
+        write(&out.join("sheet.png"), &encode_png(sw, sh, &sheet).map_err(|e| e.to_string())?)?;
+    }
+    write(&out.join("results.json"), serde_json::to_string_pretty(&results).unwrap_or_default().as_bytes())
 }
 
 /// Time the operations that matter for editing, on the card-sized sample.

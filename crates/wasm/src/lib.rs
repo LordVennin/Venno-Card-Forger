@@ -64,10 +64,12 @@ unsafe fn text<'a>(ptr: *const u8, len: usize) -> Result<&'a str, String> {
     std::str::from_utf8(bytes(ptr, len)).map_err(|_| "Text passed to the core was not UTF-8".to_string())
 }
 
-/// Replace the session, keeping the current view size so the screen stays in step.
+/// Replace the session, keeping the loaded fonts, and the current view size so the screen stays in step.
 fn open(s: &mut State, doc: Doc, assets: AssetBytes) {
     let view = s.session.view();
-    s.session = Session::new(doc, assets);
+    // Fonts belong to the app, not to a document: they carry over.
+    let fonts = s.session.fonts().clone();
+    s.session = Session::with_fonts(doc, assets, fonts);
     s.session.set_view(View { scale: 1.0, x: 0.0, y: 0.0, ..view });
 }
 

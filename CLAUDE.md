@@ -30,6 +30,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 
 ```
 crates/core/           Rust core: doc model, commands, compositor, effects, renderer, brush, text
+crates/cards/          Card knowledge in Rust: rules text formatting and symbols now; frame logic and layouts later
 crates/cli/            Native binary: render, samples, batch
 crates/wasm/           WebAssembly bindings used by the app
 packages/doc/          TypeScript types for the document JSON (no logic)
@@ -94,6 +95,7 @@ pnpm dev              # run the Tauri app
 cargo test --workspace   # Rust core tests (also: pnpm test:rust)
 cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <png> [--fonts <dir>] [--text-bounds <json>]   # headless render (Rust); text needs the fonts
 cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
+cargo run --release -p cardsmith-cli -- text <suite.json> -o <dir> --fonts <dir>     # render a suite of rules text boxes
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
 pnpm test             # TypeScript unit tests (Vitest): the importer and survey
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
@@ -108,6 +110,8 @@ pnpm import:psd <psd> -o <template-dir>     # convert a PSD into a template pack
 
 `pnpm test:golden [template...]` renders each imported template (default state, plus the states in `tests/golden/states.json`) and compares with the references in `fixtures/local/golden/`. It skips cleanly when there are none, and leaves text areas out when `fixtures/local/fonts` is empty. What does not match yet is listed in `docs/KNOWN_DIFFS.md`.
 
+`pnpm test:text` renders the rules text of the cards in `tests/text/cards.json` (symbols, italics, bullets, flavor text, shrink to fit), checks each fits, and compares with `fixtures/local/text-golden/` where references exist. It skips cleanly without fonts. `--update <card>` or `--update all` accepts the current renders, only after a human has confirmed them.
+
 `pnpm dev` needs the Tauri Linux libraries (`libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`) and the Rust WASM target (`rustup target add wasm32-unknown-unknown`).
 
 Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fonts text is drawn with, `templates/` holds the PSDs, `imported/` the template packages made from them, `survey/` the survey output, `golden/` the reference images.
@@ -116,8 +120,10 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 
 - `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree; tile caches for path coverage and effects), `text.rs` (fonts registry and text layout: shaping by rustybuzz, our own line breaking and fitting), `paint.rs` (brush engine), `session.rs` (an open document: edits, strokes, undo, incremental redraw, the on-screen view), `samples.rs` (sample documents, including the card-sized one). Tests are in `crates/core/tests` and beside the modules.
 - **Two invariants the tests enforce, and that every renderer change must keep:** drawing a region gives exactly the pixels a full render has there, and a session's incrementally updated frame always equals a fresh full render.
+- `crates/cards`: `rules_text.rs` (ported from Proxyshop, MPL header): `italic_ranges`/`generate_italics`, `strip_reminder_text`, the symbol map and colors, and `format_rules_text`, which turns oracle and flavor text into the `RichText` of a rules box. Proxyshop's italics cases are in `tests/data/text_italic.toml`.
+- Text tests use `crates/core/tests/fixtures/blocks.ttf`, a font of rectangles made by `tools/make-test-font.py`. Real fonts are only ever read from `fixtures/local/fonts`.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
-- `crates/cli`: `cardsmith render | samples | hashes | bench | compare`.
+- `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text`.
 - `packages/importer/src/import`: `convert.ts` (PSD layer tree to document), `paths.ts` (vector paths), `effects.ts` (layer effects), `bindings.ts` (Proxyshop layer names to bindings), `cli.ts`.
-- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`.
+- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`.
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

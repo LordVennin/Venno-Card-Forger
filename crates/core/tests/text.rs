@@ -116,7 +116,50 @@ fn runs_carry_their_own_size_color_and_tracking() {
     // Pens at 0, 100, 300, 410 (tracking adds 10 after each tracked glyph); glyphs are twice as wide.
     assert_eq!(ink(&l), [10.0, 200.0, 500.0, 300.0]);
     let colors: Vec<Color> = l.parts.iter().map(|(c, _)| *c).collect();
-    assert_eq!(colors, [RED, BLUE]);
+    assert_eq!(colors, [RED, BLUE, RED]);
+}
+
+#[test]
+fn paragraphs_can_set_their_own_spacing_indent_and_alignment() {
+    // Three paragraphs in a 300 px box: plain, a bullet-style hanging indent, right-aligned.
+    let layer = text(
+        json!([{ "text": "a\na a a a a a\na" }]),
+        json!({ "box": { "x": 0, "y": 0, "w": 300, "h": 900 }, "style": { "leading": 1, "paragraphSpacing": 40 } }),
+    );
+    let mut styled = layer.clone();
+    styled.content.paragraphs = serde_json::from_value(json!([{}, { "spaceBefore": 10, "indent": 100, "firstLineIndent": -60 }, { "align": "right" }])).unwrap();
+    let plain = layout_text(&layer, &fonts());
+    let l = layout_text(&styled, &fonts());
+    // Unstyled: "a a a a" (275 wide) then "a a"; 4 lines in all.
+    assert_eq!(plain.lines, 4);
+    // Styled: the first bullet line starts at 40 and has 260 of room ("a a a" = 200 advance + trailing), later lines start at 100 with 200 of room.
+    let p = &l.paragraph_ink;
+    assert_eq!(p[0].unwrap().map(f64::round), [5.0, 20.0, 45.0, 70.0]);
+    assert_eq!(p[1].unwrap()[0], 45.0);
+    // 10 px above the second paragraph instead of 40: first baseline 70, second 70 + 100 + 10.
+    assert_eq!(p[1].unwrap()[1], 130.0);
+    // "a a a" fits the first line's 260 px and the other three the 200 px left beside the indent.
+    assert_eq!(l.lines, 4);
+    // Second line of the bullet hangs at the indent.
+    let hanging = layout_text(&{ let mut one = styled.clone(); one.content.runs[0].text = "a\na a a a".into(); one.content.paragraphs.truncate(2); one }, &fonts());
+    assert_eq!(hanging.lines, 3);
+    // The last paragraph ends at the right edge of the box: its "a" is 40 wide and the advance is 50.
+    assert_eq!(p[2].unwrap()[2], 295.0);
+    // The style's 40 px applies before the third paragraph, which has no spacing of its own.
+    assert_eq!(p[2].unwrap()[1] - p[1].unwrap()[3], 100.0 + 40.0 - 50.0);
+}
+
+#[test]
+fn fitting_shrinks_the_type_but_not_paragraph_spacing_or_indents() {
+    let mut layer = text(json!([{ "text": "a\na" }]), json!({ "box": { "x": 0, "y": 0, "w": 300, "h": 120 }, "fit": "shrinkHeight", "style": { "leading": 1 } }));
+    layer.content.paragraphs = serde_json::from_value(json!([{}, { "spaceBefore": 40, "indent": 30 }])).unwrap();
+    let l = layout_text(&layer, &fonts());
+    assert!(l.scale < 1.0);
+    let (a, b) = (l.paragraph_ink[0].unwrap(), l.paragraph_ink[1].unwrap());
+    // The second "a" still starts 30 px in (plus the glyph's own 5 px, scaled).
+    assert!((b[0] - (30.0 + 5.0 * l.scale)).abs() < 1e-6, "{b:?}");
+    // Baselines are one (scaled) line plus the full 40 px apart, to the nearest pixel.
+    assert!(((b[3] - a[3]) - (100.0 * l.scale + 40.0)).abs() <= 1.0, "{a:?} {b:?} {}", l.scale);
 }
 
 #[test]
@@ -124,10 +167,31 @@ fn shrink_width_scales_point_text_down_to_its_box_and_never_up() {
     // "bbb" has 280 px of ink.
     let fits = plain("bbb", json!({ "origin": { "x": 0, "y": 100 }, "box": { "x": 0, "y": 0, "w": 300, "h": 100 }, "fit": "shrinkWidth" }));
     assert_eq!(fits.scale, 1.0);
-    let l = plain("bbb", json!({ "origin": { "x": 0, "y": 100 }, "box": { "x": 0, "y": 0, "w": 140, "h": 100 }, "fit": "shrinkWidth" }));
-    assert_eq!(l.scale, 0.5);
+    // The ink must end by the right edge of the box (x 142.5): at half size it runs from 2.5 to 142.5.
+    let l = plain("bbb", json!({ "origin": { "x": 0, "y": 100 }, "box": { "x": 0, "y": 0, "w": 142.5, "h": 100 }, "fit": "shrinkWidth" }));
+    assert!((l.scale - 0.5).abs() < 1e-5, "{}", l.scale);
     let i = ink(&l);
-    assert_eq!((i[2] - i[0], i[3] - i[1], i[3]), (140.0, 25.0, 100.0));
+    // It also moves up by 0.3 of the size it lost, to stay centered in its bar.
+    assert_eq!((i[2].round(), (i[3] - i[1]).round(), i[3]), (143.0, 25.0, 85.0));
+    // Right-aligned text is held to the left edge instead.
+    let r = plain("bbb", json!({ "origin": { "x": 300, "y": 100 }, "box": { "x": 160, "y": 0, "w": 140, "h": 100 }, "fit": "shrinkWidth", "style": { "align": "right" } }));
+    // Its ink starts 295 x scale left of the origin.
+    assert!((r.scale - 140.0 / 295.0).abs() < 1e-5 && (ink(&r)[0] - 160.0).abs() < 0.01, "{} {:?}", r.scale, ink(&r));
+}
+
+#[test]
+fn shrinking_in_steps_stops_at_the_first_size_that_fits_then_tries_half_a_step_back() {
+    // One line of "a" is 50 tall at size 100, so it fits a 33 px box at size 66.
+    let at = |step: f64| plain("a", json!({ "box": { "x": 0, "y": 0, "w": 300, "h": 33 }, "fit": "shrinkHeight", "fitStep": step })).scale;
+    // Steps of 10: 90, 80, 70, 60 fits; 65 fits too.
+    assert!((at(10.0) - 0.65).abs() < 1e-9, "{}", at(10.0));
+    // Steps of 8: 92, 84, 76, 68, 60 fits; 64 fits too.
+    assert!((at(8.0) - 0.64).abs() < 1e-9, "{}", at(8.0));
+    // Steps of 17: 83, 66 fits; 74.5 does not, so it stays.
+    assert!((at(17.0) - 0.66).abs() < 1e-9, "{}", at(17.0));
+    // Without a step the exact largest size is found.
+    let exact = plain("a", json!({ "box": { "x": 0, "y": 0, "w": 300, "h": 33 }, "fit": "shrinkHeight" })).scale;
+    assert!((exact - 0.66).abs() < 1e-5, "{exact}");
 }
 
 #[test]

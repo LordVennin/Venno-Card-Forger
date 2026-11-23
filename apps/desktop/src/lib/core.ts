@@ -25,6 +25,7 @@ type Exports = {
   cs_execute(editPtr: number, editLen: number, labelPtr: number, labelLen: number): number;
   cs_undo(): number;
   cs_redo(): number;
+  cs_add_font(ptr: number, len: number): number;
   cs_add_paint_layer(namePtr: number, nameLen: number): number;
   cs_stroke_begin(layerPtr: number, layerLen: number, brushPtr: number, brushLen: number): number;
   cs_stroke_to(x: number, y: number, pressure: number): void;
@@ -174,6 +175,15 @@ export class Core {
   }
 
   // ---- painting ----------------------------------------------------------------
+
+  /**
+   * Load a font file (TTF or OTF) for text layers to use, and redraw. Returns
+   * the PostScript names it provides. Fonts stay loaded when another document is opened.
+   */
+  addFont(file: Uint8Array): string[] {
+    this.check(this.pass(file, (ptr, len) => this.x.cs_add_font(ptr, len)));
+    return JSON.parse(decoder.decode(this.out())) as string[];
+  }
 
   /** Add an empty paint layer on top and return its id. */
   addPaintLayer(name: string): string {

@@ -195,7 +195,21 @@ export type TextRun = {
   /** Set on runs that draw (part of) a card symbol, e.g. "{W}". */
   symbol?: string;
 };
-export type RichText = { runs: TextRun[] };
+/** Settings for one paragraph that differ from the layer's style. Lengths are in pixels and do not shrink when the text is fitted. */
+export type ParagraphStyle = {
+  /** Space above this paragraph, instead of the style's paragraphSpacing. */
+  spaceBefore?: number;
+  /** Left indent of every line. */
+  indent?: number;
+  /** Added to the indent of the first line. Negative for a hanging indent. */
+  firstLineIndent?: number;
+  align?: "left" | "center" | "right";
+};
+export type RichText = {
+  runs: TextRun[];
+  /** Per-paragraph settings, in order. Paragraphs are separated by "\n"; ones past the end use the layer's style. */
+  paragraphs?: ParagraphStyle[];
+};
 export type TextStyle = {
   font: string;
   size: number;
@@ -206,7 +220,7 @@ export type TextStyle = {
   tracking?: number;
   /** Horizontal stretch of the glyphs. Default 1. */
   scaleX?: number;
-  /** Extra space above each paragraph after the first, in pixels. */
+  /** Extra space above each paragraph after the first, in pixels. Does not shrink when the text is fitted. */
   paragraphSpacing?: number;
   align: "left" | "center" | "right";
 };
@@ -221,6 +235,8 @@ export type TextLayer = LayerBase & {
   content: RichText;
   style: TextStyle;
   fit: FitMode;
+  /** Shrink in steps of this many pixels of font size, then try half a step back (Proxyshop's search). Omit for the largest size that fits. */
+  fitStep?: number;
   /** Where box text sits in its box when it is shorter than the box. Default "top". */
   verticalAlign?: "top" | "center";
 };
