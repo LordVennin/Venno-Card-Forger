@@ -1,5 +1,6 @@
 //! cardsmith render <doc.json | file.cardsmith> -o <out.png>
 //! cardsmith samples <dir>
+//! cardsmith hashes        print a hash of each sample render
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -47,6 +48,15 @@ fn run(args: &[String]) -> Result<(), String> {
                 write(&dir.join(format!("{}.cardsmith", sample.name)), &save_cardsmith(&sample.doc, &sample.assets).map_err(|e| e.to_string())?)?;
                 write(&dir.join(format!("{}.png", sample.name)), &encode_png(r.width, r.height, &r.pixels).map_err(|e| e.to_string())?)?;
                 eprintln!("{}: {}×{} -> {}", sample.name, r.width, r.height, dir.join(sample.name).display());
+            }
+            Ok(())
+        }
+        Some("hashes") => {
+            // One line per sample: "<name> <width>x<height> <hash>". Used to check that
+            // the WebAssembly build renders the same bytes as this native one.
+            for sample in samples() {
+                let r = render(&sample.doc, &sample.assets);
+                println!("{} {}x{} {:016x}", sample.name, r.width, r.height, cardsmith_core::render::hash(&r.pixels));
             }
             Ok(())
         }

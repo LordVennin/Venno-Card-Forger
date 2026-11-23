@@ -14,3 +14,6 @@ fixtures/local/
 # Tauri generated
 apps/desktop/src-tauri/gen/
 *.tsbuildinfo
+
+# Built from crates/wasm by `pnpm build:wasm`
+apps/desktop/src/wasm/*.wasm

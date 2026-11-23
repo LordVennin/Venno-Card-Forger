@@ -1,11 +1,12 @@
-import wasmUrl from "canvaskit-wasm/bin/canvaskit.wasm?url";
-import { Renderer, loadCanvasKit } from "@cardsmith/render";
-import type { CanvasKit } from "canvaskit-wasm";
+import wasmUrl from "../wasm/cardsmith.wasm?url";
+import { Core } from "./core";
 
-let ready: Promise<{ ck: CanvasKit; renderer: Renderer }> | undefined;
+let ready: Promise<Core> | undefined;
 
-/** The app's single renderer. Same code and same WASM as the headless one. */
-export function getRenderer() {
-  ready ??= loadCanvasKit(() => wasmUrl).then((ck) => ({ ck, renderer: new Renderer(ck) }));
+/** The app's single core instance. */
+export function getCore(): Promise<Core> {
+  ready ??= fetch(wasmUrl)
+    .then((response) => response.arrayBuffer())
+    .then((bytes) => Core.load(bytes));
   return ready;
 }

@@ -24,7 +24,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 | Card data | Scryfall API and Scryfall bulk data |
 | Symbols | Mana font (open license) for mana symbols. Scryfall `/sets` SVGs and Keyrune for set symbols |
 
-**Migration in progress (SPEC Phase 1R):** `packages/doc` and `packages/render` are the TypeScript originals being ported to `crates/core`. Until the port lands they remain the working implementation and the behavioural reference; their tests define what the Rust code must do.
+**Migration in progress (SPEC Phase 1R):** the core is ported to `crates/core` and the app runs it through `crates/wasm`. `packages/doc` and `packages/render` are the TypeScript originals; the app now uses `packages/doc` only for its type definitions. Do not add features to the TypeScript renderer. It is removed in Phase 1R task 7.
 
 ## Repository layout (target)
 
@@ -95,10 +95,9 @@ cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <p
 cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
 pnpm test             # TypeScript unit tests (Vitest)
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
-pnpm render <doc.json | file.cardsmith> -o <png>   # headless render
-pnpm render --samples <dir>                        # write the built-in sample documents and their renders
-pnpm test:parity            # Node vs frontend pixel diff, in headless Chromium (skips if Playwright is absent)
-pnpm test:parity --app      # the same, inside the real Tauri window (needs a display; xvfb-run -a works)
+pnpm build:wasm             # build crates/wasm and copy it into the app (pnpm dev does this for you)
+pnpm test:parity            # native vs WASM-in-Node vs WASM-in-Chromium frame hashes (frontend part skips without Playwright)
+pnpm test:parity --app      # the same, with the frontend running in the real Tauri window (needs a display; xvfb-run -a works)
 pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
 pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
 pnpm spike:text [-o <png>]                  # Phase 0 CanvasKit text-fit spike
@@ -106,12 +105,13 @@ pnpm spike:text [-o <png>]                  # Phase 0 CanvasKit text-fit spike
 
 Not built yet (Phase 2): `pnpm test:golden`, `pnpm import <psd> -o <template-dir>`.
 
-`pnpm dev` needs the Tauri Linux libraries: `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`.
+`pnpm dev` needs the Tauri Linux libraries (`libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`) and the Rust WASM target (`rustup target add wasm32-unknown-unknown`).
 
 Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the PSDs, `survey/` the survey output, `golden/` the reference images.
 
 ## Where things are
 
-- `packages/doc`: types (`types.ts`), commands and `History` (`commands.ts`), JSON and `.cardsmith` save/load (`serialize.ts`).
-- `packages/render`: `render.ts` walks the layer tree; `raster.ts` is the compositor (no CanvasKit); `field.ts` is the distance field and blur; `effects.ts` turns effects into coverage stamps; `samples.ts` holds the sample documents used by tests, the app and the parity check.
-- Do not composite through CanvasKit surfaces. Its CPU backend is about ten times slower than `raster.ts` (see the Decisions log).
+- `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree), `samples.rs` (sample documents). Tests are in `crates/core/tests` and beside the modules.
+- `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
+- `crates/cli`: `cardsmith render | samples | hashes`.
+- The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

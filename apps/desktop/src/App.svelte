@@ -1,37 +1,63 @@
 <script lang="ts">
-  import { History, setLayerProps, type Layer } from "@cardsmith/doc";
-  import { buildSamples, type Sample } from "@cardsmith/render";
-  import { getRenderer } from "./lib/renderer";
+  import type { Doc, Layer } from "@cardsmith/doc";
+  import type { Core, CoreState } from "./lib/core";
+  import { getCore } from "./lib/renderer";
 
-  // Phase 1 shell: pick a sample document, toggle layers through commands,
-  // undo and redo. The canvas only ever shows what the renderer returns.
+  // Phase 1R shell. The Rust core (WebAssembly) owns the document, its history
+  // and the pixels. This component sends edits and shows what the core reports.
   let canvas = $state<HTMLCanvasElement>();
-  let samples = $state.raw<Sample[]>([]);
+  let core = $state.raw<Core>();
+  let samples = $state<string[]>([]);
   let current = $state(0);
-  let history = $state.raw<History>();
-  let revision = $state(0);
-  let status = $state("Loading renderer…");
-  let warnings = $state<string[]>([]);
+  let doc = $state.raw<Doc>();
+  let history = $state.raw<CoreState>({ canUndo: false, canRedo: false, labels: [], warnings: [] });
+  let status = $state("Loading core…");
 
-  getRenderer()
-    .then(({ ck }) => {
-      samples = buildSamples(ck);
+  getCore()
+    .then((loaded) => {
+      core = loaded;
+      samples = loaded.sampleNames();
       open(0);
     })
-    .catch((err) => (status = `Renderer failed to load: ${err.message ?? err}`));
+    .catch((err) => (status = `The core failed to load: ${err.message ?? err}`));
+
+  /** Pull the core's state and redraw. Called after anything that changes the document. */
+  function refresh() {
+    if (!core || !canvas) return;
+    doc = core.doc();
+    const started = performance.now();
+    const frame = core.render();
+    const rendered = performance.now() - started;
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    // The frame is a view over the core's memory: it goes to the canvas in one copy.
+    canvas.getContext("2d")!.putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
+    history = core.state();
+    status = `${frame.width}×${frame.height} · render ${rendered.toFixed(1)} ms · to screen ${(performance.now() - started - rendered).toFixed(1)} ms`;
+  }
 
   function open(index: number) {
     current = index;
-    history = new History(structuredClone(samples[index]!.doc));
-    history.subscribe(() => revision++);
-    revision++;
+    core?.openSample(index);
+    refresh();
   }
 
+  function run(action: () => void) {
+    try {
+      action();
+    } catch (err) {
+      status = `Edit refused: ${err instanceof Error ? err.message : err}`;
+      return;
+    }
+    refresh();
+  }
+
+  const toggle = (layer: Layer) =>
+    run(() => core?.execute({ type: "setLayerProps", id: layer.id, props: { visible: !layer.visible } }, `${layer.visible ? "Hide" : "Show"} ${layer.name}`));
+
+  // Top layer first, like every layer panel, with children under their group.
   const layers = $derived.by(() => {
-    void revision;
     const list: { layer: Layer; depth: number }[] = [];
-    if (!history) return list;
-    // Top layer first, like every layer panel, with children under their group.
     const add = (children: Layer[], depth: number) => {
       for (let i = children.length - 1; i >= 0; i--) {
         const layer = children[i]!;
@@ -39,40 +65,25 @@
         if (layer.kind === "group") add(layer.children, depth + 1);
       }
     };
-    add(history.doc.root.children, 0);
+    if (doc) add(doc.root.children, 0);
     return list;
   });
 
+  // The canvas mounts after the core may already be ready.
   $effect(() => {
-    void revision;
-    if (!canvas || !history) return;
-    const doc = history.doc;
-    const assets = samples[current]!.assets;
-    getRenderer().then(({ renderer }) => {
-      const started = performance.now();
-      const result = renderer.render(doc, assets);
-      canvas!.width = result.width;
-      canvas!.height = result.height;
-      const image = new ImageData(new Uint8ClampedArray(result.pixels), result.width, result.height);
-      canvas!.getContext("2d")!.putImageData(image, 0, 0);
-      warnings = result.warnings;
-      status = `${result.width}×${result.height} rendered in ${Math.round(performance.now() - started)} ms`;
-    });
+    if (canvas && core && !doc) refresh();
   });
-
-  const toggle = (layer: Layer) =>
-    history?.execute(setLayerProps(layer.id, { visible: !layer.visible }, `${layer.visible ? "Hide" : "Show"} ${layer.name}`));
 </script>
 
 <main>
   <header>
     <strong>Cardsmith</strong>
     {#each samples as sample, i}
-      <button class:active={i === current} onclick={() => open(i)}>{sample.name}</button>
+      <button class:active={i === current} onclick={() => open(i)}>{sample}</button>
     {/each}
     <span class="spacer"></span>
-    <button disabled={!history?.canUndo || revision < 0} onclick={() => history?.undo()}>Undo</button>
-    <button disabled={!history?.canRedo || revision < 0} onclick={() => history?.redo()}>Redo</button>
+    <button disabled={!history.canUndo} onclick={() => run(() => core?.undo())}>Undo</button>
+    <button disabled={!history.canRedo} onclick={() => run(() => core?.redo())}>Redo</button>
   </header>
 
   <section class="stage">
@@ -92,11 +103,17 @@
         </li>
       {/each}
     </ul>
+    {#if history.labels.length}
+      <h2>History</h2>
+      <ol>
+        {#each history.labels as label}<li>{label}</li>{/each}
+      </ol>
+    {/if}
   </aside>
 
   <footer>
     {status}
-    {#each warnings as warning}<span class="warning">{warning}</span>{/each}
+    {#each history.warnings as warning}<span class="warning">{warning}</span>{/each}
   </footer>
 </main>
 
@@ -143,9 +160,9 @@
     padding: 8px 10px;
   }
   h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9ca3; margin: 4px 0 8px; }
-  ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  ul, ol { list-style: none; margin: 0 0 12px; padding: 0; font-size: 13px; }
   li { padding-block: 2px; }
-  li.hidden { color: #777; }
+  li.hidden, ol li { color: #777; }
   small { color: #777; margin-left: 4px; }
   footer {
     grid-area: footer;
