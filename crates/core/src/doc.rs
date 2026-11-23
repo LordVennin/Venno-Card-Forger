@@ -207,6 +207,11 @@ pub enum Effect {
         altitude: f64,
         highlight: Tone,
         shadow: Tone,
+        /// The bevel's cross-section, as points (position across the bevel,
+        /// height), both 0..1, joined by a smooth curve. Omit for a straight
+        /// ramp. Photoshop's "Contour" sub-option.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<Vec<[f64; 2]>>,
     },
 }
 

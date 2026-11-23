@@ -12,12 +12,6 @@
         "/Name & Title Boxes/Shape/Typeline/Normal",
         "/Legendary Crown/Legendary Crown",
         "/PT Box"
-      ],
-      "unverified": [
-        {
-          "region": "2380,3760,620,400",
-          "why": "P/T box bevel: Photopea lights it from below, we light it from the upper right as its settings (direction up, angle 50) say. Waiting for the owner to say which is right."
-        }
       ]
     }
   },

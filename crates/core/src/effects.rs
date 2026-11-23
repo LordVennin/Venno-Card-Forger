@@ -180,8 +180,9 @@ impl<'a> EffectContext<'a> {
                 vec![Stamp { coverage: Cow::Owned(coverage), ink: solid(color), blend: *blend, opacity: *opacity as f32 }]
             }
 
-            Effect::Bevel { style, direction, depth, size, soften, angle, altitude, highlight, shadow, .. } => {
+            Effect::Bevel { style, direction, depth, size, soften, angle, altitude, highlight, shadow, profile, .. } => {
                 let size = (*size as f32).max(1e-3);
+                let steepness = profile.as_deref().map(profile_slopes);
                 let inner = *style == BevelStyle::Inner;
                 let sd = self.sd();
                 let (lx, ly) = light_dir(*angle);
@@ -201,6 +202,10 @@ impl<'a> EffectContext<'a> {
                         if band <= 0.0 {
                             continue;
                         }
+                        // Where across the bevel this pixel is: 0 at its low edge, 1 at its high edge.
+                        let across = if inner { -sd[i] / size } else { 1.0 - sd[i] / size };
+                        // A custom cross-section changes how steep the surface is here, and which way it leans.
+                        let slope = slope * steepness.as_ref().map_or(1.0, |lut| lut[((across.clamp(0.0, 1.0) * (PROFILE_STEPS - 1) as f32) + 0.5) as usize]);
                         // Height falls as distance grows, so the normal leans along +grad(sd).
                         let nx = (sd[y * w + (x + 1).min(w - 1)] - sd[y * w + x.saturating_sub(1)]) / 2.0 * slope;
                         let ny = (sd[(y + 1).min(h - 1) * w + x] - sd[y.saturating_sub(1) * w + x]) / 2.0 * slope;
@@ -223,6 +228,43 @@ impl<'a> EffectContext<'a> {
             }
         }
     }
+}
+
+const PROFILE_STEPS: usize = 256;
+
+/// The slope of a bevel cross-section at evenly spaced positions across it,
+/// relative to a straight ramp (which has slope 1 everywhere). The points are
+/// joined by a Catmull-Rom curve, as Photoshop's contour editor draws them.
+fn profile_slopes(points: &[[f64; 2]]) -> Vec<f32> {
+    let mut pts: Vec<[f64; 2]> = points.to_vec();
+    pts.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    if pts.len() < 2 {
+        return vec![1.0; PROFILE_STEPS];
+    }
+    // Height at position t.
+    let height = |t: f64| -> f64 {
+        let i = pts.windows(2).position(|w| t <= w[1][0]).unwrap_or(pts.len() - 2);
+        let (p1, p2) = (pts[i], pts[i + 1]);
+        let span = p2[0] - p1[0];
+        if span <= 0.0 {
+            return p2[1];
+        }
+        // Tangents from the neighbours on each side; at the ends, from the segment itself.
+        let tangent = |a: [f64; 2], b: [f64; 2]| if b[0] > a[0] { (b[1] - a[1]) / (b[0] - a[0]) } else { 0.0 };
+        let m1 = if i > 0 { tangent(pts[i - 1], p2) } else { tangent(p1, p2) };
+        let m2 = if i + 2 < pts.len() { tangent(p1, pts[i + 2]) } else { tangent(p1, p2) };
+        let u = ((t - p1[0]) / span).clamp(0.0, 1.0);
+        let (u2, u3) = (u * u, u * u * u);
+        (2.0 * u3 - 3.0 * u2 + 1.0) * p1[1] + (u3 - 2.0 * u2 + u) * span * m1 + (-2.0 * u3 + 3.0 * u2) * p2[1] + (u3 - u2) * span * m2
+    };
+    let step = 1.0 / (PROFILE_STEPS - 1) as f64;
+    (0..PROFILE_STEPS)
+        .map(|i| {
+            let t = i as f64 * step;
+            let (a, b) = ((t - step).max(0.0), (t + step).min(1.0));
+            ((height(b) - height(a)) / (b - a)) as f32
+        })
+        .collect()
 }
 
 /// Position of an effect in Photoshop's stacking, bottom to top. Negative

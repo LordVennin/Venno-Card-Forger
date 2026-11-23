@@ -138,7 +138,13 @@ export function convertEffects(fx: LayerEffectsInfo, global: Global, where: stri
     const style = e.style === "outer bevel" ? "outer" : "inner";
     if (e.style !== "inner bevel" && e.style !== "outer bevel") warn(`${where} bevel: style "${e.style}" is not supported; using inner bevel`);
     if (e.technique !== "chisel hard") warn(`${where} bevel: technique "${e.technique}" is not supported; using chisel hard`);
+    // The "Contour" sub-option replaces the bevel's straight ramp with a drawn cross-section.
+    const shape = e as { useShape?: boolean; shapeContour?: { curve?: { x: number; y: number }[] } };
+    const profile = shape.useShape && shape.shapeContour?.curve?.length ? { profile: shape.shapeContour.curve.map((p) => [p.x / 255, p.y / 255] as [number, number]) } : {};
+    if (e.useTexture) warn(`${where} bevel: the Texture sub-option is not supported; ignored`);
+    if (e.contour?.name && e.contour.name !== "Linear") warn(`${where} bevel: gloss contour "${e.contour.name}" is not supported; using linear`);
     out.push({
+      ...profile,
       type: "bevel", enabled: e.enabled !== false, style, technique: "chiselHard", direction: e.direction === "down" ? "down" : "up",
       depth: e.strength ?? 1, size: px(e.size), soften: px(e.soften), angle: angle(e), altitude: e.useGlobalLight ? global.altitude : (e.altitude ?? global.altitude),
       highlight: { color: color(e.highlightColor), blend: blendMode(e.highlightBlendMode, `${where} bevel highlight`, warn), opacity: e.highlightOpacity ?? 1 },

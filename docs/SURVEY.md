@@ -16,7 +16,7 @@ Read this section as the scope. The generated tables below it are the evidence.
 
 **Blend modes: four on layers.** `normal`, `soft light`, `overlay`, `linear light`. Groups are `pass through` (80) or `normal` (4, isolated). Effects add `multiply`, `screen` and `luminosity` internally.
 
-**Layer effects: seven.** Stroke (outside, inside and center; color fill only; up to two on one layer), drop shadow (with spread, and a Gaussian contour on three), bevel (inner and outer, chisel hard, with soften), gradient overlay (linear and radial, solid multi-stop gradients, luminosity or normal blend), outer glow, inner shadow, and color overlay (`solidFill`).
+**Layer effects: seven.** Stroke (outside, inside and center; color fill only; up to two on one layer), drop shadow (with spread, and a Gaussian contour on three), bevel (inner and outer, chisel hard, with soften, and on two layers a custom "Contour" cross-section, found in Phase 2), gradient overlay (linear and radial, solid multi-stop gradients, luminosity or normal blend), outer glow, inner shadow, and color overlay (`solidFill`).
 
 - Color overlay and most drop shadows are defined on layers whose whole layer style is switched off. Proxyshop turns some of these on at render time, so they are in scope even though the default state does not show them. The engine needs a "layer style enabled" flag separate from each effect's own flag.
 - Not present, so not built: inner glow, satin, pattern overlay, gradient or pattern strokes, noise gradients.

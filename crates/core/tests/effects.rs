@@ -316,6 +316,21 @@ fn outer_bevel_shades_the_band_outside_and_leaves_the_layer_alone() {
 }
 
 #[test]
+fn a_bevel_profile_reshapes_the_cross_section() {
+    // A hump: the surface rises over the outer half of the bevel and falls over the inner half.
+    // Lit from above, the top face is bright at its outer edge and dark at its inner edge,
+    // and the bottom face is the other way round.
+    let r = bevel(json!({ "size": 8, "depth": 3, "profile": [[0, 0], [0.5, 0.1], [1, 0]] }));
+    let top: Vec<u8> = (10..18).map(|y| px(&r, 20, y)[0]).collect();
+    assert!(top[..3].iter().all(|&v| v > 200) && top[5..].iter().all(|&v| v < 60), "bright outer part, dark inner part: {top:?}");
+    let bottom: Vec<u8> = (22..30).map(|y| px(&r, 20, y)[0]).collect();
+    assert!(bottom[..3].iter().all(|&v| v > 200) && bottom[5..].iter().all(|&v| v < 60), "bright inner part, dark outer part: {bottom:?}");
+    assert_eq!(px(&r, 20, 20), G);
+    // A straight-line profile is the default ramp.
+    assert_eq!(bevel(json!({ "profile": [[0, 0], [1, 1]] })).pixels, bevel(json!({})).pixels);
+}
+
+#[test]
 fn bevel_soften_blurs_the_facets() {
     assert!(px(&bevel(json!({ "soften": 6 })), 20, 14)[0] > 128);
 }

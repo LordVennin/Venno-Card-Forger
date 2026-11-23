@@ -11,21 +11,19 @@ Measured on 2026-11-24. Default states are compared with the composites embedded
 | `normal-extended` default | PSD composite | 83 dB | Matches |
 | `normal-extended` white legendary creature | Photopea export | 85 dB | Matches |
 | `borderless-vector` default | PSD composite | 72 dB | Matches; see "Anti-aliasing" |
-| `borderless-vector` frame | Photopea export | 41.5 dB with the P/T box left out; 35.5 dB with it | Passes with one unverified area; see below |
+| `borderless-vector` frame | Photopea export | 41.3 dB | Matches within its limits; see "Fine detail of bevels" |
 
 ## Open
 
 ### Text is not drawn
 Text layers are imported (box, font, size, leading, tracking, alignment, color, runs) but not rendered until Phase 3. The golden runner leaves the area of every visible text layer out of the comparison. That exclusion comes out when text rendering lands.
 
-### P/T box bevel disagrees with Photopea (unverified)
-`borderless-vector` frame state, area 2380,3760 620×400. The P/T box has an inner chisel-hard bevel: direction up, depth 300%, size 35, light angle 50°, altitude 30°. We light the top and right faces, as those settings say. Photopea's export shades the top face and lights the bottom one, with a softer look. The other three bevels in the same state (name bar, type bar, text box) agree between the two renderers. The area is left out of the comparison until the owner says which is right.
-
 ### Effects are checked against Photopea, not Photoshop
-The frame state exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers and vector masks, and matches Photopea at 41.5 dB outside the P/T box. Photopea is not Photoshop, so this is good evidence, not proof. What that comparison settled:
+The frame state exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers and vector masks, and matches Photopea at 41.3 dB. The owner also compared the P/T box against cards they made in Proxyshop (real Photoshop) and confirmed Photopea's rendering of it. Photopea is still not Photoshop, so this is good evidence, not proof. What the comparison settled:
 
 - gradient overlays honour Photoshop's "smoothness" (each segment eases in and out),
-- a gradient's length is the line through the bounds' center at its angle, from edge to opposite edge.
+- a gradient's length is the line through the bounds' center at its angle, from edge to opposite edge,
+- bevels honour Photoshop's "Contour" sub-option (a drawn cross-section in place of a straight ramp). The importer used to drop it silently, which made the P/T box look lit from the wrong side.
 
 Still estimates, because nothing visible in the references pins them down: blur width for a shadow or glow "size" beyond the one drop shadow here, the Gaussian contour's curve, the radius of radial gradients, and outer glow and inner shadow (not in any reference state).
 

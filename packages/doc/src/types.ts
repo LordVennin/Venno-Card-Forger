@@ -117,6 +117,11 @@ export type Effect =
       altitude: number;
       highlight: { color: Color; blend: BlendMode; opacity: number };
       shadow: { color: Color; blend: BlendMode; opacity: number };
+      /**
+       * The bevel's cross-section, as points [position across the bevel, height],
+       * both 0..1, joined by a smooth curve. Omit for a straight ramp.
+       */
+      profile?: [number, number][];
     };
 
 export type EffectType = Effect["type"];

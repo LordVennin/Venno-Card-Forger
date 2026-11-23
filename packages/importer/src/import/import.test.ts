@@ -95,6 +95,19 @@ describe("convertEffects", () => {
     expect(effects[1]).toMatchObject({ type: "bevel", style: "inner", direction: "down", angle: 102, altitude: 21, size: 16, highlight: { blend: "screen", opacity: 0.85 } });
   });
 
+  it("imports a bevel's contour as its profile, and warns about texture and gloss contours", () => {
+    const base = { present: true, style: "inner bevel", technique: "chisel hard", size: px(35), strength: 3 };
+    const shaped = convert({ bevel: { ...base, useShape: true, shapeContour: { name: "Custom", curve: [{ x: 0, y: 0 }, { x: 127, y: 26 }, { x: 255, y: 0 }] } } });
+    expect((shaped.effects[0] as { profile?: number[][] }).profile).toEqual([[0, 0], [127 / 255, 26 / 255], [1, 0]]);
+    expect(shaped.warnings).toEqual([]);
+    // A contour that is stored but switched off is not used.
+    expect(convert({ bevel: { ...base, useShape: false, shapeContour: { curve: [{ x: 0, y: 0 }, { x: 255, y: 0 }] } } }).effects[0]).not.toHaveProperty("profile");
+    expect(convert({ bevel: { ...base, useTexture: true, contour: { name: "Ring" } } }).warnings).toEqual([
+      "/Layer bevel: the Texture sub-option is not supported; ignored",
+      '/Layer bevel: gloss contour "Ring" is not supported; using linear',
+    ]);
+  });
+
   it("merges gradient color and opacity stops, and keeps offset, scale and reverse", () => {
     const { effects } = convert({ gradientOverlay: [{ present: true, blendMode: "luminosity", opacity: 0.2, type: "linear", angle: -20, scale: 0.5, reverse: true, offset: { x: -0.1, y: 0 },
       gradient: { type: "solid", colorStops: [{ color: { r: 255, g: 0, b: 0 }, location: 0, midpoint: 0.5 }, { color: { r: 0, g: 0, b: 255 }, location: 1, midpoint: 0.5 }],
