@@ -1,0 +1,11 @@
+{
+  "name": "@cardsmith/doc",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MPL-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  }
+}
