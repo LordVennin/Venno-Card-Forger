@@ -1,0 +1,32 @@
+{
+  "//": "Named layer states for pnpm test:golden, beyond each template's default state. Each lists layer paths to switch on (show) or off (hide); 'styleOn' switches a layer's whole layer style on. A state is compared with fixtures/local/golden/<template>.<state>.png when that file exists. The same lists are the instructions for producing that reference in Photoshop or Photopea.",
+  "borderless-vector": {
+    "frame": {
+      "about": "A normal-size frame with a legendary crown and P/T box: exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers, and vector masks.",
+      "show": [
+        "/Textbox/Shape/Normal",
+        "/Pinlines/Shape/Textbox/Normal",
+        "/Pinlines/Shape/Typeline/Normal",
+        "/Pinlines/Shape/Card Name/Normal",
+        "/Name & Title Boxes/Shape/Card Name/Normal",
+        "/Name & Title Boxes/Shape/Typeline/Normal",
+        "/Legendary Crown/Legendary Crown",
+        "/PT Box"
+      ]
+    }
+  },
+  "normal": {
+    "white-legendary-creature": {
+      "about": "What Proxyshop switches on for a mono-white legendary creature.",
+      "show": ["/Background/W", "/Pinlines & Textbox/W", "/Name & Title Boxes/W", "/PT Box/W", "/Legendary Crown/W", "/Border/Legendary Border"],
+      "hide": ["/Border/Normal Border"]
+    }
+  },
+  "normal-extended": {
+    "white-legendary-creature": {
+      "about": "What Proxyshop switches on for a mono-white legendary creature.",
+      "show": ["/Background/W", "/Pinlines & Textbox/W", "/Name & Title Boxes/W", "/PT Box/W", "/Legendary Crown/W", "/Border/Legendary Border"],
+      "hide": ["/Border/Normal Border"]
+    }
+  }
+}

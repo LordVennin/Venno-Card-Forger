@@ -11,6 +11,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { decodeLayerPixels, readPsd } from "ag-psd";
 import { initHeadlessPsd } from "../headless.js";
+import { describeBindings, generateBindings } from "./bindings.js";
 import { convertPsd } from "./convert.js";
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { out: { type: "string", short: "o" } } });
@@ -63,6 +64,7 @@ const count = (list: { kind: string; children?: unknown[] }[]) => {
 };
 count(doc.root.children);
 
+const bindings = generateBindings(doc);
 await writeFile(join(outDir, "doc.json"), JSON.stringify(doc, null, 1) + "\n");
 await writeFile(
   join(outDir, "manifest.json"),
@@ -76,8 +78,7 @@ await writeFile(
       dpi: doc.dpi,
       layers,
       warnings,
-      // Filled in by the binding generator (Phase 2, task 4).
-      bindings: {},
+      bindings,
     },
     null,
     2,
@@ -85,6 +86,7 @@ await writeFile(
 );
 
 for (const warning of warnings) console.error(`warning: ${warning}`);
+console.error(describeBindings(bindings));
 console.error(
   `${basename(file)} -> ${outDir}: ${layers} layers, ${images} images (${(imageBytes / 1e6).toFixed(1)} MB), ` +
     `${warnings.length} warning${warnings.length === 1 ? "" : "s"}, ${((performance.now() - started) / 1000).toFixed(1)} s`,

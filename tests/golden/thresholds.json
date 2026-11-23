@@ -1,0 +1,5 @@
+{
+  "//": "Limits for pnpm test:golden. minPsnr is in dB over the compared pixels; maxBlockError is the mean error (0..255) allowed in the worst 64 px block. Change one only with the reason in the commit message (CLAUDE.md rule 5).",
+  "default": { "minPsnr": 40, "maxBlockError": 6 },
+  "templates": {}
+}

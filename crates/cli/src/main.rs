@@ -2,6 +2,7 @@
 //! cardsmith samples <dir>
 //! cardsmith hashes        print a hash of each sample render
 //! cardsmith bench         time editing on the card-sized sample
+//! cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -14,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png>\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -63,6 +64,53 @@ fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         Some("bench") => bench(),
+        Some("compare") => {
+            // cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]
+            // Prints one line of JSON with the metrics.
+            use cardsmith_core::raster::Region;
+            use cardsmith_core::render::decode_image;
+            let mut files = Vec::new();
+            let mut ignore = Vec::new();
+            let mut heatmap = None;
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "--ignore" => {
+                        let value = rest.next().ok_or(USAGE)?;
+                        let n: Vec<i32> = value.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+                        let [x, y, w, h] = n[..] else { return Err(format!("--ignore takes x,y,w,h, not \"{value}\"")) };
+                        ignore.push(Region::new(x, y, w, h));
+                    }
+                    "--heatmap" => heatmap = rest.next(),
+                    _ => files.push(arg),
+                }
+            }
+            let [actual, reference] = files[..] else { return Err(USAGE.into()) };
+            let load = |file: &String| -> Result<_, String> {
+                let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+                decode_image(&bytes).ok_or_else(|| format!("{file}: not a readable image"))
+            };
+            let (a, r) = (load(actual)?, load(reference)?);
+            if (a.w, a.h) != (r.w, r.h) {
+                return Err(format!("the images differ in size: {}×{} and {}×{}", a.w, a.h, r.w, r.h));
+            }
+            let (c, heat) = cardsmith_core::compare::compare(a.w as u32, a.h as u32, &a.data, &r.data, &ignore);
+            if let Some(out) = heatmap {
+                write(Path::new(out), &encode_png(a.w as u32, a.h as u32, &heat).map_err(|e| e.to_string())?)?;
+            }
+            println!(
+                "{}",
+                serde_json::json!({
+                    // JSON has no infinity; identical images report null.
+                    "psnr": if c.psnr.is_finite() { Some(c.psnr) } else { None },
+                    "maxDiff": c.max_diff,
+                    "differing": c.differing,
+                    "compared": c.compared,
+                    "worstBlock": { "x": c.worst_block.x, "y": c.worst_block.y, "w": c.worst_block.w, "h": c.worst_block.h, "meanError": c.worst_block_error },
+                })
+            );
+            Ok(())
+        }
         Some("render") => {
             let mut input = None;
             let mut out = None;

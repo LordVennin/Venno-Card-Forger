@@ -1,6 +1,7 @@
 import type { Doc, GroupLayer, Layer } from "@cardsmith/doc";
 import type { Layer as PsdLayer, Psd } from "ag-psd";
 import { describe, expect, it } from "vitest";
+import { describeBindings, generateBindings } from "./bindings.js";
 import { convertPsd } from "./convert.js";
 import { convertEffects } from "./effects.js";
 import { convertVectorPath } from "./paths.js";
@@ -224,5 +225,61 @@ describe("convertPsd", () => {
   it("keeps ids unique when a PSD repeats or omits them", () => {
     const { doc } = run({ children: [{ name: "a", id: 5 }, { name: "b", id: 5 }, { name: "c" }] as PsdLayer[] });
     expect(new Set(doc.root.children.map((l) => l.id)).size).toBe(3);
+  });
+});
+
+describe("generateBindings", () => {
+  const base = { visible: true, opacity: 1, blend: "normal" as const, clip: false };
+  const leaf = (name: string): Layer => ({ ...base, kind: "shape", id: `id:${name}:${Math.random().toString(36).slice(2, 7)}`, name, path: { d: "" }, fill: { type: "solid", color: [0, 0, 0, 1] } });
+  const group = (name: string, children: Layer[]): Layer => ({ ...base, kind: "group", id: `g:${name}`, name, passThrough: true, children });
+  const docOf = (children: Layer[]): Doc => ({ version: 1, width: 10, height: 10, dpi: 72, assets: {}, root: { ...(group("Root", children) as GroupLayer), id: "root" } });
+  const colors = (names: string[]) => names.map(leaf);
+
+  const raster = () =>
+    docOf([
+      leaf("Layer 1"), leaf("Full Art Frame"), leaf("Art Frame"),
+      group("Background", colors(["W", "U", "Gold"])), group("Land Pinlines & Textbox", colors(["W", "Land"])), group("Pinlines & Textbox", colors(["W", "WU"])),
+      leaf("Hollow Crown Shadow"), group("Legendary Crown", colors(["W"])), group("Name & Title Boxes", colors(["W"])), group("PT Box", colors(["W", "Vehicle"])), group("Color Indicator", colors(["W"])),
+      group("Text and Icons", ["Divider", "Textbox Reference", "PT Reference", "Expansion Reference", "Rules Text - Creature", "Rules Text - Noncreature", "Typeline Shift", "Typeline", "Power / Toughness", "Mana Cost", "Card Name"].map(leaf)),
+      group("Legal", ["Collector", "Set", "Artist"].map(leaf)),
+    ]);
+
+  it("binds a raster template by Proxyshop's layer names", () => {
+    const doc = raster();
+    const b = generateBindings(doc);
+    expect(b.kind).toBe("raster");
+    expect(b.unresolved).toEqual([]);
+    expect(b.art).toBe(doc.root.children[0]!.id);
+    expect(Object.keys(b.artRefs).sort()).toEqual(["fullArt", "normal"]);
+    expect(Object.keys(b.text).sort()).toEqual(["artist", "collector", "mana", "name", "pt", "rulesCreature", "rulesNoncreature", "set", "type", "typeShift"]);
+    expect(Object.keys(b.textRefs).sort()).toEqual(["expansion", "pt", "textbox"]);
+    expect(Object.keys(b.toggles.pinlines!)).toEqual(["W", "WU"]);
+    expect(Object.keys(b.toggles.ptBox!)).toEqual(["W", "Vehicle"]);
+    expect(b.toggles.background!.Gold).toBe((doc.root.children[3] as GroupLayer).children[2]!.id);
+    expect(b.layers).toHaveProperty("crownShadow");
+    expect(describeBindings(b)).toMatch(/nothing unresolved/);
+  });
+
+  it("lists what a template is missing instead of guessing", () => {
+    const doc = raster();
+    doc.root.children = doc.root.children.filter((l) => !["Layer 1", "Legendary Crown", "Legal"].includes(l.name));
+    const b = generateBindings(doc);
+    expect(b.unresolved.sort()).toEqual(["art", "groups.legal", "text.artist", "text.set", "toggles.crown"]);
+    expect(describeBindings(b)).toMatch(/UNRESOLVED.*toggles\.crown/);
+  });
+
+  it("recognizes a vector template and binds its sized rules text and shape groups", () => {
+    const sized = (size: string) => group(size, [leaf("Rules Text - Creature"), leaf("Rules Text - Noncreature")]);
+    const b = generateBindings(docOf([
+      leaf("Layer 1"), leaf("Full Art Frame"), leaf("Art Frame Normal"), leaf("Art Frame Tall"),
+      group("Textbox", [group("Shape", [])]), group("Pinlines", [group("Shape", [])]), group("Name & Title Boxes", [group("Shape", [])]), group("PT Box", [group("Shape", [])]),
+      group("Text and Icons", [...["Divider", "PT Reference", "Expansion Reference", "Textbox Reference", "Typeline", "Power / Toughness", "Mana Cost", "Card Name"].map(leaf), sized("Normal"), sized("Tall")]),
+      group("Legal", ["Set", "Artist"].map(leaf)),
+    ]));
+    expect(b.kind).toBe("vector");
+    expect(b.unresolved).toEqual([]);
+    expect(Object.keys(b.artRefs).sort()).toEqual(["fullArt", "normal", "tall"]);
+    expect(Object.keys(b.text)).toEqual(expect.arrayContaining(["rulesCreature.normal", "rulesNoncreature.tall"]));
+    expect(Object.keys(b.groups)).toEqual(expect.arrayContaining(["pinlinesShapes", "textboxShapes", "twinsShapes", "ptBoxShapes"]));
   });
 });
