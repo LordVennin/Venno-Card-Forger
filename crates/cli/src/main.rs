@@ -55,7 +55,8 @@ fn run(args: &[String]) -> Result<(), String> {
         Some("hashes") => {
             // One line per sample: "<name> <width>x<height> <hash>". Used to check that
             // the WebAssembly build renders the same bytes as this native one.
-            for sample in samples() {
+            // The card-sized sample is included: it is the one that matters in practice.
+            for sample in samples().into_iter().chain([cardsmith_core::samples::card()]) {
                 let r = render(&sample.doc, &sample.assets);
                 println!("{} {}x{} {:016x}", sample.name, r.width, r.height, cardsmith_core::render::hash(&r.pixels));
             }

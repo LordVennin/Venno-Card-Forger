@@ -93,10 +93,11 @@ pnpm dev              # run the Tauri app
 cargo test --workspace   # Rust core tests (also: pnpm test:rust)
 cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <png>   # headless render (Rust)
 cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
+cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
 pnpm test             # TypeScript unit tests (Vitest)
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
 pnpm build:wasm             # build crates/wasm and copy it into the app (pnpm dev does this for you)
-pnpm test:parity            # native vs WASM-in-Node vs WASM-in-Chromium frame hashes (frontend part skips without Playwright)
+pnpm test:parity            # native vs WASM-in-Node vs WASM-in-Chromium frame hashes, plus brush timings in the frontend (frontend part skips without Playwright)
 pnpm test:parity --app      # the same, with the frontend running in the real Tauri window (needs a display; xvfb-run -a works)
 pnpm survey <dir-of-psds> [-o <out-dir>]    # importer feature survey -> survey.json + survey.md
 pnpm composite <psd-or-dir> [-o <out-dir>]  # extract embedded composites as golden references
@@ -111,7 +112,8 @@ Local fixtures (all gitignored, under `fixtures/local/`): `templates/` holds the
 
 ## Where things are
 
-- `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree), `samples.rs` (sample documents). Tests are in `crates/core/tests` and beside the modules.
+- `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree; tile caches for path coverage and effects), `paint.rs` (brush engine), `session.rs` (an open document: edits, strokes, undo, incremental redraw, the on-screen view), `samples.rs` (sample documents, including the card-sized one). Tests are in `crates/core/tests` and beside the modules.
+- **Two invariants the tests enforce, and that every renderer change must keep:** drawing a region gives exactly the pixels a full render has there, and a session's incrementally updated frame always equals a fresh full render.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
 - `crates/cli`: `cardsmith render | samples | hashes`.
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

@@ -2,55 +2,47 @@
 //!
 //! A plain C ABI, with no binding generator: the build is `cargo build
 //! --target wasm32-unknown-unknown` and nothing else. The module holds one
-//! session (a document with its history, assets and last rendered frame).
+//! session: a document with its history, pixels and on-screen view.
 //!
 //! Conventions:
 //!   - The host passes bytes by allocating with `cs_alloc`, writing into
 //!     linear memory, and passing `(ptr, len)`. It frees them with `cs_free`.
 //!   - Calls that can fail return 1 on success and 0 on failure; the message
-//!     is then in the text buffer (`cs_text_ptr`, `cs_text_len`).
-//!   - Calls that return text (JSON) put it in the same text buffer.
-//!   - The rendered frame stays in linear memory (`cs_frame_ptr`). The host
-//!     draws it with `putImageData` on a view of that memory: pixels are never
-//!     copied across a process boundary.
+//!     is then in the output buffer (`cs_out_ptr`, `cs_out_len`).
+//!   - Calls that return text (JSON) or a file put it in the same output buffer.
+//!   - Pixels stay in linear memory. The host draws the view (`cs_view_ptr`)
+//!     with `putImageData` on a view of that memory, limited to the dirty
+//!     rectangle the last call reported. Pixels never cross a process boundary.
 
-use cardsmith_core::commands::{Edit, History};
+use cardsmith_core::commands::Edit;
 use cardsmith_core::doc::Doc;
-use cardsmith_core::render::render;
-use cardsmith_core::samples::samples;
+use cardsmith_core::paint::Brush;
+use cardsmith_core::raster::Region;
+use cardsmith_core::samples;
 use cardsmith_core::serialize::{load_cardsmith, parse_doc, AssetBytes};
+use cardsmith_core::session::{Session, View};
 use std::cell::RefCell;
 
-struct Session {
-    history: History,
-    assets: AssetBytes,
-    frame: Vec<u8>,
-    frame_size: (u32, u32),
-    warnings: Vec<String>,
-    text: Vec<u8>,
+struct State {
+    session: Session,
+    /// Assets supplied after `cs_open_json`, until the session is (re)built with them.
+    out: Vec<u8>,
 }
 
 thread_local! {
-    static SESSION: RefCell<Session> = RefCell::new(Session {
-        history: History::new(Doc::empty(1, 1, 72.0)),
-        assets: AssetBytes::new(),
-        frame: Vec::new(),
-        frame_size: (0, 0),
-        warnings: Vec::new(),
-        text: Vec::new(),
-    });
+    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), out: Vec::new() });
 }
 
-fn with<T>(f: impl FnOnce(&mut Session) -> T) -> T {
-    SESSION.with(|s| f(&mut s.borrow_mut()))
+fn with<T>(f: impl FnOnce(&mut State) -> T) -> T {
+    STATE.with(|s| f(&mut s.borrow_mut()))
 }
 
 /// Run a fallible call: on error, store the message and return 0.
-fn attempt(f: impl FnOnce(&mut Session) -> Result<(), String>) -> u32 {
+fn attempt(f: impl FnOnce(&mut State) -> Result<(), String>) -> u32 {
     with(|s| match f(s) {
         Ok(()) => 1,
         Err(message) => {
-            s.text = message.into_bytes();
+            s.out = message.into_bytes();
             0
         }
     })
@@ -72,13 +64,14 @@ unsafe fn text<'a>(ptr: *const u8, len: usize) -> Result<&'a str, String> {
     std::str::from_utf8(bytes(ptr, len)).map_err(|_| "Text passed to the core was not UTF-8".to_string())
 }
 
-fn open(s: &mut Session, doc: Doc, assets: AssetBytes) {
-    s.history = History::new(doc);
-    s.assets = assets;
-    s.frame.clear();
-    s.frame_size = (0, 0);
-    s.warnings.clear();
+/// Replace the session, keeping the current view size so the screen stays in step.
+fn open(s: &mut State, doc: Doc, assets: AssetBytes) {
+    let view = s.session.view();
+    s.session = Session::new(doc, assets);
+    s.session.set_view(View { scale: 1.0, x: 0.0, y: 0.0, ..view });
 }
+
+// ---- memory and output ---------------------------------------------------------
 
 #[no_mangle]
 pub extern "C" fn cs_alloc(len: usize) -> *mut u8 {
@@ -96,27 +89,30 @@ pub unsafe extern "C" fn cs_free(ptr: *mut u8, len: usize) {
 }
 
 #[no_mangle]
-pub extern "C" fn cs_text_ptr() -> *const u8 {
-    with(|s| s.text.as_ptr())
+pub extern "C" fn cs_out_ptr() -> *const u8 {
+    with(|s| s.out.as_ptr())
 }
 
 #[no_mangle]
-pub extern "C" fn cs_text_len() -> usize {
-    with(|s| s.text.len())
+pub extern "C" fn cs_out_len() -> usize {
+    with(|s| s.out.len())
 }
 
-/// Number of built-in sample documents; their names as a JSON array go to the text buffer.
+// ---- opening and saving ----------------------------------------------------------
+
+/// Names of the built-in sample documents, as a JSON array in the output buffer.
 #[no_mangle]
-pub extern "C" fn cs_sample_names() -> u32 {
-    let names: Vec<&str> = samples().iter().map(|s| s.name).collect();
-    with(|s| s.text = serde_json::to_vec(&names).unwrap_or_default());
-    names.len() as u32
+pub extern "C" fn cs_sample_names() {
+    let mut names: Vec<&str> = samples::samples().iter().map(|s| s.name).collect();
+    names.push("card");
+    with(|s| s.out = serde_json::to_vec(&names).unwrap_or_default());
 }
 
 #[no_mangle]
 pub extern "C" fn cs_open_sample(index: u32) -> u32 {
     attempt(|s| {
-        let sample = samples().into_iter().nth(index as usize).ok_or("No such sample")?;
+        let mut all = samples::samples();
+        let sample = if index as usize == all.len() { samples::card() } else if (index as usize) < all.len() { all.swap_remove(index as usize) } else { return Err("No such sample".into()) };
         open(s, sample.doc, sample.assets);
         Ok(())
     })
@@ -136,33 +132,76 @@ pub unsafe extern "C" fn cs_open_cardsmith(ptr: *const u8, len: usize) -> u32 {
     })
 }
 
-/// Open a bare document from JSON. Its assets are supplied afterwards with `cs_set_asset_data`.
-///
-/// # Safety
-/// `(ptr, len)` must be valid as described in the module docs.
-#[no_mangle]
-pub unsafe extern "C" fn cs_open_json(ptr: *const u8, len: usize) -> u32 {
-    let json = text(ptr, len);
-    attempt(|s| {
-        let doc = parse_doc(json?).map_err(|e| e.to_string())?;
-        open(s, doc, AssetBytes::new());
-        Ok(())
-    })
-}
-
-/// Supply the bytes for one asset id.
+/// Open a document from JSON together with its assets, packed as repeated
+/// records of `[id length: u32 LE][id][data length: u32 LE][data]`.
 ///
 /// # Safety
 /// Both `(ptr, len)` pairs must be valid as described in the module docs.
 #[no_mangle]
-pub unsafe extern "C" fn cs_set_asset_data(id_ptr: *const u8, id_len: usize, ptr: *const u8, len: usize) -> u32 {
-    let id = text(id_ptr, id_len);
-    let data = bytes(ptr, len).to_vec();
+pub unsafe extern "C" fn cs_open_json(json_ptr: *const u8, json_len: usize, assets_ptr: *const u8, assets_len: usize) -> u32 {
+    let json = text(json_ptr, json_len);
+    let packed = bytes(assets_ptr, assets_len);
     attempt(|s| {
-        s.assets.insert(id?.to_string(), data);
+        let doc = parse_doc(json?).map_err(|e| e.to_string())?;
+        let mut assets = AssetBytes::new();
+        let mut rest = packed;
+        let mut take = |n: usize| -> Result<&[u8], String> {
+            if rest.len() < n {
+                return Err("The packed assets are cut short".into());
+            }
+            let (part, tail) = rest.split_at(n);
+            rest = tail;
+            Ok(part)
+        };
+        let mut read = packed.len();
+        while read > 0 {
+            let id_len = u32::from_le_bytes(take(4)?.try_into().unwrap()) as usize;
+            let id = String::from_utf8(take(id_len)?.to_vec()).map_err(|_| "An asset id was not UTF-8")?;
+            let data_len = u32::from_le_bytes(take(4)?.try_into().unwrap()) as usize;
+            assets.insert(id, take(data_len)?.to_vec());
+            read = read.saturating_sub(8 + id_len + data_len);
+        }
+        open(s, doc, assets);
         Ok(())
     })
 }
+
+/// The document as `.cardsmith` bytes, in the output buffer.
+#[no_mangle]
+pub extern "C" fn cs_save() -> u32 {
+    attempt(|s| {
+        s.out = s.session.save().map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
+// ---- state -----------------------------------------------------------------------
+
+/// The document as JSON, in the output buffer.
+#[no_mangle]
+pub extern "C" fn cs_doc_json() -> u32 {
+    attempt(|s| {
+        s.out = serde_json::to_vec(s.session.doc()).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
+/// History state and render warnings as JSON, in the output buffer:
+/// `{ "canUndo", "canRedo", "labels", "warnings" }`.
+#[no_mangle]
+pub extern "C" fn cs_state_json() {
+    with(|s| {
+        let state = serde_json::json!({
+            "canUndo": s.session.can_undo(),
+            "canRedo": s.session.can_redo(),
+            "labels": s.session.labels(),
+            "warnings": s.session.warnings(),
+        });
+        s.out = serde_json::to_vec(&state).unwrap_or_default();
+    });
+}
+
+// ---- edits -----------------------------------------------------------------------
 
 /// Apply an edit given as JSON (see `cardsmith_core::commands::Edit`).
 ///
@@ -174,81 +213,117 @@ pub unsafe extern "C" fn cs_execute(edit_ptr: *const u8, edit_len: usize, label_
     let label = text(label_ptr, label_len);
     attempt(|s| {
         let edit: Edit = serde_json::from_str(edit?).map_err(|e| format!("Invalid edit: {e}"))?;
-        s.history.execute(edit, label?).map_err(|e| e.to_string())
+        s.session.execute(edit, label?).map_err(|e| e.to_string())
     })
 }
 
 #[no_mangle]
 pub extern "C" fn cs_undo() -> u32 {
-    with(|s| s.history.undo() as u32)
+    with(|s| s.session.undo() as u32)
 }
 
 #[no_mangle]
 pub extern "C" fn cs_redo() -> u32 {
-    with(|s| s.history.redo() as u32)
+    with(|s| s.session.redo() as u32)
 }
 
-/// The document as JSON, into the text buffer.
+// ---- painting --------------------------------------------------------------------
+
+/// Add an empty, document-sized pixel layer on top. Its id goes to the output buffer.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
 #[no_mangle]
-pub extern "C" fn cs_doc_json() -> u32 {
+pub unsafe extern "C" fn cs_add_paint_layer(name_ptr: *const u8, name_len: usize) -> u32 {
+    let name = text(name_ptr, name_len);
     attempt(|s| {
-        s.text = serde_json::to_vec(s.history.doc()).map_err(|e| e.to_string())?;
+        s.out = s.session.add_paint_layer(name?).map_err(|e| e.to_string())?.into_bytes();
         Ok(())
     })
-    // On success the text buffer holds the document, which is what the caller reads.
 }
 
-/// History state and render warnings as JSON, into the text buffer:
-/// `{ "canUndo", "canRedo", "labels", "warnings" }`.
+/// Start a stroke on a pixel layer. The brush is JSON (see `cardsmith_core::paint::Brush`).
+///
+/// # Safety
+/// Both `(ptr, len)` pairs must be valid as described in the module docs.
 #[no_mangle]
-pub extern "C" fn cs_state_json() {
-    with(|s| {
-        let state = serde_json::json!({
-            "canUndo": s.history.can_undo(),
-            "canRedo": s.history.can_redo(),
-            "labels": s.history.labels(),
-            "warnings": s.warnings,
-        });
-        s.text = serde_json::to_vec(&state).unwrap_or_default();
-    });
+pub unsafe extern "C" fn cs_stroke_begin(layer_ptr: *const u8, layer_len: usize, brush_ptr: *const u8, brush_len: usize) -> u32 {
+    let layer = text(layer_ptr, layer_len);
+    let brush = text(brush_ptr, brush_len);
+    attempt(|s| {
+        let brush: Brush = serde_json::from_str(brush?).map_err(|e| format!("Invalid brush: {e}"))?;
+        s.session.stroke_begin(layer?, brush).map_err(|e| e.to_string())
+    })
 }
 
-/// Render the whole document into the frame buffer.
+/// Extend the stroke to a document position. The view is updated; read the dirty rectangle afterwards.
 #[no_mangle]
-pub extern "C" fn cs_render() {
-    with(|s| {
-        let result = render(s.history.doc(), &s.assets);
-        s.frame = result.pixels;
-        s.frame_size = (result.width, result.height);
-        s.warnings = result.warnings;
-    });
+pub extern "C" fn cs_stroke_to(x: f32, y: f32, pressure: f32) {
+    with(|s| s.session.stroke_to(x, y, pressure));
 }
 
-/// Straight-alpha RGBA, `cs_frame_width() × cs_frame_height() × 4` bytes.
-/// Valid until the next call that renders or opens a document.
+/// Finish the stroke and record it for undo.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_stroke_end(label_ptr: *const u8, label_len: usize) {
+    let label = text(label_ptr, label_len).unwrap_or("Brush");
+    with(|s| s.session.stroke_end(label));
+}
+
+// ---- pixels ----------------------------------------------------------------------
+
+/// Set what part of the document is on screen: `scale` screen pixels per
+/// document pixel, document point (x, y) at the top-left, `w × h` screen pixels.
+#[no_mangle]
+pub extern "C" fn cs_set_view(scale: f32, x: f32, y: f32, w: u32, h: u32) {
+    with(|s| s.session.set_view(View { scale, x, y, w, h }));
+}
+
+/// The view: straight-alpha RGBA, `w × h × 4` bytes as given to `cs_set_view`.
+/// Valid until the next call that changes the document or the view.
+#[no_mangle]
+pub extern "C" fn cs_view_ptr() -> *const u8 {
+    with(|s| s.session.view_pixels().as_ptr())
+}
+
+fn dirty() -> Region {
+    with(|s| s.session.dirty_view())
+}
+
+/// The part of the view the last call redrew, in view pixels. Width 0 means nothing changed.
+#[no_mangle]
+pub extern "C" fn cs_dirty_x() -> i32 {
+    dirty().x
+}
+#[no_mangle]
+pub extern "C" fn cs_dirty_y() -> i32 {
+    dirty().y
+}
+#[no_mangle]
+pub extern "C" fn cs_dirty_w() -> i32 {
+    dirty().w
+}
+#[no_mangle]
+pub extern "C" fn cs_dirty_h() -> i32 {
+    dirty().h
+}
+
+/// The full-resolution frame: straight-alpha RGBA, document size. For export and checks.
 #[no_mangle]
 pub extern "C" fn cs_frame_ptr() -> *const u8 {
-    with(|s| s.frame.as_ptr())
+    with(|s| s.session.frame().as_ptr())
 }
 
-#[no_mangle]
-pub extern "C" fn cs_frame_width() -> u32 {
-    with(|s| s.frame_size.0)
-}
-
-#[no_mangle]
-pub extern "C" fn cs_frame_height() -> u32 {
-    with(|s| s.frame_size.1)
-}
-
-/// FNV-1a hash of the frame, as two 32-bit halves. Lets native and WASM
-/// renders be compared without moving the pixels anywhere.
+/// FNV-1a hash of the full-resolution frame, as two 32-bit halves. Lets native
+/// and WASM renders be compared without moving the pixels anywhere.
 #[no_mangle]
 pub extern "C" fn cs_frame_hash_hi() -> u32 {
-    with(|s| (cardsmith_core::render::hash(&s.frame) >> 32) as u32)
+    with(|s| (s.session.frame_hash() >> 32) as u32)
 }
 
 #[no_mangle]
 pub extern "C" fn cs_frame_hash_lo() -> u32 {
-    with(|s| cardsmith_core::render::hash(&s.frame) as u32)
+    with(|s| s.session.frame_hash() as u32)
 }

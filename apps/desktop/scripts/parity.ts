@@ -40,8 +40,8 @@ const native: Row[] = sh("cargo", ["run", "-q", "--release", "-p", "cardsmith-cl
 const core = await Core.load(await readFile(join(appDir, "src/wasm/cardsmith.wasm")));
 const inNode: Row[] = core.sampleNames().map((name, index) => {
   core.openSample(index);
-  const frame = core.render();
-  return { name, size: `${frame.width}x${frame.height}`, hash: core.frameHash() };
+  const doc = core.doc();
+  return { name, size: `${doc.width}x${doc.height}`, hash: core.frameHash() };
 });
 
 // 3. WASM in the frontend.
@@ -64,7 +64,7 @@ const stop = () => {
 };
 process.on("exit", stop);
 
-let frontend: { userAgent: string; results: (Row & { ms: number })[] } | undefined;
+let frontend: { userAgent: string; results: (Row & { ms: number })[]; bench: string[] } | undefined;
 let closeBrowser = async () => {};
 let skipped = "";
 if (values.app) {
@@ -125,4 +125,5 @@ for (const want of native) {
   console.log(`${ok ? "✓" : "✗"} ${want.name} ${want.size}: native ${want.hash}, wasm/node ${node?.hash ?? "missing"}, ${webText}`);
 }
 if (skipped) console.log(`Note: ${skipped}.`);
+if (frontend?.bench.length) console.log(`\nBrush timings in the frontend (card sample, 1300×900 canvas):\n${frontend.bench.join("\n")}`);
 process.exit(failed ? 1 : 0);

@@ -1,10 +1,11 @@
 /**
  * The Rust core, loaded as WebAssembly (crates/wasm).
  *
- * The core owns the document, its history and the rendered frame. This wrapper
- * only moves small things across the boundary (JSON, file bytes) and exposes
- * the frame as a view over the module's memory, so pixels are never copied
- * between processes. It has no DOM dependencies and also runs in Node.
+ * The core owns the document, its history and its pixels. This wrapper only
+ * moves small things across the boundary (JSON, file bytes, pointer positions)
+ * and exposes the on-screen view as a window onto the module's memory, so
+ * pixels are never copied between processes. It has no DOM dependencies and
+ * also runs in Node.
  */
 import type { Doc } from "@cardsmith/doc";
 
@@ -12,28 +13,50 @@ type Exports = {
   memory: WebAssembly.Memory;
   cs_alloc(len: number): number;
   cs_free(ptr: number, len: number): void;
-  cs_text_ptr(): number;
-  cs_text_len(): number;
-  cs_sample_names(): number;
+  cs_out_ptr(): number;
+  cs_out_len(): number;
+  cs_sample_names(): void;
   cs_open_sample(index: number): number;
   cs_open_cardsmith(ptr: number, len: number): number;
-  cs_open_json(ptr: number, len: number): number;
-  cs_set_asset_data(idPtr: number, idLen: number, ptr: number, len: number): number;
+  cs_open_json(jsonPtr: number, jsonLen: number, assetsPtr: number, assetsLen: number): number;
+  cs_save(): number;
+  cs_doc_json(): number;
+  cs_state_json(): void;
   cs_execute(editPtr: number, editLen: number, labelPtr: number, labelLen: number): number;
   cs_undo(): number;
   cs_redo(): number;
-  cs_doc_json(): number;
-  cs_state_json(): void;
-  cs_render(): void;
+  cs_add_paint_layer(namePtr: number, nameLen: number): number;
+  cs_stroke_begin(layerPtr: number, layerLen: number, brushPtr: number, brushLen: number): number;
+  cs_stroke_to(x: number, y: number, pressure: number): void;
+  cs_stroke_end(labelPtr: number, labelLen: number): void;
+  cs_set_view(scale: number, x: number, y: number, w: number, h: number): void;
+  cs_view_ptr(): number;
+  cs_dirty_x(): number;
+  cs_dirty_y(): number;
+  cs_dirty_w(): number;
+  cs_dirty_h(): number;
   cs_frame_ptr(): number;
-  cs_frame_width(): number;
-  cs_frame_height(): number;
   cs_frame_hash_hi(): number;
   cs_frame_hash_lo(): number;
 };
 
 export type CoreState = { canUndo: boolean; canRedo: boolean; labels: string[]; warnings: string[] };
-export type Frame = { width: number; height: number; pixels: Uint8ClampedArray<ArrayBuffer> };
+
+/** `scale` screen pixels per document pixel, with document point (x, y) at the view's top-left. */
+export type View = { scale: number; x: number; y: number; width: number; height: number };
+export type Rect = { x: number; y: number; width: number; height: number };
+
+export type Brush = {
+  /** Diameter in document pixels. */
+  size: number;
+  /** 0..1. */
+  hardness: number;
+  /** 0..1, for the whole stroke. */
+  opacity: number;
+  /** sRGB, 0..255. */
+  color: [number, number, number];
+  erase: boolean;
+};
 
 /** An edit, as the core's `Edit` enum serializes. */
 export type Edit =
@@ -49,6 +72,8 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 export class Core {
+  private view: View = { scale: 1, x: 0, y: 0, width: 0, height: 0 };
+
   private constructor(private x: Exports) {}
 
   static async load(wasm: BufferSource): Promise<Core> {
@@ -67,18 +92,24 @@ export class Core {
     }
   }
 
-  private text(): string {
-    return decoder.decode(new Uint8Array(this.x.memory.buffer, this.x.cs_text_ptr(), this.x.cs_text_len()));
+  private passText<T>(text: string, f: (ptr: number, len: number) => T): T {
+    return this.pass(encoder.encode(text), f);
+  }
+
+  private out(): Uint8Array {
+    return new Uint8Array(this.x.memory.buffer, this.x.cs_out_ptr(), this.x.cs_out_len());
   }
 
   /** Throw the core's error message if a call reported failure. */
   private check(ok: number): void {
-    if (!ok) throw new Error(this.text());
+    if (!ok) throw new Error(decoder.decode(this.out()));
   }
+
+  // ---- opening and saving ------------------------------------------------------
 
   sampleNames(): string[] {
     this.x.cs_sample_names();
-    return JSON.parse(this.text());
+    return JSON.parse(decoder.decode(this.out()));
   }
 
   openSample(index: number): void {
@@ -90,17 +121,46 @@ export class Core {
   }
 
   openJson(doc: string, assets: Record<string, Uint8Array> = {}): void {
-    this.check(this.pass(encoder.encode(doc), (ptr, len) => this.x.cs_open_json(ptr, len)));
+    // Assets are packed as [id length][id][data length][data], lengths as 32-bit little-endian.
+    const parts: Uint8Array[] = [];
+    const length = (n: number) => new Uint8Array(new Uint32Array([n]).buffer);
     for (const [id, data] of Object.entries(assets)) {
-      const ok = this.pass(encoder.encode(id), (idPtr, idLen) => this.pass(data, (ptr, len) => this.x.cs_set_asset_data(idPtr, idLen, ptr, len)));
-      this.check(ok);
+      const name = encoder.encode(id);
+      parts.push(length(name.length), name, length(data.length), data);
     }
+    const packed = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let at = 0;
+    for (const part of parts) {
+      packed.set(part, at);
+      at += part.length;
+    }
+    this.check(this.passText(doc, (jsonPtr, jsonLen) => this.pass(packed, (ptr, len) => this.x.cs_open_json(jsonPtr, jsonLen, ptr, len))));
   }
+
+  /** The document as `.cardsmith` file bytes. */
+  save(): Uint8Array {
+    this.check(this.x.cs_save());
+    return this.out().slice();
+  }
+
+  // ---- state -------------------------------------------------------------------
+
+  doc(): Doc {
+    this.check(this.x.cs_doc_json());
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  state(): CoreState {
+    this.x.cs_state_json();
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  // ---- edits -------------------------------------------------------------------
 
   /** Apply an edit. Throws, leaving the document unchanged, if the core refuses it. */
   execute(edit: Edit, label: string): void {
-    const ok = this.pass(encoder.encode(JSON.stringify(edit)), (editPtr, editLen) =>
-      this.pass(encoder.encode(label), (labelPtr, labelLen) => this.x.cs_execute(editPtr, editLen, labelPtr, labelLen)),
+    const ok = this.passText(JSON.stringify(edit), (editPtr, editLen) =>
+      this.passText(label, (labelPtr, labelLen) => this.x.cs_execute(editPtr, editLen, labelPtr, labelLen)),
     );
     this.check(ok);
   }
@@ -113,31 +173,56 @@ export class Core {
     return this.x.cs_redo() === 1;
   }
 
-  doc(): Doc {
-    this.check(this.x.cs_doc_json());
-    return JSON.parse(this.text());
+  // ---- painting ----------------------------------------------------------------
+
+  /** Add an empty paint layer on top and return its id. */
+  addPaintLayer(name: string): string {
+    this.check(this.passText(name, (ptr, len) => this.x.cs_add_paint_layer(ptr, len)));
+    return decoder.decode(this.out());
   }
 
-  state(): CoreState {
-    this.x.cs_state_json();
-    return JSON.parse(this.text());
+  strokeBegin(layerId: string, brush: Brush): void {
+    const ok = this.passText(layerId, (layerPtr, layerLen) =>
+      this.passText(JSON.stringify(brush), (brushPtr, brushLen) => this.x.cs_stroke_begin(layerPtr, layerLen, brushPtr, brushLen)),
+    );
+    this.check(ok);
+  }
+
+  /** Extend the stroke to a document position. `pressure` (0..1) scales the brush size. */
+  strokeTo(x: number, y: number, pressure = 1): void {
+    this.x.cs_stroke_to(x, y, pressure);
+  }
+
+  strokeEnd(label: string): void {
+    this.passText(label, (ptr, len) => this.x.cs_stroke_end(ptr, len));
+  }
+
+  // ---- pixels ------------------------------------------------------------------
+
+  setView(view: View): void {
+    this.view = view;
+    this.x.cs_set_view(view.scale, view.x, view.y, view.width, view.height);
   }
 
   /**
-   * Render the document. The returned pixels are a view over the module's
-   * memory: use them (for example with `putImageData`) before calling the core
-   * again, and do not keep them.
+   * The on-screen view: a window onto the module's memory, not a copy. Use it
+   * (for example with `putImageData`) before calling the core again, and do not
+   * keep it.
    */
-  render(): Frame {
-    this.x.cs_render();
-    const width = this.x.cs_frame_width();
-    const height = this.x.cs_frame_height();
+  viewPixels(): Uint8ClampedArray<ArrayBuffer> {
     // A WebAssembly.Memory that is not shared is always backed by a plain ArrayBuffer.
     const buffer = this.x.memory.buffer as ArrayBuffer;
-    return { width, height, pixels: new Uint8ClampedArray(buffer, this.x.cs_frame_ptr(), width * height * 4) };
+    return new Uint8ClampedArray(buffer, this.x.cs_view_ptr(), this.view.width * this.view.height * 4);
   }
 
-  /** Hash of the last rendered frame, in the same format as `cardsmith hashes`. */
+  /** The part of the view the last call redrew. Null if nothing changed. */
+  dirty(): Rect | null {
+    const width = this.x.cs_dirty_w();
+    const height = this.x.cs_dirty_h();
+    return width > 0 && height > 0 ? { x: this.x.cs_dirty_x(), y: this.x.cs_dirty_y(), width, height } : null;
+  }
+
+  /** Hash of the full-resolution frame, in the same format as `cardsmith hashes`. */
   frameHash(): string {
     const part = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
     return part(this.x.cs_frame_hash_hi()) + part(this.x.cs_frame_hash_lo());
