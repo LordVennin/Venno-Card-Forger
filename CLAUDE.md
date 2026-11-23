@@ -14,35 +14,41 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 
 | Concern | Choice |
 |---|---|
-| App shell | Tauri 2 (Rust backend, web frontend) |
-| Frontend | TypeScript, Vite, a light UI framework (Svelte or React, decided in Phase 0) |
-| Rendering | Our own typed-array compositor (`packages/render/src/raster.ts`), with CanvasKit (Skia WASM) for path coverage, image decoding and text. CPU only. The same render core runs in the app and headless in Node for tests and batch rendering |
-| Text | CanvasKit Paragraph API. Mana symbols are inline placeholders |
-| PSD parsing | `ag-psd`, used only in the importer |
-| Heavy compute (Rust side) | PatchMatch fill, ONNX Runtime (`ort` crate) for LaMa/MI-GAN, stable-diffusion.cpp as a sidecar binary, model downloads, file IO |
+| Core | **Rust** (`crates/core`): document model, commands, compositor, effects, renderer, brush engine, text. Builds natively and for `wasm32-unknown-unknown` |
+| App shell | Tauri 2. The core runs as **WebAssembly inside the webview** and draws to the canvas itself |
+| Frontend | TypeScript, Vite, Svelte 5. UI only: panels, pickers, editors |
+| Headless | The same core as a native binary: `cardsmith render`, batch export, tests |
+| Text | Pure-Rust layout engine, chosen in Phase 3. Mana symbols are inline placeholders |
+| PSD parsing | `ag-psd` in TypeScript, used only in the offline importer |
+| Heavy compute (Tauri side) | PatchMatch fill, ONNX Runtime (`ort` crate) for LaMa/MI-GAN, stable-diffusion.cpp as a sidecar binary, model downloads, file IO |
 | Card data | Scryfall API and Scryfall bulk data |
 | Symbols | Mana font (open license) for mana symbols. Scryfall `/sets` SVGs and Keyrune for set symbols |
+
+**Migration in progress (SPEC Phase 1R):** `packages/doc` and `packages/render` are the TypeScript originals being ported to `crates/core`. Until the port lands they remain the working implementation and the behavioural reference; their tests define what the Rust code must do.
 
 ## Repository layout (target)
 
 ```
-apps/desktop/          Tauri app (src-tauri/ = Rust, src/ = UI)
-packages/doc/          Document model, commands (undo/redo), serialization
-packages/render/       Headless render core (CanvasKit): compositing, effects, text
-packages/text/         Rules-text parsing: symbols, italics, reminder text, fitting
+crates/core/           Rust core: doc model, commands, compositor, effects, renderer, brush, text
+crates/cli/            Native binary: render, samples, batch
+crates/wasm/           WebAssembly bindings used by the app
+apps/desktop/          Tauri app (src-tauri/ = Rust shell, src/ = Svelte UI)
+packages/importer/     PSD -> template package converter + feature survey (TypeScript, offline)
 packages/cards/        Card model, Scryfall client, frame logic, layouts
 packages/engine/       Card engine: template manifest + card -> document
-packages/importer/     PSD -> template package converter + feature survey
-packages/fill/         FillProvider interface + TS-side glue to Rust/HTTP backends
+packages/fill/         FillProvider interface + glue to Rust/HTTP backends
 tests/golden/          Reference images and the golden-image runner
 reference/Proxyshop/   Clone of Proxyshop for reference only (gitignored)
 ```
 
+Whether `cards`, `engine` and `fill` end up in Rust or TypeScript is decided when their phase starts. Default to Rust for anything that touches the document.
+
 ## Non-negotiable rules
 
 1. **The document model is the source of truth.** The renderer is a pure function: `(document, assets) -> pixels`. Don't add UI-only rendering paths.
-2. **The render core must run headless.** Anything in `packages/render` has to work in Node with no DOM. Batch export and every golden test depend on this.
-3. **Every edit is a command.** All mutations go through the command system in `packages/doc`, so undo/redo works for everything, including card-engine output and fills.
+2. **The render core must run headless.** `crates/core` has to build and run as a plain native binary with no window, no webview and no GPU. Batch export and every golden test depend on this. It must also build for WebAssembly, so it takes no dependency that cannot.
+3. **Every edit is a command.** All mutations go through the command system in the core, so undo/redo works for everything, including brush strokes, card-engine output and fills.
+3a. **Pixels never cross Tauri's IPC.** Frames go from the WASM core straight to the canvas. IPC carries commands and files only. Measured: IPC moves about 100 MB/s, which is 66 ms for one 1080p frame.
 4. **Fills and generated content go on their own layers.** Never modify the user's art pixels in place.
 5. **Golden tests gate visual work.** Any change to compositing, effects, text or templates must keep `pnpm test:golden` passing. If you change a threshold, write the reason in the commit message.
 6. **Port logic test-first.** When porting Proxyshop logic, port its test data first (e.g. `src/data/tests/frame_data.toml`), confirm the tests fail, then port the code.

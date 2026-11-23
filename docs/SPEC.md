@@ -130,6 +130,31 @@ Each phase lists its tasks and the acceptance criteria that must pass before the
 - Hand-written test documents render correctly in both Node and the app.
 - Rendering the same input in Node and in the app gives a pixel diff of at most 1/255 per channel.
 
+### Phase 1R: Rust core (added 2026-11-23)
+
+The owner expects heavy brush and eraser work, so edit-to-screen latency is now a first-class requirement. The core moves to Rust. See the Decisions log for the measurements behind this.
+
+**Architecture**
+- `crates/core` (`cardsmith-core`): document model, commands and history, serialization, compositor, effects, renderer, and later the brush engine and text. No platform dependencies, so it builds both natively and for `wasm32-unknown-unknown`.
+- **In the app, the core runs as WebAssembly inside the webview.** It owns the pixel buffers and writes the visible region straight to the canvas. Pixels never cross Tauri's IPC.
+- **Natively, the same crate** backs the headless CLI (`cardsmith render`, batch export) and the test suite, with threads.
+- The Tauri (Rust) side keeps file IO, model downloads, fills and other heavy or privileged work. It exchanges files and commands with the webview, not frames.
+- The web UI (Svelte) keeps panels, pickers and editors. It holds no document state of its own: it sends commands to the core and renders what the core reports.
+
+**Tasks**
+1. Port `packages/doc` to Rust with the same JSON format, so existing documents and samples load unchanged. Port its tests.
+2. Port `raster`, `field`, `effects` and `render`, replacing CanvasKit with pure-Rust path rasterization and image decoding. Port their tests. The sample renders must match the TypeScript renderer's within 1/255, apart from path anti-aliasing at shape edges.
+3. `cardsmith render` and `cardsmith samples` CLI, replacing `pnpm render`.
+4. WebAssembly bindings and app integration: the app renders the samples through the WASM core.
+5. **Incremental rendering:** tiles or dirty rectangles, cached composites below and above the active layer, and a viewport-resolution preview path.
+6. **Brush spike:** a paintable pixel layer, brush and eraser as undoable commands, and an on-screen frame-time readout.
+7. Remove the TypeScript renderer and document commands once the Rust ones pass. Keep TypeScript only for UI and the PSD importer (an offline tool that reads PSDs with ag-psd and writes our JSON).
+
+**Acceptance criteria**
+- All ported tests pass under `cargo test`.
+- Native and WASM builds render the samples to identical bytes.
+- On the owner's machine, brush strokes on a 3264×4440 document with a realistic layer stack stay under 16 ms per frame for brushes up to 256 px, with the readout to prove it. If this fails, revisit the display path before Phase 2.
+
 ### Phase 2: PSD importer and golden tests
 
 **Tasks**
@@ -307,3 +332,8 @@ _(append: date — decision — reason)_
 - 2026-11-23 — **Uncalibrated constants, to be settled by Phase 2's golden tests:** blur sigma = size ÷ 2 for shadows, glows and bevel soften; the bevel's lighting normalization; the Gaussian contour as a smoothstep; radial gradient radius = half the bounds' projection; mask feather sigma = feather ÷ 2. — These reproduce Photoshop's behaviour in kind. The exact numbers need reference images, which Phase 1 does not have.
 - 2026-11-23 — Text layers are part of the document model but are **not drawn** until Phase 3; the renderer reports a warning for each. Pixel layers with a scale or rotation use plain bilinear sampling. — Text is Phase 3's job. Bilinear is correct for upscaling and mild downscaling; heavy downscaling of high-resolution art needs area filtering, which belongs with art framing in Phase 6.
 - 2026-11-23 — Render speed at card size (3264×4440, one CPU core, Node): about 0.1–0.25 s per full-canvas layer, 0.5 s for an overlay effect, 1.5–3 s for a stroke, shadow or bevel on a full-canvas shape. — Good enough to proceed. The obvious next steps, when needed: cache each layer's rasterized content between renders, render previews at reduced scale, limit the distance field to the band an effect needs, and move the hot loops to Rust/WASM.
+- 2026-11-23 — **The core moves to Rust; the UI stays web (Tauri + Svelte).** Chosen by the owner. — Heavy brush and eraser work makes edit latency a hard requirement, and one Rust core is easier to audit than logic split across TypeScript and Rust. Phases 0 and 1 are the cheapest point to do this: the TypeScript core is about 1,500 lines with 134 tests that port directly.
+- 2026-11-23 — **Pixels never cross Tauri's IPC. In the app the Rust core runs as WebAssembly inside the webview.** Required by the owner and confirmed by measurement in the real Tauri window (WebKitGTK, release build): raw binary IPC and a custom URI scheme both move about 100–125 MB/s, so a 1920×1080 frame costs 66 ms and a full 3264×4440 frame 700 ms. A view over WASM memory passed to `putImageData` costs 1.5 ms and 12 ms for the same sizes. An empty IPC round trip is about 1 ms, which is fine for commands and files.
+- 2026-11-23 — Rust by itself is not the speed-up; structure is. Measured for one full-canvas layer (3264×4440): the Phase 1 JavaScript loop about 100 ms, the same math in scalar Rust 106 ms native and 163–191 ms as WASM, an integer fast path for normal blending over opaque pixels 50 ms native and 57 ms as WASM. WebKitGTK runs WASM as fast as Node does. — So the plan relies on dirty rectangles, cached stacks and viewport-resolution previews first, branch-free SIMD kernels second, and native threads for export and batch.
+- 2026-11-23 — Rule 2 ("the render core must run headless") now means **headless as a native Rust binary**, not in Node. CanvasKit leaves the renderer. Text layout (Phase 3) needs a pure-Rust engine that also builds for WASM; the Phase 0 CanvasKit spike proved the approach (inline placeholders, measure, shrink to fit), not the library. — A dependency that cannot build for WASM would force pixels back over IPC.
+- 2026-11-23 — The PSD importer stays in TypeScript with ag-psd. — It is an offline, one-time conversion that writes our JSON and PNGs, it is not on any hot path, and Rust has no PSD library that reads layer effects and text data as completely.
