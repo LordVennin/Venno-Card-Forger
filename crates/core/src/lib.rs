@@ -14,10 +14,12 @@ pub mod doc;
 pub mod effects;
 pub mod error;
 pub mod field;
+pub mod paint;
 pub mod raster;
 pub mod render;
 pub mod samples;
 pub mod serialize;
+pub mod session;
 pub mod tree;
 
 pub use error::{Error, Result};
