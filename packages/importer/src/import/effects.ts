@@ -39,7 +39,10 @@ type Global = { angle: number; altitude: number };
  * Merge Photoshop's separate color and opacity stops into RGBA stops. Midpoints
  * other than 50% get an extra stop at the midpoint, which is what they mean.
  */
-function gradientStops(g: { colorStops?: { color: PsdColor; location: number; midpoint: number }[]; opacityStops?: { opacity: number; location: number; midpoint: number }[] }): GradientStop[] {
+function gradientStops(g: { smoothness?: number; colorStops?: { color: PsdColor; location: number; midpoint: number }[]; opacityStops?: { opacity: number; location: number; midpoint: number }[] }): GradientStop[] {
+  // Photoshop's "smoothness" eases each segment in and out instead of ramping linearly.
+  const smoothness = Math.min(1, Math.max(0, g.smoothness ?? 0));
+  const ease = (f: number) => f + (f * f * (3 - 2 * f) - f) * smoothness;
   const colors = [...(g.colorStops ?? [])].sort((a, b) => a.location - b.location);
   const opacities = [...(g.opacityStops ?? [])].sort((a, b) => a.location - b.location);
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -54,7 +57,7 @@ function gradientStops(g: { colorStops?: { color: PsdColor; location: number; mi
       const mid = b.midpoint > 0 && b.midpoint < 1 ? b.midpoint : 0.5;
       // The midpoint is where the blend is half-way; remap linearly on each side of it.
       f = f < mid ? (f / mid) * 0.5 : 0.5 + ((f - mid) / (1 - mid)) * 0.5;
-      return mix(values[i]!, values[i + 1]!, f);
+      return mix(values[i]!, values[i + 1]!, ease(f));
     }
     return values[values.length - 1]!;
   };
@@ -73,7 +76,16 @@ function gradientStops(g: { colorStops?: { color: PsdColor; location: number; mi
       if (prev && Math.abs(s.midpoint - 0.5) > 1e-3) locations.add(prev.location + (s.location - prev.location) * s.midpoint);
     });
   }
-  return [...locations].sort((a, b) => a - b).map((offset) => ({ offset, color: at(offset) }));
+  const sorted = [...locations].sort((a, b) => a - b);
+  if (smoothness > 0) {
+    // Our gradients are piecewise linear, so an eased segment is written as several short ones.
+    const STEPS = 8;
+    for (let i = sorted.length - 1; i > 0; i--) {
+      const [a, b] = [sorted[i - 1]!, sorted[i]!];
+      for (let k = STEPS - 1; k > 0; k--) sorted.splice(i, 0, a + ((b - a) * k) / STEPS);
+    }
+  }
+  return sorted.map((offset) => ({ offset, color: at(offset) }));
 }
 
 /**

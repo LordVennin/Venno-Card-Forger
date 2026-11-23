@@ -2,27 +2,35 @@
 
 What `pnpm test:golden` does not yet match, and why. Remove an entry when it is fixed.
 
-Measured on 2026-11-24 against the composites embedded in the three first-set PSDs (default layer state).
+Measured on 2026-11-24. Default states are compared with the composites embedded in the PSDs; named states with exports the owner made in Photopea.
 
-| Template | PSNR | Largest difference | Status |
-|---|---:|---:|---|
-| `normal` | 107 dB | 1/255 | Matches |
-| `normal-extended` | 83 dB | 1/255 | Matches |
-| `borderless-vector` | 72 dB | 51/255 on 0.02% of pixels | Matches within threshold; see "Anti-aliasing" |
+| Template and state | Reference | PSNR | Status |
+|---|---|---:|---|
+| `normal` default | PSD composite | 107 dB | Matches |
+| `normal` white legendary creature | Photopea export | 83 dB | Matches |
+| `normal-extended` default | PSD composite | 83 dB | Matches |
+| `normal-extended` white legendary creature | Photopea export | 85 dB | Matches |
+| `borderless-vector` default | PSD composite | 72 dB | Matches; see "Anti-aliasing" |
+| `borderless-vector` frame | Photopea export | 41.5 dB with the P/T box left out; 35.5 dB with it | Passes with one unverified area; see below |
 
 ## Open
 
 ### Text is not drawn
 Text layers are imported (box, font, size, leading, tracking, alignment, color, runs) but not rendered until Phase 3. The golden runner leaves the area of every visible text layer out of the comparison. That exclusion comes out when text rendering lands.
 
-### Layer effects are not yet checked against Photoshop
-In the default state of all three templates, the shapes that carry strokes, bevels, gradient overlays and shadows are hidden, so the comparison above does not exercise them. `tests/golden/states.json` defines states that do (`borderless-vector.frame`, and a white legendary creature for the two raster templates). They render, and look right by eye, but have no reference image yet. Until they do, these are estimates:
+### P/T box bevel disagrees with Photopea (unverified)
+`borderless-vector` frame state, area 2380,3760 620×400. The P/T box has an inner chisel-hard bevel: direction up, depth 300%, size 35, light angle 50°, altitude 30°. We light the top and right faces, as those settings say. Photopea's export shades the top face and lights the bottom one, with a softer look. The other three bevels in the same state (name bar, type bar, text box) agree between the two renderers. The area is left out of the comparison until the owner says which is right.
 
-- blur width for a given shadow or glow "size",
-- the lighting of the chisel-hard bevel,
-- the Gaussian contour's curve,
-- the radius of radial gradients,
-- the exact stacking order of bevel and stroke.
+### Effects are checked against Photopea, not Photoshop
+The frame state exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers and vector masks, and matches Photopea at 41.5 dB outside the P/T box. Photopea is not Photoshop, so this is good evidence, not proof. What that comparison settled:
+
+- gradient overlays honour Photoshop's "smoothness" (each segment eases in and out),
+- a gradient's length is the line through the bounds' center at its angle, from edge to opposite edge.
+
+Still estimates, because nothing visible in the references pins them down: blur width for a shadow or glow "size" beyond the one drop shadow here, the Gaussian contour's curve, the radius of radial gradients, and outer glow and inner shadow (not in any reference state).
+
+### Fine detail of bevels on curved ends
+Both renderers draw thin streaks where a chiselled bevel follows a curve, and the streaks differ. This is the worst block (7.9/255 mean error) in the frame state, and the reason its block limit is 9 instead of 6.
 
 ### Anti-aliasing on vector edges
 Shape and vector-mask edges are rasterized by tiny-skia, not Photoshop, so partially covered edge pixels can differ. This is the 51/255 difference in `borderless-vector`: a one-pixel line along curved outlines. Not planned to change.

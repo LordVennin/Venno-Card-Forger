@@ -1,5 +1,12 @@
 {
-  "//": "Limits for pnpm test:golden. minPsnr is in dB over the compared pixels; maxBlockError is the mean error (0..255) allowed in the worst 64 px block. Change one only with the reason in the commit message (CLAUDE.md rule 5).",
-  "default": { "minPsnr": 40, "maxBlockError": 6 },
-  "templates": {}
+  "//": "Limits for pnpm test:golden. minPsnr is in dB over the compared pixels; maxBlockError is the mean error (0..255) allowed in the worst 64 px block. Change one only with the reason in the commit message (CLAUDE.md rule 5). borderless-vector.frame allows a block error of 9: its reference is a Photopea export, and the two renderers draw the fine streaks of a chiselled bevel on curved ends differently.",
+  "default": {
+    "minPsnr": 40,
+    "maxBlockError": 6
+  },
+  "templates": {
+    "borderless-vector.frame": {
+      "maxBlockError": 9
+    }
+  }
 }

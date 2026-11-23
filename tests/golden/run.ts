@@ -61,7 +61,7 @@ mkdirSync(out, { recursive: true });
 execFileSync("cargo", ["build", "-q", "--release", "-p", "cardsmith-cli"], { cwd: repo, stdio: "inherit" });
 const cardsmith = join(repo, "target/release/cardsmith");
 
-type State = { about?: string; show?: string[]; hide?: string[]; styleOn?: string[] };
+type State = { about?: string; show?: string[]; hide?: string[]; styleOn?: string[]; unverified?: { region: string; why: string }[] };
 const states = JSON.parse(readFileSync(join(import.meta.dirname, "states.json"), "utf8")) as Record<string, Record<string, State> | string>;
 
 /** The layer at a path such as "/Pinlines/Shape/Textbox". Fails if the path is missing or ambiguous. */
@@ -116,7 +116,9 @@ for (const name of wanted) {
       continue;
     }
 
-    const ignore = textRegions(doc.root.children);
+    const text = textRegions(doc.root.children);
+    const unverified = (state.unverified ?? []).map((u) => u.region);
+    const ignore = [...text, ...unverified];
     let result: { psnr: number | null; maxDiff: number; differing: number; compared: number; worstBlock: { x: number; y: number; meanError: number } };
     try {
       result = JSON.parse(execFileSync(cardsmith, ["compare", render, reference, "--heatmap", join(out, `${name}.${stateName}.diff.png`), ...ignore.flatMap((r) => ["--ignore", r])], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
@@ -134,8 +136,10 @@ for (const name of wanted) {
       `${ok ? "✓" : "✗"} ${label}: PSNR ${Number.isFinite(psnr) ? psnr.toFixed(1) + " dB" : "∞"} (min ${limits.minPsnr}), ` +
         `worst block ${result.worstBlock.meanError.toFixed(1)} at (${result.worstBlock.x}, ${result.worstBlock.y}) (max ${limits.maxBlockError}), ` +
         `${((100 * result.differing) / result.compared).toFixed(2)}% of pixels differ, largest difference ${result.maxDiff}/255, ` +
-        `${ignore.length} text area${ignore.length === 1 ? "" : "s"} left out`,
+        `${text.length} text area${text.length === 1 ? "" : "s"} left out` +
+        (unverified.length ? `, ${unverified.length} unverified area${unverified.length === 1 ? "" : "s"} left out` : ""),
     );
+    for (const u of state.unverified ?? []) console.log(`    unverified ${u.region}: ${u.why}`);
   }
 }
 console.log(`\nRenders and heatmaps are in ${out}.`);

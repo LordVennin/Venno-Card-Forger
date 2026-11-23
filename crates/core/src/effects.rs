@@ -131,8 +131,10 @@ impl<'a> EffectContext<'a> {
                 let shift = offset.unwrap_or(crate::doc::Vec2 { x: 0.0, y: 0.0 });
                 let cx = bounds.x as f64 + bounds.w as f64 * (0.5 + shift.x);
                 let cy = bounds.y as f64 + bounds.h as f64 * (0.5 + shift.y);
-                // The gradient line crosses the bounds' center and spans their projection onto its direction.
-                let half = ((bounds.w as f64 * lx).abs() + (bounds.h as f64 * ly).abs()) / 2.0 * scale;
+                // The gradient line crosses the bounds' center at the given angle and runs
+                // from one edge of the bounds to the opposite one.
+                let reach = |extent: f64, along: f64| if along.abs() > 1e-9 { extent / along.abs() } else { f64::INFINITY };
+                let half = reach(bounds.w as f64, lx).min(reach(bounds.h as f64, ly)) / 2.0 * scale;
                 let radial = *style == GradientStyle::Radial;
                 let end = (cx + lx * half, cy + ly * half);
                 let start = if radial { (cx, cy) } else { (cx - lx * half, cy - ly * half) };

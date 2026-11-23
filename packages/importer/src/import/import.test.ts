@@ -114,6 +114,17 @@ describe("convertEffects", () => {
     expect(stops[1]!.color[0]).toBeCloseTo(0.5); // half-way color reached a quarter of the way along
   });
 
+  it("eases smooth gradients by writing each segment as several short ones", () => {
+    const { effects } = convert({ gradientOverlay: [{ present: true, type: "linear", gradient: { type: "solid", smoothness: 1,
+      colorStops: [{ color: { r: 0, g: 0, b: 0 }, location: 0, midpoint: 0.5 }, { color: { r: 255, g: 255, b: 255 }, location: 1, midpoint: 0.5 }], opacityStops: [] } }] });
+    const stops = (effects[0] as { gradient: { stops: { offset: number; color: number[] }[] } }).gradient.stops;
+    expect(stops).toHaveLength(9);
+    expect(stops[4]).toMatchObject({ offset: 0.5 });
+    expect(stops[4]!.color[0]).toBeCloseTo(0.5);
+    expect(stops[1]!.color[0]).toBeLessThan(0.125 * 0.5); // slow start…
+    expect(stops[7]!.color[0]).toBeGreaterThan(1 - 0.125 * 0.5); // …and slow finish
+  });
+
   it("maps stroke, color overlay and outer glow, and warns about what it cannot represent", () => {
     const { effects, warnings } = convert({
       stroke: [{ present: true, position: "inside", fillType: "gradient", size: px(7), color: { r: 0, g: 0, b: 0 }, blendMode: "color dodge" }],

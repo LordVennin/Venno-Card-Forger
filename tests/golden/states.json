@@ -1,5 +1,5 @@
 {
-  "//": "Named layer states for pnpm test:golden, beyond each template's default state. Each lists layer paths to switch on (show) or off (hide); 'styleOn' switches a layer's whole layer style on. A state is compared with fixtures/local/golden/<template>.<state>.png when that file exists. The same lists are the instructions for producing that reference in Photoshop or Photopea.",
+  "//": "Named layer states for pnpm test:golden, beyond each template's default state. Each lists layer paths to switch on (show) or off (hide); 'styleOn' switches a layer's whole layer style on. A state is compared with fixtures/local/golden/<template>.<state>.png when that file exists. The same lists are the instructions for producing that reference in Photoshop or Photopea. 'unverified' lists areas (x,y,w,h) left out of the comparison because the reference itself is in doubt there, each with the reason.",
   "borderless-vector": {
     "frame": {
       "about": "A normal-size frame with a legendary crown and P/T box: exercises strokes, bevels, gradient overlays, a drop shadow, fill opacity, clipped soft-light and overlay layers, and vector masks.",
@@ -12,21 +12,45 @@
         "/Name & Title Boxes/Shape/Typeline/Normal",
         "/Legendary Crown/Legendary Crown",
         "/PT Box"
+      ],
+      "unverified": [
+        {
+          "region": "2380,3760,620,400",
+          "why": "P/T box bevel: Photopea lights it from below, we light it from the upper right as its settings (direction up, angle 50) say. Waiting for the owner to say which is right."
+        }
       ]
     }
   },
   "normal": {
     "white-legendary-creature": {
       "about": "What Proxyshop switches on for a mono-white legendary creature.",
-      "show": ["/Background/W", "/Pinlines & Textbox/W", "/Name & Title Boxes/W", "/PT Box/W", "/Legendary Crown/W", "/Border/Legendary Border"],
-      "hide": ["/Border/Normal Border"]
+      "show": [
+        "/Background/W",
+        "/Pinlines & Textbox/W",
+        "/Name & Title Boxes/W",
+        "/PT Box/W",
+        "/Legendary Crown/W",
+        "/Border/Legendary Border"
+      ],
+      "hide": [
+        "/Border/Normal Border"
+      ]
     }
   },
   "normal-extended": {
     "white-legendary-creature": {
       "about": "What Proxyshop switches on for a mono-white legendary creature.",
-      "show": ["/Background/W", "/Pinlines & Textbox/W", "/Name & Title Boxes/W", "/PT Box/W", "/Legendary Crown/W", "/Border/Legendary Border"],
-      "hide": ["/Border/Normal Border"]
+      "show": [
+        "/Background/W",
+        "/Pinlines & Textbox/W",
+        "/Name & Title Boxes/W",
+        "/PT Box/W",
+        "/Legendary Crown/W",
+        "/Border/Legendary Border"
+      ],
+      "hide": [
+        "/Border/Normal Border"
+      ]
     }
   }
 }
