@@ -116,12 +116,11 @@ describe("blend modes", () => {
     near(pixelAt(r, 4, 4), to8(expected(mode)));
   });
 
-  it.each(modes)("%s: the SkSL formula agrees with the path the renderer uses", (mode) => {
-    const dst: Color = [...D, 1] as Color;
-    for (const alpha of [1, 0.5]) {
-      const src: Color = [...S, alpha] as Color;
-      near(renderer.blendPixel(dst, src, mode, false, true), renderer.blendPixel(dst, src, mode, false, false), 1);
-    }
+  it.each(modes)("%s over a translucent backdrop mixes blended and unblended source", (mode) => {
+    // Backdrop alpha 0.5, source alpha 0.5: a quarter is source only, a quarter blended, a quarter backdrop only.
+    const r = render(8, 8, [full("d", [...D, 0.5] as Color), full("s", [...S, 0.5] as Color, { blend: mode })]);
+    const mixed = expected(mode).map((b, i) => (0.25 * S[i]! + 0.25 * b + 0.25 * D[i]!) / 0.75);
+    near(pixelAt(r, 4, 4), [...mixed.map((v) => Math.round(v * 255)), 191], 2);
   });
 
   it("blends normally where the backdrop is transparent", () => {

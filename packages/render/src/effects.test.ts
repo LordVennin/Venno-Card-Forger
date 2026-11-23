@@ -183,6 +183,17 @@ describe("drop shadow", () => {
     expect(hard(20, 37)).toEqual(CLEAR);
   });
 
+  it("the Gaussian contour thins the outer falloff", () => {
+    const linear = shadow({ distance: 0, size: 10 });
+    const curved = shadow({ distance: 0, size: 10, contour: "gaussian" });
+    // Outside the layer the blurred matte is below one half, where the S-curve pulls values down.
+    const pairs = [31, 33, 35].map((y) => [linear(20, y)[3]!, curved(20, y)[3]!]);
+    for (const [lin, cur] of pairs) {
+      expect(lin).toBeGreaterThan(0);
+      expect(cur).toBeLessThan(lin!);
+    }
+  });
+
   it("blends with the backdrop through its own mode and opacity", () => {
     const at = square(
       [{ ...paint, type: "dropShadow", color: GRAY, blend: "multiply", opacity: 0.5, angle: 90, distance: 4, spread: 0, size: 0 }],

@@ -85,6 +85,8 @@ export type Effect =
       /** 0..1: the share of `size` that is a hard expansion instead of blur. */
       spread: number;
       size: number;
+      /** Falloff curve. "gaussian" is Photoshop's Gaussian contour preset. Default "linear". */
+      contour?: "linear" | "gaussian";
     })
   | (EffectPaint & {
       type: "innerShadow";

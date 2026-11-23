@@ -91,12 +91,14 @@ export class EffectContext {
   }
 
   /** Shadow or glow cast outward, hidden where the layer itself is. */
-  private outer(color: Color, blend: BlendMode, opacity: number, size: number, spread: number, dx: number, dy: number): Stamp {
+  private outer(color: Color, blend: BlendMode, opacity: number, size: number, spread: number, dx: number, dy: number, gaussian = false): Stamp {
     const { w, h, alpha } = this.shape;
     const grow = spread * size;
     const matte = grow > 0 ? this.map((i) => cover(this.sd[i]! - grow)) : alpha;
     const soft = blur(shifted(matte, w, h, dx, dy, 0), w, h, (size - grow) * SIGMA_PER_SIZE);
-    return { coverage: this.map((i) => soft[i]! * (1 - alpha[i]!)), color, blend, opacity };
+    // The Gaussian contour remaps the falloff through an S-curve: fainter at the rim, denser near the layer.
+    const curve = gaussian ? (v: number) => v * v * (3 - 2 * v) : (v: number) => v;
+    return { coverage: this.map((i) => curve(soft[i]!) * (1 - alpha[i]!)), color, blend, opacity };
   }
 
   stamps(effect: Effect): Stamp[] {
@@ -137,7 +139,7 @@ export class EffectContext {
         const [lx, ly] = lightDir(effect.angle);
         const dx = Math.round(-lx * effect.distance);
         const dy = Math.round(-ly * effect.distance);
-        return [this.outer(effect.color, effect.blend, effect.opacity, effect.size, effect.spread, dx, dy)];
+        return [this.outer(effect.color, effect.blend, effect.opacity, effect.size, effect.spread, dx, dy, effect.contour === "gaussian")];
       }
 
       case "outerGlow":
