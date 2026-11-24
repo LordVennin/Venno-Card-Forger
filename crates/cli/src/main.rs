@@ -4,6 +4,8 @@
 //! cardsmith bench         time editing on the card-sized sample
 //! cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
+//! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
+//! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -16,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -169,6 +171,50 @@ fn run(args: &[String]) -> Result<(), String> {
                 eprintln!("warning: {warning}");
             }
             eprintln!("{}×{} in {elapsed} ms -> {out}", r.width, r.height);
+            Ok(())
+        }
+        Some("card") | Some("bulk") => {
+            let mut what = None;
+            let (mut set, mut number, mut raw) = (None, None, false);
+            // Like other apps' caches, under the user's cache folder unless told otherwise.
+            let mut cache = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache"))).unwrap_or_else(|| PathBuf::from(".cache")).join("cardsmith/scryfall");
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "--set" => set = rest.next(),
+                    "--number" => number = rest.next(),
+                    "--cache" => cache = PathBuf::from(rest.next().ok_or(USAGE)?),
+                    // Scryfall's own data instead of the card as the engine will use it.
+                    "--raw" => raw = true,
+                    _ => what = Some(arg),
+                }
+            }
+            let what = what.ok_or(USAGE)?;
+            let mut client = cardsmith_scryfall::Client::new(&cache);
+            if args[0] == "bulk" {
+                let kind = match what.as_str() {
+                    "oracle" => cardsmith_scryfall::BulkKind::OracleCards,
+                    "default" => cardsmith_scryfall::BulkKind::DefaultCards,
+                    _ => return Err(USAGE.into()),
+                };
+                let cards = client.bulk(kind).map_err(|e| e.to_string())?;
+                eprintln!("{} cards in {}", cards.len(), cache.join("bulk").display());
+                return Ok(());
+            }
+            // The name may carry Proxyshop's art file tags: "Name (Artist) [SET] {num} $creator".
+            let mut info = cardsmith_cards::file_name::parse_card_info(what);
+            if let Some(set) = set {
+                info.set = set.clone();
+            }
+            if let Some(number) = number {
+                info.number = number.clone();
+            }
+            let out = if raw {
+                client.card(&info.name, Some(&info.set), Some(&info.number)).map_err(|e| e.to_string())?
+            } else {
+                serde_json::to_value(client.card_data(&info).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?
+            };
+            println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
             Ok(())
         }
         Some("text") => {

@@ -30,13 +30,13 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 
 ```
 crates/core/           Rust core: doc model, commands, compositor, effects, renderer, brush, text
-crates/cards/          Card knowledge in Rust: rules text formatting and symbols now; frame logic and layouts later
+crates/cards/          Card knowledge in Rust (pure, builds for WASM): rules text, symbols, frame logic, layouts, art file names
+crates/scryfall/       Scryfall client (native only): polite requests, on-disk cache that works offline, bulk data
 crates/cli/            Native binary: render, samples, batch
 crates/wasm/           WebAssembly bindings used by the app
 packages/doc/          TypeScript types for the document JSON (no logic)
 apps/desktop/          Tauri app (src-tauri/ = Rust shell, src/ = Svelte UI)
 packages/importer/     PSD -> template package converter + feature survey (TypeScript, offline)
-packages/cards/        Card model, Scryfall client, frame logic, layouts
 packages/engine/       Card engine: template manifest + card -> document
 packages/fill/         FillProvider interface + glue to Rust/HTTP backends
 tests/golden/          Reference images and the golden-image runner
@@ -96,6 +96,8 @@ cargo test --workspace   # Rust core tests (also: pnpm test:rust)
 cargo run --release -p cardsmith-cli -- render <doc.json | file.cardsmith> -o <png> [--fonts <dir>] [--text-bounds <json>]   # headless render (Rust); text needs the fonts
 cargo run --release -p cardsmith-cli -- samples <dir>                                # sample documents and renders
 cargo run --release -p cardsmith-cli -- text <suite.json> -o <dir> --fonts <dir>     # render a suite of rules text boxes
+cargo run --release -p cardsmith-cli -- card "<name or art file name>" [--set <code>] [--number <n>] [--raw]   # a card from Scryfall (cached); --raw for Scryfall's own JSON
+cargo run --release -p cardsmith-cli -- bulk <oracle | default>                      # download Scryfall bulk data for offline lookups
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
 pnpm test             # TypeScript unit tests (Vitest): the importer and survey
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
@@ -121,9 +123,11 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 - `crates/core`: `doc.rs` (types), `commands.rs` (`Edit`, `apply`, `History`), `serialize.rs` (JSON and `.cardsmith`), `raster.rs` (compositor), `field.rs` (distance field and blur), `effects.rs` (effects as coverage stamps), `render.rs` (walks the layer tree; tile caches for path coverage and effects), `text.rs` (fonts registry and text layout: shaping by rustybuzz, our own line breaking and fitting), `paint.rs` (brush engine), `session.rs` (an open document: edits, strokes, undo, incremental redraw, the on-screen view), `samples.rs` (sample documents, including the card-sized one). Tests are in `crates/core/tests` and beside the modules.
 - **Two invariants the tests enforce, and that every renderer change must keep:** drawing a region gives exactly the pixels a full render has there, and a session's incrementally updated frame always equals a fresh full render.
 - `crates/cards`: `rules_text.rs` (ported from Proxyshop, MPL header): `italic_ranges`/`generate_italics`, `strip_reminder_text`, the symbol map and colors, and `format_rules_text`, which turns oracle and flavor text into the `RichText` of a rules box. Proxyshop's italics cases are in `tests/data/text_italic.toml`.
+- `crates/cards` also has `frame_logic.rs` (background, pinlines and name boxes from a card's cost, types and text), `layout.rs` (`process_card_data` settles the layout, `card_data` reads every field into `CardData`) and `file_name.rs` (`Name (Artist) [SET] {num} $creator`), all ported with MPL headers. Proxyshop's cases are in `tests/data/`: `frame_data.toml` runs against `frame_cards.json`, which `tools/fetch-frame-cards.py` refreshes from Scryfall.
+- `crates/scryfall`: `lib.rs` (`Client`, the `Transport` trait tests replace, the cache, `card_data`), `bulk.rs` (bulk download, index and lookups). Its tests use a pretend network; nothing in `cargo test` touches the real one.
 - Text tests use `crates/core/tests/fixtures/blocks.ttf`, a font of rectangles made by `tools/make-test-font.py`. Real fonts are only ever read from `fixtures/local/fonts`.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
-- `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text`.
+- `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text | card | bulk`.
 - `packages/importer/src/import`: `convert.ts` (PSD layer tree to document), `paths.ts` (vector paths), `effects.ts` (layer effects), `bindings.ts` (Proxyshop layer names to bindings), `cli.ts`.
 - `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`.
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

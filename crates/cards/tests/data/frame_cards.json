@@ -1,0 +1,6530 @@
+{
+ "//": "Scryfall game data for the cards in frame_data.toml, trimmed by tools/fetch-frame-cards.py. Card data courtesy of Scryfall.",
+ "cards": {
+  "Abzan Charm": {
+   "collector_number": "138",
+   "color_identity": [
+    "B",
+    "G",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "G",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W}{B}{G}",
+   "name": "Abzan Charm",
+   "object": "card",
+   "oracle_id": "4137a22c-f793-4e27-a9b2-72740a6e2121",
+   "oracle_text": "Choose one —\n• Exile target creature with power 3 or greater.\n• You draw two cards and you lose 2 life.\n• Distribute two +1/+1 counters among one or two target creatures.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Academy Ruins": {
+   "collector_number": "512",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Academy Ruins",
+   "object": "card",
+   "oracle_id": "a3da7d5b-2c2b-45fe-b9c5-413b8c8fc0a2",
+   "oracle_text": "{T}: Add {C}.\n{1}{U}, {T}: Put target artifact card from your graveyard on top of your library.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Legendary Land"
+  },
+  "Advice from the Fae": {
+   "collector_number": "28",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/U}{2/U}{2/U}",
+   "name": "Advice from the Fae",
+   "object": "card",
+   "oracle_id": "5063f015-bd1c-4e14-9888-63e202be2ac8",
+   "oracle_text": "({2/U} can be paid with any two mana or with {U}. This card's mana value is 6.)\nLook at the top five cards of your library. If you control more creatures than each other player, put two of those cards into your hand. Otherwise, put one of them into your hand. Then put the rest on the bottom of your library in any order.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "type_line": "Sorcery"
+  },
+  "Aether Hub": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Aether Hub",
+     "object": "related_card",
+     "type_line": "Land",
+     "uri": "https://api.scryfall.com/cards/25ea04d8-5d85-49d3-8d8d-7fe123d0ed6c"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Energy Reserve",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/a446b9f8-cb22-408a-93ff-bee44a0dccc0"
+    }
+   ],
+   "collector_number": "242",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Aether Hub",
+   "object": "card",
+   "oracle_id": "61c89b11-65c9-4fda-bbcd-d84de25df801",
+   "oracle_text": "When this land enters, you get {E} (an energy counter).\n{T}: Add {C}.\n{T}, Pay {E}: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2016-09-30",
+   "set": "kld",
+   "set_name": "Kaladesh",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Ajani, Sleeper Agent": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Ajani, Sleeper Agent",
+     "object": "related_card",
+     "type_line": "Legendary Planeswalker — Ajani",
+     "uri": "https://api.scryfall.com/cards/6894a44e-ac13-453f-b45a-ab6bec574197"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Poison Counter",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/8a9cb417-8709-4336-be36-2fb0cea31fe1"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Ajani, Sleeper Agent Emblem",
+     "object": "related_card",
+     "type_line": "Emblem",
+     "uri": "https://api.scryfall.com/cards/ae9ee46d-b2f4-4710-bf7d-1d7a5ec0aefe"
+    }
+   ],
+   "collector_number": "192",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Compleated"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "loyalty": "4",
+   "mana_cost": "{1}{G}{G/W/P}{W}",
+   "name": "Ajani, Sleeper Agent",
+   "object": "card",
+   "oracle_id": "37714eb9-a39d-4534-a2d3-27908c418f8a",
+   "oracle_text": "Compleated ({G/W/P} can be paid with {G}, {W}, or 2 life. If life was paid, this planeswalker enters with two fewer loyalty counters.)\n+1: Reveal the top card of your library. If it's a creature or planeswalker card, put it into your hand. Otherwise, you may put it on the bottom of your library.\n−3: Distribute three +1/+1 counters among up to three target creatures. They gain vigilance until end of turn.\n−6: You get an emblem with \"Whenever you cast a creature or planeswalker spell, target opponent gets two poison counters.\"",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2022-09-09",
+   "set": "dmu",
+   "set_name": "Dominaria United",
+   "set_type": "expansion",
+   "type_line": "Legendary Planeswalker — Ajani"
+  },
+  "Ally Encampment": {
+   "collector_number": "228",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Ally Encampment",
+   "object": "card",
+   "oracle_id": "9d293b69-12b7-4b50-a0a7-c4f493dee30b",
+   "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an Ally spell.\n{1}, {T}, Sacrifice this land: Return target Ally you control to its owner's hand.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2015-10-02",
+   "set": "bfz",
+   "set_name": "Battle for Zendikar",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Ancestral Recall": {
+   "collector_number": "1",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}",
+   "name": "Ancestral Recall",
+   "object": "card",
+   "oracle_id": "550c74d4-1fcb-406a-b02a-639a760a4380",
+   "oracle_text": "Target player draws three cards.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Ancestral Vision": {
+   "collector_number": "144",
+   "color_identity": [
+    "U"
+   ],
+   "color_indicator": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Ancestral Vision",
+   "object": "card",
+   "oracle_id": "9728dec9-d482-4c7a-8cdc-44d010dc878d",
+   "oracle_text": "Suspend 4—{U} (Rather than cast this card from your hand, pay {U} and exile it with four time counters on it. At the beginning of your upkeep, remove a time counter. When the last is removed, you may cast it without paying its mana cost.)\nTarget player draws three cards.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2025-04-11",
+   "set": "tdc",
+   "set_name": "Tarkir: Dragonstorm Commander",
+   "set_type": "commander",
+   "type_line": "Sorcery"
+  },
+  "Arcane Sanctum": {
+   "collector_number": "513",
+   "color_identity": [
+    "B",
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Arcane Sanctum",
+   "object": "card",
+   "oracle_id": "7d7cf15c-06b9-4062-a1eb-32614c458a3b",
+   "oracle_text": "This land enters tapped.\n{T}: Add {W}, {U}, or {B}.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Archangel Avacyn": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Archangel Avacyn // Avacyn, the Purifier",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Angel // Legendary Creature — Angel",
+     "uri": "https://api.scryfall.com/cards/df325e2d-869d-49f1-bec2-630694d5ea7a"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Shadows Over Innistrad Checklist 2",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/4825c59d-9e27-4a12-ba84-642b8540e573"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "W"
+     ],
+     "mana_cost": "{3}{W}{W}",
+     "name": "Archangel Avacyn",
+     "object": "card_face",
+     "oracle_text": "Flash\nFlying, vigilance\nWhen Archangel Avacyn enters, creatures you control gain indestructible until end of turn.\nWhen a non-Angel creature you control dies, transform Archangel Avacyn at the beginning of the next upkeep.",
+     "power": "4",
+     "toughness": "4",
+     "type_line": "Legendary Creature — Angel"
+    },
+    {
+     "color_indicator": [
+      "R"
+     ],
+     "colors": [
+      "R"
+     ],
+     "mana_cost": "",
+     "name": "Avacyn, the Purifier",
+     "object": "card_face",
+     "oracle_text": "Flying\nWhen this creature transforms into Avacyn, the Purifier, it deals 3 damage to each other creature and each opponent.",
+     "power": "6",
+     "toughness": "5",
+     "type_line": "Legendary Creature — Angel"
+    }
+   ],
+   "collector_number": "11",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Flying",
+    "Vigilance",
+    "Transform",
+    "Flash"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Archangel Avacyn // Avacyn, the Purifier",
+   "object": "card",
+   "oracle_id": "432b37a5-d32a-4b78-91ab-860aa026b7cc",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2025-01-24",
+   "set": "inr",
+   "set_name": "Innistrad Remastered",
+   "set_type": "masters",
+   "type_line": "Legendary Creature — Angel // Legendary Creature — Angel"
+  },
+  "Arid Mesa": {
+   "collector_number": "244",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Arid Mesa",
+   "object": "card",
+   "oracle_id": "c5acf2a5-40f4-433d-a74d-1cb56c521464",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Mountain or Plains card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Ash Barrens": {
+   "collector_number": "60",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Landcycling",
+    "Basic landcycling",
+    "Typecycling",
+    "Cycling"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Ash Barrens",
+   "object": "card",
+   "oracle_id": "58257464-278e-45fa-8e0b-bcd9a7500bc1",
+   "oracle_text": "{T}: Add {C}.\nBasic landcycling {1} ({1}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "common",
+   "released_at": "2026-03-06",
+   "set": "tmc",
+   "set_name": "Teenage Mutant Ninja Turtles Eternal",
+   "set_type": "eternal",
+   "type_line": "Land"
+  },
+  "Asmoranomardicadaistinaculdacar": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Asmoranomardicadaistinaculdacar",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Human Wizard",
+     "uri": "https://api.scryfall.com/cards/2879f780-e17f-4e68-931e-6e45f9df28e1"
+    },
+    {
+     "component": "combo_piece",
+     "name": "The Underworld Cookbook",
+     "object": "related_card",
+     "type_line": "Artifact — Book",
+     "uri": "https://api.scryfall.com/cards/4f24504e-b397-4b98-b8e8-8166457f7a2e"
+    }
+   ],
+   "collector_number": "186",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "color_indicator": [
+    "B",
+    "R"
+   ],
+   "colors": [
+    "B",
+    "R"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Asmoranomardicadaistinaculdacar",
+   "object": "card",
+   "oracle_id": "1f74e26f-5cf3-4b0e-bcc6-f858599474fc",
+   "oracle_text": "As long as you've discarded a card this turn, you may pay {B/R} to cast this spell.\nWhen Asmoranomardicadaistinaculdacar enters, you may search your library for a card named The Underworld Cookbook, reveal it, put it into your hand, then shuffle.\nSacrifice two Foods: Target creature deals 6 damage to itself.",
+   "power": "3",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "toughness": "3",
+   "type_line": "Legendary Creature — Human Wizard"
+  },
+  "Avacyn, the Purifier": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Archangel Avacyn // Avacyn, the Purifier",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Angel // Legendary Creature — Angel",
+     "uri": "https://api.scryfall.com/cards/df325e2d-869d-49f1-bec2-630694d5ea7a"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Shadows Over Innistrad Checklist 2",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/4825c59d-9e27-4a12-ba84-642b8540e573"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "W"
+     ],
+     "mana_cost": "{3}{W}{W}",
+     "name": "Archangel Avacyn",
+     "object": "card_face",
+     "oracle_text": "Flash\nFlying, vigilance\nWhen Archangel Avacyn enters, creatures you control gain indestructible until end of turn.\nWhen a non-Angel creature you control dies, transform Archangel Avacyn at the beginning of the next upkeep.",
+     "power": "4",
+     "toughness": "4",
+     "type_line": "Legendary Creature — Angel"
+    },
+    {
+     "color_indicator": [
+      "R"
+     ],
+     "colors": [
+      "R"
+     ],
+     "mana_cost": "",
+     "name": "Avacyn, the Purifier",
+     "object": "card_face",
+     "oracle_text": "Flying\nWhen this creature transforms into Avacyn, the Purifier, it deals 3 damage to each other creature and each opponent.",
+     "power": "6",
+     "toughness": "5",
+     "type_line": "Legendary Creature — Angel"
+    }
+   ],
+   "collector_number": "11",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Flying",
+    "Vigilance",
+    "Transform",
+    "Flash"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Archangel Avacyn // Avacyn, the Purifier",
+   "object": "card",
+   "oracle_id": "432b37a5-d32a-4b78-91ab-860aa026b7cc",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2025-01-24",
+   "set": "inr",
+   "set_name": "Innistrad Remastered",
+   "set_type": "masters",
+   "type_line": "Legendary Creature — Angel // Legendary Creature — Angel"
+  },
+  "Awaken the Blood Avatar": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Extus, Oriq Overlord // Awaken the Blood Avatar",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Human Warlock // Sorcery",
+     "uri": "https://api.scryfall.com/cards/786156ce-544c-4aa4-8381-756042d0bcda"
+    },
+    {
+     "component": "token",
+     "name": "Avatar",
+     "object": "related_card",
+     "type_line": "Token Creature — Avatar",
+     "uri": "https://api.scryfall.com/cards/94a50acd-ac2d-47bf-b331-0bcf5edd9c75"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "B",
+      "W"
+     ],
+     "mana_cost": "{1}{W}{B}{B}",
+     "name": "Extus, Oriq Overlord",
+     "object": "card_face",
+     "oracle_text": "Double strike\nMagecraft — Whenever you cast or copy an instant or sorcery spell, return target nonlegendary creature card from your graveyard to your hand.",
+     "power": "2",
+     "toughness": "4",
+     "type_line": "Legendary Creature — Human Warlock"
+    },
+    {
+     "colors": [
+      "B",
+      "R"
+     ],
+     "mana_cost": "{6}{B}{R}",
+     "name": "Awaken the Blood Avatar",
+     "object": "card_face",
+     "oracle_text": "As an additional cost to cast this spell, you may sacrifice any number of creatures. This spell costs {2} less to cast for each creature sacrificed this way.\nEach opponent sacrifices a creature of their choice. Create a 3/6 black and red Avatar creature token with haste and \"Whenever this token attacks, it deals 3 damage to each opponent.\"",
+     "type_line": "Sorcery"
+    }
+   ],
+   "collector_number": "149",
+   "color_identity": [
+    "B",
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Magecraft",
+    "Double strike"
+   ],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Extus, Oriq Overlord // Awaken the Blood Avatar",
+   "object": "card",
+   "oracle_id": "0b299983-9f0f-404a-acd1-8f142572b1f1",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-04-23",
+   "set": "stx",
+   "set_name": "Strixhaven: School of Mages",
+   "set_type": "expansion",
+   "type_line": "Legendary Creature — Human Warlock // Sorcery"
+  },
+  "Axgard Armory": {
+   "collector_number": "250",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Axgard Armory",
+   "object": "card",
+   "oracle_id": "bce30fd0-ed1e-495d-9149-6a4c81c45c7b",
+   "oracle_text": "This land enters tapped.\n{T}: Add {W}.\n{1}{R}{R}{W}, {T}, Sacrifice this land: Search your library for an Aura card and/or an Equipment card, reveal them, put them into your hand, then shuffle.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-02-05",
+   "set": "khm",
+   "set_name": "Kaldheim",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Azorius Charm": {
+   "collector_number": "192",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "colors": [
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W}{U}",
+   "name": "Azorius Charm",
+   "object": "card",
+   "oracle_id": "e7592863-4aee-47b3-9abf-4b863ab0b6ec",
+   "oracle_text": "Choose one —\n• Creatures you control gain lifelink until end of turn.\n• Draw a card.\n• Put target attacking or blocking creature on top of its owner's library.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2017-11-17",
+   "set": "ima",
+   "set_name": "Iconic Masters",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Bant Charm": {
+   "collector_number": "181",
+   "color_identity": [
+    "G",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G}{W}{U}",
+   "name": "Bant Charm",
+   "object": "card",
+   "oracle_id": "324889d6-c857-41ed-bb60-408809fc9964",
+   "oracle_text": "Choose one —\n• Destroy target artifact.\n• Put target creature on the bottom of its owner's library.\n• Counter target instant spell.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-07-08",
+   "set": "2x2",
+   "set_name": "Double Masters 2022",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Bant Panorama": {
+   "collector_number": "387",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Bant Panorama",
+   "object": "card",
+   "oracle_id": "0a1d817d-dce8-4e83-a380-909f7c9eee46",
+   "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic Forest, Plains, or Island card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Barkchannel Pathway": {
+   "card_faces": [
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Barkchannel Pathway",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {G}.",
+     "type_line": "Land"
+    },
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Tidechannel Pathway",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {U}.",
+     "type_line": "Land"
+    }
+   ],
+   "collector_number": "251",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Barkchannel Pathway // Tidechannel Pathway",
+   "object": "card",
+   "oracle_id": "59d22de5-e310-44d7-89cf-ef3529e40cef",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-02-05",
+   "set": "khm",
+   "set_name": "Kaldheim",
+   "set_type": "expansion",
+   "type_line": "Land // Land"
+  },
+  "Behemoth Sledge": {
+   "collector_number": "180",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Equip"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{1}{G}{W}",
+   "name": "Behemoth Sledge",
+   "object": "card",
+   "oracle_id": "00573e77-8ff6-4acb-8683-8827d965288f",
+   "oracle_text": "Equipped creature gets +2/+2 and has trample and lifelink.\nEquip {3}",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-07-23",
+   "set": "afc",
+   "set_name": "Forgotten Realms Commander",
+   "set_type": "commander",
+   "type_line": "Artifact — Equipment"
+  },
+  "Beseech the Queen": {
+   "collector_number": "19",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/B}{2/B}{2/B}",
+   "name": "Beseech the Queen",
+   "object": "card",
+   "oracle_id": "cf94cafc-527e-4b27-8a28-7807435aaccf",
+   "oracle_text": "({2/B} can be paid with any two mana or with {B}. This card's mana value is 6.)\nSearch your library for a card with mana value less than or equal to the number of lands you control, reveal it, put it into your hand, then shuffle.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2009-09-04",
+   "set": "hop",
+   "set_name": "Planechase",
+   "set_type": "planechase",
+   "type_line": "Sorcery"
+  },
+  "Black Lotus": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Black Lotus",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Arzakon",
+     "object": "related_card",
+     "type_line": "Legendary Planeswalker — Arzakon",
+     "uri": "https://api.scryfall.com/cards/85f81500-1b1b-47e7-93a1-db5f6de95e87"
+    }
+   ],
+   "collector_number": "4",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Black Lotus",
+   "object": "card",
+   "oracle_id": "5089ec1a-f881-4d55-af14-5d996171203b",
+   "oracle_text": "{T}, Sacrifice this artifact: Add three mana of any one color.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Blex, Vexing Pest": {
+   "card_faces": [
+    {
+     "colors": [
+      "G"
+     ],
+     "mana_cost": "{2}{G}",
+     "name": "Blex, Vexing Pest",
+     "object": "card_face",
+     "oracle_text": "Other Pests, Bats, Insects, Snakes, and Spiders you control get +1/+1.\nWhen Blex dies, you gain 4 life.",
+     "power": "3",
+     "toughness": "2",
+     "type_line": "Legendary Creature — Pest"
+    },
+    {
+     "colors": [
+      "B"
+     ],
+     "mana_cost": "{2}{B}{B}",
+     "name": "Search for Blex",
+     "object": "card_face",
+     "oracle_text": "Look at the top five cards of your library. You may put any number of them into your hand and the rest into your graveyard. You lose 3 life for each card you put into your hand this way.",
+     "type_line": "Sorcery"
+    }
+   ],
+   "collector_number": "148",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Blex, Vexing Pest // Search for Blex",
+   "object": "card",
+   "oracle_id": "b2c53124-e422-4786-8135-67c350d71a36",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-04-23",
+   "set": "stx",
+   "set_name": "Strixhaven: School of Mages",
+   "set_type": "expansion",
+   "type_line": "Legendary Creature — Pest // Sorcery"
+  },
+  "Blighted Cataract": {
+   "collector_number": "279",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blighted Cataract",
+   "object": "card",
+   "oracle_id": "4d722521-0396-48f9-88b2-08b6249f970d",
+   "oracle_text": "{T}: Add {C}.\n{5}{U}, {T}, Sacrifice this land: Draw two cards.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-04-23",
+   "set": "c21",
+   "set_name": "Commander 2021",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Blighted Fen": {
+   "collector_number": "230",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blighted Fen",
+   "object": "card",
+   "oracle_id": "b8f3da11-7c8f-4846-98a6-204bfd8d572b",
+   "oracle_text": "{T}: Add {C}.\n{4}{B}, {T}, Sacrifice this land: Target opponent sacrifices a creature of their choice.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2015-10-02",
+   "set": "bfz",
+   "set_name": "Battle for Zendikar",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Blighted Gorge": {
+   "collector_number": "58",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blighted Gorge",
+   "object": "card",
+   "oracle_id": "c2cb0afd-781f-4cfa-b680-ed1edfa81868",
+   "oracle_text": "{T}: Add {C}.\n{4}{R}, {T}, Sacrifice this land: It deals 2 damage to any target.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2017-10-24",
+   "set": "ddt",
+   "set_name": "Duel Decks: Merfolk vs. Goblins",
+   "set_type": "duel_deck",
+   "type_line": "Land"
+  },
+  "Blighted Steppe": {
+   "collector_number": "232",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blighted Steppe",
+   "object": "card",
+   "oracle_id": "db16a2fb-dc42-4086-9928-52076043097f",
+   "oracle_text": "{T}: Add {C}.\n{3}{W}, {T}, Sacrifice this land: You gain 2 life for each creature you control.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2015-10-02",
+   "set": "bfz",
+   "set_name": "Battle for Zendikar",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Blighted Woodland": {
+   "collector_number": "881",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blighted Woodland",
+   "object": "card",
+   "oracle_id": "02679a2e-303d-412f-87d8-0a37a8ca259c",
+   "oracle_text": "{T}: Add {C}.\n{3}{G}, {T}, Sacrifice this land: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-06-10",
+   "set": "clb",
+   "set_name": "Commander Legends: Battle for Baldur's Gate",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Blood Crypt": {
+   "collector_number": "278",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Blood Crypt",
+   "object": "card",
+   "oracle_id": "43985bbc-a0f6-4812-984e-392bc8562633",
+   "oracle_text": "({T}: Add {B} or {R}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Swamp Mountain"
+  },
+  "Bloodstained Mire": {
+   "collector_number": "216",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Bloodstained Mire",
+   "object": "card",
+   "oracle_id": "fc0707c7-d504-4ccf-a0d2-3eb6e26e7a57",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Swamp or Mountain card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-06-14",
+   "set": "mh3",
+   "set_name": "Modern Horizons 3",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Boros Charm": {
+   "collector_number": "721",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "colors": [
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R}{W}",
+   "name": "Boros Charm",
+   "object": "card",
+   "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
+   "oracle_text": "Choose one —\n• Boros Charm deals 4 damage to target player or planeswalker.\n• Permanents you control gain indestructible until end of turn.\n• Target creature gains double strike until end of turn.",
+   "promo": false,
+   "promo_types": [
+    "startercollection"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2024-11-15",
+   "set": "fdn",
+   "set_name": "Foundations",
+   "set_type": "core",
+   "type_line": "Instant"
+  },
+  "Breeding Pool": {
+   "collector_number": "279",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Breeding Pool",
+   "object": "card",
+   "oracle_id": "20283c4a-f1f0-42f0-bc08-6da87474426b",
+   "oracle_text": "({T}: Add {G} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Forest Island"
+  },
+  "Brisela, Voice of Nightmares": {
+   "all_parts": [
+    {
+     "component": "meld_result",
+     "name": "Brisela, Voice of Nightmares",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Eldrazi Angel",
+     "uri": "https://api.scryfall.com/cards/7e926e19-553c-470a-afde-358541af5caa"
+    },
+    {
+     "component": "meld_part",
+     "name": "Bruna, the Fading Light",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Angel Horror",
+     "uri": "https://api.scryfall.com/cards/6fccdb60-5fce-4a6e-a709-b986f9a4b653"
+    },
+    {
+     "component": "meld_part",
+     "name": "Gisela, the Broken Blade",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Angel Horror",
+     "uri": "https://api.scryfall.com/cards/04506bad-3856-4184-8dda-941ded60f41a"
+    }
+   ],
+   "collector_number": "14b",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Flying",
+    "Lifelink",
+    "Vigilance",
+    "First strike"
+   ],
+   "lang": "en",
+   "layout": "meld",
+   "mana_cost": "",
+   "meld_parts": {
+    "Brisela, Voice of Nightmares": {
+     "all_parts": [
+      {
+       "component": "meld_result",
+       "name": "Brisela, Voice of Nightmares",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Eldrazi Angel",
+       "uri": "https://api.scryfall.com/cards/7e926e19-553c-470a-afde-358541af5caa"
+      },
+      {
+       "component": "meld_part",
+       "name": "Bruna, the Fading Light",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/6fccdb60-5fce-4a6e-a709-b986f9a4b653"
+      },
+      {
+       "component": "meld_part",
+       "name": "Gisela, the Broken Blade",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/04506bad-3856-4184-8dda-941ded60f41a"
+      }
+     ],
+     "collector_number": "14b",
+     "color_identity": [
+      "W"
+     ],
+     "colors": [],
+     "frame": "2015",
+     "frame_effects": [
+      "legendary"
+     ],
+     "keywords": [
+      "Flying",
+      "Lifelink",
+      "Vigilance",
+      "First strike"
+     ],
+     "lang": "en",
+     "layout": "meld",
+     "mana_cost": "",
+     "name": "Brisela, Voice of Nightmares",
+     "object": "card",
+     "oracle_id": "b23587e0-9fb7-492e-8bb4-f218e8e4ce6c",
+     "oracle_text": "Flying, first strike, vigilance, lifelink\nYour opponents can't cast spells with mana value 3 or less.",
+     "power": "9",
+     "promo": false,
+     "rarity": "mythic",
+     "released_at": "2025-01-24",
+     "set": "inr",
+     "set_name": "Innistrad Remastered",
+     "set_type": "masters",
+     "toughness": "10",
+     "type_line": "Legendary Creature — Eldrazi Angel"
+    },
+    "Bruna, the Fading Light": {
+     "all_parts": [
+      {
+       "component": "combo_piece",
+       "name": "Eldritch Moon Checklist",
+       "object": "related_card",
+       "type_line": "Card",
+       "uri": "https://api.scryfall.com/cards/cd8586f9-97e2-438d-b74f-1e53c811f314"
+      },
+      {
+       "component": "meld_result",
+       "name": "Brisela, Voice of Nightmares",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Eldrazi Angel",
+       "uri": "https://api.scryfall.com/cards/7e926e19-553c-470a-afde-358541af5caa"
+      },
+      {
+       "component": "meld_part",
+       "name": "Bruna, the Fading Light",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/6fccdb60-5fce-4a6e-a709-b986f9a4b653"
+      },
+      {
+       "component": "meld_part",
+       "name": "Gisela, the Broken Blade",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/04506bad-3856-4184-8dda-941ded60f41a"
+      }
+     ],
+     "collector_number": "14",
+     "color_identity": [
+      "W"
+     ],
+     "colors": [
+      "W"
+     ],
+     "frame": "2015",
+     "frame_effects": [
+      "legendary"
+     ],
+     "keywords": [
+      "Flying",
+      "Vigilance"
+     ],
+     "lang": "en",
+     "layout": "meld",
+     "mana_cost": "{5}{W}{W}",
+     "name": "Bruna, the Fading Light",
+     "object": "card",
+     "oracle_id": "bce7e45d-b2c5-43aa-91a6-3a3c24f30850",
+     "oracle_text": "When you cast this spell, you may return target Angel or Human creature card from your graveyard to the battlefield.\nFlying, vigilance\n(Melds with Gisela, the Broken Blade.)",
+     "power": "5",
+     "promo": false,
+     "rarity": "rare",
+     "released_at": "2025-01-24",
+     "set": "inr",
+     "set_name": "Innistrad Remastered",
+     "set_type": "masters",
+     "toughness": "7",
+     "type_line": "Legendary Creature — Angel Horror"
+    },
+    "Gisela, the Broken Blade": {
+     "all_parts": [
+      {
+       "component": "combo_piece",
+       "name": "Eldritch Moon Checklist",
+       "object": "related_card",
+       "type_line": "Card",
+       "uri": "https://api.scryfall.com/cards/cd8586f9-97e2-438d-b74f-1e53c811f314"
+      },
+      {
+       "component": "meld_result",
+       "name": "Brisela, Voice of Nightmares",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Eldrazi Angel",
+       "uri": "https://api.scryfall.com/cards/7e926e19-553c-470a-afde-358541af5caa"
+      },
+      {
+       "component": "meld_part",
+       "name": "Bruna, the Fading Light",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/6fccdb60-5fce-4a6e-a709-b986f9a4b653"
+      },
+      {
+       "component": "meld_part",
+       "name": "Gisela, the Broken Blade",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Angel Horror",
+       "uri": "https://api.scryfall.com/cards/04506bad-3856-4184-8dda-941ded60f41a"
+      }
+     ],
+     "collector_number": "24",
+     "color_identity": [
+      "W"
+     ],
+     "colors": [
+      "W"
+     ],
+     "frame": "2015",
+     "frame_effects": [
+      "legendary"
+     ],
+     "keywords": [
+      "Flying",
+      "Lifelink",
+      "First strike",
+      "Meld"
+     ],
+     "lang": "en",
+     "layout": "meld",
+     "mana_cost": "{2}{W}{W}",
+     "name": "Gisela, the Broken Blade",
+     "object": "card",
+     "oracle_id": "f3e23d5e-bd88-4e7c-a3fb-db2a8cb05b22",
+     "oracle_text": "Flying, first strike, lifelink\nAt the beginning of your end step, if you both own and control Gisela and a creature named Bruna, the Fading Light, exile them, then meld them into Brisela, Voice of Nightmares.",
+     "power": "4",
+     "promo": false,
+     "rarity": "mythic",
+     "released_at": "2025-01-24",
+     "set": "inr",
+     "set_name": "Innistrad Remastered",
+     "set_type": "masters",
+     "toughness": "3",
+     "type_line": "Legendary Creature — Angel Horror"
+    }
+   },
+   "name": "Brisela, Voice of Nightmares",
+   "object": "card",
+   "oracle_id": "b23587e0-9fb7-492e-8bb4-f218e8e4ce6c",
+   "oracle_text": "Flying, first strike, vigilance, lifelink\nYour opponents can't cast spells with mana value 3 or less.",
+   "power": "9",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2025-01-24",
+   "set": "inr",
+   "set_name": "Innistrad Remastered",
+   "set_type": "masters",
+   "toughness": "10",
+   "type_line": "Legendary Creature — Eldrazi Angel"
+  },
+  "Cabal Coffers": {
+   "collector_number": "301",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Cabal Coffers",
+   "object": "card",
+   "oracle_id": "7358e164-5704-4e78-9b21-6a9bf2a968ce",
+   "oracle_text": "{2}, {T}: Add {B} for each Swamp you control.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Castle Ardenvale": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Human",
+     "object": "related_card",
+     "type_line": "Token Creature — Human",
+     "uri": "https://api.scryfall.com/cards/5054bb15-ddd5-4e5e-a9fd-6bdf255f7fd3"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Castle Ardenvale",
+     "object": "related_card",
+     "type_line": "Land",
+     "uri": "https://api.scryfall.com/cards/65e4de2e-47d2-4967-be31-9df0057a9c74"
+    }
+   ],
+   "collector_number": "346",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Castle Ardenvale",
+   "object": "card",
+   "oracle_id": "f8f4fc60-725d-46d8-8e8f-e68e00d20589",
+   "oracle_text": "This land enters tapped unless you control a Plains.\n{T}: Add {W}.\n{2}{W}{W}, {T}: Create a 1/1 white Human creature token.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2025-04-11",
+   "set": "tdc",
+   "set_name": "Tarkir: Dragonstorm Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Castle Embereth": {
+   "collector_number": "347",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Castle Embereth",
+   "object": "card",
+   "oracle_id": "91fbb25b-8521-483f-88b0-77778d25f7fd",
+   "oracle_text": "This land enters tapped unless you control a Mountain.\n{T}: Add {R}.\n{1}{R}{R}, {T}: Creatures you control get +1/+0 until end of turn.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2025-04-11",
+   "set": "tdc",
+   "set_name": "Tarkir: Dragonstorm Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Castle Garenbrig": {
+   "collector_number": "240",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Castle Garenbrig",
+   "object": "card",
+   "oracle_id": "de75e5dd-8a52-406c-b55c-96d686885500",
+   "oracle_text": "This land enters tapped unless you control a Forest.\n{T}: Add {G}.\n{2}{G}{G}, {T}: Add six {G}. Spend this mana only to cast creature spells or activate abilities of creatures.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Castle Locthwain": {
+   "collector_number": "884",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Castle Locthwain",
+   "object": "card",
+   "oracle_id": "be811e70-aaaa-41f3-bf9e-5d3f9f719b49",
+   "oracle_text": "This land enters tapped unless you control a Swamp.\n{T}: Add {B}.\n{1}{B}{B}, {T}: Draw a card, then you lose life equal to the number of cards in your hand.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-06-10",
+   "set": "clb",
+   "set_name": "Commander Legends: Battle for Baldur's Gate",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Castle Vantress": {
+   "collector_number": "267",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Scry"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Castle Vantress",
+   "object": "card",
+   "oracle_id": "cdf41cf4-4e77-453d-be5b-0abbbd358934",
+   "oracle_text": "This land enters tapped unless you control an Island.\n{T}: Add {U}.\n{2}{U}{U}, {T}: Scry 2.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-09-27",
+   "set": "dsc",
+   "set_name": "Duskmourn: House of Horror Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Celestial Colonnade": {
+   "collector_number": "238",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Celestial Colonnade",
+   "object": "card",
+   "oracle_id": "876ac6f6-74de-4666-84c6-83d81f054723",
+   "oracle_text": "This land enters tapped.\n{T}: Add {W} or {U}.\n{3}{W}{U}: Until end of turn, this land becomes a 4/4 white and blue Elemental creature with flying and vigilance. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2018-12-07",
+   "set": "uma",
+   "set_name": "Ultimate Masters",
+   "set_type": "masters",
+   "type_line": "Land"
+  },
+  "City of Brass": {
+   "collector_number": "62",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "City of Brass",
+   "object": "card",
+   "oracle_id": "f25351e3-539b-4bbc-b92d-6480acf4d722",
+   "oracle_text": "Whenever this land becomes tapped, it deals 1 damage to you.\n{T}: Add one mana of any color.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-03-06",
+   "set": "tmc",
+   "set_name": "Teenage Mutant Ninja Turtles Eternal",
+   "set_type": "eternal",
+   "type_line": "Land"
+  },
+  "Command Tower": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Command Tower",
+     "object": "related_card",
+     "type_line": "Land",
+     "uri": "https://api.scryfall.com/cards/a73297d2-580c-4174-a427-265f6916d09f"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Tower Winder",
+     "object": "related_card",
+     "type_line": "Creature — Snake",
+     "uri": "https://api.scryfall.com/cards/ad03209f-568a-40f5-8470-a083080e6831"
+    }
+   ],
+   "collector_number": "521",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Command Tower",
+   "object": "card",
+   "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+   "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "common",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Creeping Tar Pit": {
+   "collector_number": "888",
+   "color_identity": [
+    "B",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Creeping Tar Pit",
+   "object": "card",
+   "oracle_id": "250cb58b-2924-4dff-92fe-ac0ebbbeb218",
+   "oracle_text": "This land enters tapped.\n{T}: Add {U} or {B}.\n{1}{U}{B}: Until end of turn, this land becomes a 3/2 blue and black Elemental creature. It's still a land. It can't be blocked this turn.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-06-10",
+   "set": "clb",
+   "set_name": "Commander Legends: Battle for Baldur's Gate",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Crumbling Necropolis": {
+   "collector_number": "237",
+   "color_identity": [
+    "B",
+    "R",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Crumbling Necropolis",
+   "object": "card",
+   "oracle_id": "7190debf-708b-4f41-9714-0d0a5bd5a74e",
+   "oracle_text": "This land enters tapped.\n{T}: Add {U}, {B}, or {R}.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-06-26",
+   "set": "msc",
+   "set_name": "Marvel Super Heroes Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Crumbling Vestige": {
+   "collector_number": "170",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Crumbling Vestige",
+   "object": "card",
+   "oracle_id": "3c1fe86a-3696-4634-bc26-cd45846529ec",
+   "oracle_text": "This land enters tapped.\nWhen this land enters, add one mana of any color.\n{T}: Add {C}. ({C} represents colorless mana.)",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2016-01-22",
+   "set": "ogw",
+   "set_name": "Oath of the Gatewatch",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Crystal Quarry": {
+   "collector_number": "206",
+   "color_identity": [
+    "B",
+    "G",
+    "R",
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Crystal Quarry",
+   "object": "card",
+   "oracle_id": "ca68648f-fe3a-4770-9842-a3dc2310f099",
+   "oracle_text": "{T}: Add {C}.\n{5}, {T}: Add {W}{U}{B}{R}{G}.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Curious Homunculus": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Eldritch Moon Checklist",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/cd8586f9-97e2-438d-b74f-1e53c811f314"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Curious Homunculus // Voracious Reader",
+     "object": "related_card",
+     "type_line": "Creature — Homunculus // Creature — Eldrazi Homunculus",
+     "uri": "https://api.scryfall.com/cards/22e816af-df55-4a3f-a6e7-0ff3bb1b45b5"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "U"
+     ],
+     "mana_cost": "{1}{U}",
+     "name": "Curious Homunculus",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.\nAt the beginning of your upkeep, if there are three or more instant and/or sorcery cards in your graveyard, transform this creature.",
+     "power": "1",
+     "toughness": "1",
+     "type_line": "Creature — Homunculus"
+    },
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Voracious Reader",
+     "object": "card_face",
+     "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nInstant and sorcery spells you cast cost {1} less to cast.",
+     "power": "3",
+     "toughness": "4",
+     "type_line": "Creature — Eldrazi Homunculus"
+    }
+   ],
+   "collector_number": "54",
+   "color_identity": [
+    "U"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "mooneldrazidfc"
+   ],
+   "keywords": [
+    "Prowess",
+    "Transform"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Curious Homunculus // Voracious Reader",
+   "object": "card",
+   "oracle_id": "c38db10f-c0b7-4391-b49a-77079a4d087c",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2016-07-22",
+   "set": "emn",
+   "set_name": "Eldritch Moon",
+   "set_type": "expansion",
+   "type_line": "Creature — Homunculus // Creature — Eldrazi Homunculus"
+  },
+  "Dark Ritual": {
+   "collector_number": "793",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}",
+   "name": "Dark Ritual",
+   "object": "card",
+   "oracle_id": "53f7c868-b03e-4fc2-8dcf-a75bbfa3272b",
+   "oracle_text": "Add {B}{B}{B}.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-06-26",
+   "set": "msc",
+   "set_name": "Marvel Super Heroes Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Deity of Scars": {
+   "collector_number": "118",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "colors": [
+    "B",
+    "G"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Regenerate",
+    "Trample"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B/G}{B/G}{B/G}{B/G}{B/G}",
+   "name": "Deity of Scars",
+   "object": "card",
+   "oracle_id": "bf7c1fa8-0460-4be5-b00d-72c0960c4149",
+   "oracle_text": "Trample\nThis creature enters with two -1/-1 counters on it.\n{B/G}, Remove a -1/-1 counter from this creature: Regenerate this creature.",
+   "power": "7",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-07-25",
+   "set": "eve",
+   "set_name": "Eventide",
+   "set_type": "expansion",
+   "toughness": "7",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Demigod of Revenge": {
+   "collector_number": "187",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "colors": [
+    "B",
+    "R"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Flying",
+    "Haste"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B/R}{B/R}{B/R}{B/R}{B/R}",
+   "name": "Demigod of Revenge",
+   "object": "card",
+   "oracle_id": "602ce676-380d-4c3c-b97a-9234ccdc2904",
+   "oracle_text": "When you cast this spell, return all cards named Demigod of Revenge from your graveyard to the battlefield.\nFlying, haste",
+   "power": "5",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2013-06-07",
+   "set": "mma",
+   "set_name": "Modern Masters",
+   "set_type": "masters",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Demolition Field": {
+   "collector_number": "687",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Demolition Field",
+   "object": "card",
+   "oracle_id": "93953926-a644-49bb-9b5a-4c8f19114c7e",
+   "oracle_text": "{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Destroy target nonbasic land an opponent controls. That land's controller may search their library for a basic land card, put it onto the battlefield, then shuffle. You may search your library for a basic land card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "promo_types": [
+    "startercollection"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2024-11-15",
+   "set": "fdn",
+   "set_name": "Foundations",
+   "set_type": "core",
+   "type_line": "Land"
+  },
+  "Demonspine Whip": {
+   "collector_number": "39",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "colors": [
+    "B",
+    "R"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Equip"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}{R}",
+   "name": "Demonspine Whip",
+   "object": "card",
+   "oracle_id": "a588f047-02b4-4c6b-bce2-6e4d564296ec",
+   "oracle_text": "{X}: Equipped creature gets +X/+0 until end of turn.\nEquip {1}",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2009-04-30",
+   "set": "arb",
+   "set_name": "Alara Reborn",
+   "set_type": "expansion",
+   "type_line": "Artifact — Equipment"
+  },
+  "Deus of Calamity": {
+   "collector_number": "54",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "colors": [
+    "G",
+    "R"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Trample"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R/G}{R/G}{R/G}{R/G}{R/G}",
+   "name": "Deus of Calamity",
+   "object": "card",
+   "oracle_id": "f263f9d0-2ca9-4d3f-9b41-c67bdc73281a",
+   "oracle_text": "Trample\nWhenever this creature deals 6 or more damage to an opponent, destroy target land that player controls.",
+   "power": "6",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2013-09-06",
+   "set": "ddl",
+   "set_name": "Duel Decks: Heroes vs. Monsters",
+   "set_type": "duel_deck",
+   "toughness": "6",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Dimir Charm": {
+   "collector_number": "154",
+   "color_identity": [
+    "B",
+    "U"
+   ],
+   "colors": [
+    "B",
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}{B}",
+   "name": "Dimir Charm",
+   "object": "card",
+   "oracle_id": "4d99e786-585d-4026-9253-19741fb357de",
+   "oracle_text": "Choose one —\n• Counter target sorcery spell.\n• Destroy target creature with power 2 or less.\n• Look at the top three cards of target player's library. Put one back and the rest into that player's graveyard.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2013-02-01",
+   "set": "gtc",
+   "set_name": "Gatecrash",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Divinity of Pride": {
+   "collector_number": "228",
+   "color_identity": [
+    "B",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Flying",
+    "Lifelink"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W/B}{W/B}{W/B}{W/B}{W/B}",
+   "name": "Divinity of Pride",
+   "object": "card",
+   "oracle_id": "2c91c236-34d7-4454-a55a-784db7f68bde",
+   "oracle_text": "Flying, lifelink\nThis creature gets +4/+4 as long as you have 25 or more life.",
+   "power": "4",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2013-11-01",
+   "set": "c13",
+   "set_name": "Commander 2013",
+   "set_type": "commander",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Dominus of Fealty": {
+   "collector_number": "194",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [
+    "R",
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U/R}{U/R}{U/R}{U/R}{U/R}",
+   "name": "Dominus of Fealty",
+   "object": "card",
+   "oracle_id": "f5e18b27-c5cc-4f5e-b767-4b1b43e00fd0",
+   "oracle_text": "Flying\nAt the beginning of your upkeep, you may gain control of target permanent until end of turn. If you do, untap it and it gains haste until end of turn.",
+   "power": "4",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2011-06-17",
+   "set": "cmd",
+   "set_name": "Commander 2011",
+   "set_type": "commander",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Dryad Arbor": {
+   "collector_number": "273",
+   "color_identity": [
+    "G"
+   ],
+   "color_indicator": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Dryad Arbor",
+   "object": "card",
+   "oracle_id": "e996cd67-739c-40f4-b276-0042acf26c71",
+   "oracle_text": "(This land isn't a spell, it's affected by summoning sickness, and it has \"{T}: Add {G}.\")",
+   "power": "1",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-09-27",
+   "set": "dsc",
+   "set_name": "Duskmourn: House of Horror Commander",
+   "set_type": "commander",
+   "toughness": "1",
+   "type_line": "Land Creature — Forest Dryad"
+  },
+  "Dwarven Mine": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Dwarf",
+     "object": "related_card",
+     "type_line": "Token Creature — Dwarf",
+     "uri": "https://api.scryfall.com/cards/cab5d0dd-8095-4410-8feb-8c13edfcb2e5"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Dwarven Mine",
+     "object": "related_card",
+     "type_line": "Land — Mountain",
+     "uri": "https://api.scryfall.com/cards/5c83074d-0c9b-4b58-94ca-d75240485579"
+    }
+   ],
+   "collector_number": "243",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Dwarven Mine",
+   "object": "card",
+   "oracle_id": "74ed0bd3-ac31-41a4-8220-d8e7c8c1c437",
+   "oracle_text": "({T}: Add {R}.)\nThis land enters tapped unless you control three or more other Mountains.\nWhen this land enters untapped, create a 1/1 red Dwarf creature token.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Land — Mountain"
+  },
+  "Embercleave": {
+   "collector_number": "120",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Equip",
+    "Flash"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{4}{R}{R}",
+   "name": "Embercleave",
+   "object": "card",
+   "oracle_id": "4d6120d6-fcce-40bc-9fc6-e1f5beb6c728",
+   "oracle_text": "Flash\nThis spell costs {1} less to cast for each attacking creature you control.\nWhen Embercleave enters, attach it to target creature you control.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3}",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Legendary Artifact — Equipment"
+  },
+  "Emrakul, the Aeons Torn": {
+   "collector_number": "1",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Flying",
+    "Annihilator",
+    "Protection"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{15}",
+   "name": "Emrakul, the Aeons Torn",
+   "object": "card",
+   "oracle_id": "900ca697-ad38-4b2b-bc74-2ff7eb6ea951",
+   "oracle_text": "This spell can't be countered.\nWhen you cast this spell, take an extra turn after this one.\nFlying, protection from spells that are one or more colors, annihilator 6\nWhen Emrakul is put into a graveyard from anywhere, its owner shuffles their graveyard into their library.",
+   "power": "15",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2022-07-08",
+   "set": "2x2",
+   "set_name": "Double Masters 2022",
+   "set_type": "masters",
+   "toughness": "15",
+   "type_line": "Legendary Creature — Eldrazi"
+  },
+  "Erebos, God of the Dead": {
+   "collector_number": "85",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2003",
+   "frame_effects": [
+    "enchantment"
+   ],
+   "keywords": [
+    "Indestructible"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{3}{B}",
+   "name": "Erebos, God of the Dead",
+   "object": "card",
+   "oracle_id": "1cfc7b12-a595-492d-81ee-bd100ba7de6a",
+   "oracle_text": "Indestructible\nAs long as your devotion to black is less than five, Erebos isn't a creature. (Each {B} in the mana costs of permanents you control counts toward your devotion to black.)\nYour opponents can't gain life.\n{1}{B}, Pay 2 life: Draw a card.",
+   "power": "5",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2013-09-27",
+   "set": "ths",
+   "set_name": "Theros",
+   "set_type": "expansion",
+   "toughness": "7",
+   "type_line": "Legendary Enchantment Creature — God"
+  },
+  "Esper Charm": {
+   "collector_number": "179",
+   "color_identity": [
+    "B",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W}{U}{B}",
+   "name": "Esper Charm",
+   "object": "card",
+   "oracle_id": "d40ea3d9-8c48-4846-b1f4-99018d4fd789",
+   "oracle_text": "Choose one —\n• Destroy target enchantment.\n• Draw two cards.\n• Target player discards two cards.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2018-08-10",
+   "set": "c18",
+   "set_name": "Commander 2018",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Esper Panorama": {
+   "collector_number": "399",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Esper Panorama",
+   "object": "card",
+   "oracle_id": "6b9cd3d0-4316-4945-b960-12f51052d260",
+   "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic Plains, Island, or Swamp card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Etherium-Horn Sorcerer": {
+   "collector_number": "171",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [
+    "R",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Cascade"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{4}{U}{R}",
+   "name": "Etherium-Horn Sorcerer",
+   "object": "card",
+   "oracle_id": "01afb7a1-6427-4bb6-935a-613e9bda9de3",
+   "oracle_text": "{1}{U}{R}: Return this creature to its owner's hand.\nCascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)",
+   "power": "3",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2017-08-25",
+   "set": "c17",
+   "set_name": "Commander 2017",
+   "set_type": "commander",
+   "toughness": "6",
+   "type_line": "Artifact Creature — Minotaur Wizard Sorcerer"
+  },
+  "Evolving Wilds": {
+   "collector_number": "527",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Evolving Wilds",
+   "object": "card",
+   "oracle_id": "a75445d3-1303-4bb5-89ad-26ea93fecd48",
+   "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "common",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Extus, Oriq Overlord": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Extus, Oriq Overlord // Awaken the Blood Avatar",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Human Warlock // Sorcery",
+     "uri": "https://api.scryfall.com/cards/786156ce-544c-4aa4-8381-756042d0bcda"
+    },
+    {
+     "component": "token",
+     "name": "Avatar",
+     "object": "related_card",
+     "type_line": "Token Creature — Avatar",
+     "uri": "https://api.scryfall.com/cards/94a50acd-ac2d-47bf-b331-0bcf5edd9c75"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "B",
+      "W"
+     ],
+     "mana_cost": "{1}{W}{B}{B}",
+     "name": "Extus, Oriq Overlord",
+     "object": "card_face",
+     "oracle_text": "Double strike\nMagecraft — Whenever you cast or copy an instant or sorcery spell, return target nonlegendary creature card from your graveyard to your hand.",
+     "power": "2",
+     "toughness": "4",
+     "type_line": "Legendary Creature — Human Warlock"
+    },
+    {
+     "colors": [
+      "B",
+      "R"
+     ],
+     "mana_cost": "{6}{B}{R}",
+     "name": "Awaken the Blood Avatar",
+     "object": "card_face",
+     "oracle_text": "As an additional cost to cast this spell, you may sacrifice any number of creatures. This spell costs {2} less to cast for each creature sacrificed this way.\nEach opponent sacrifices a creature of their choice. Create a 3/6 black and red Avatar creature token with haste and \"Whenever this token attacks, it deals 3 damage to each opponent.\"",
+     "type_line": "Sorcery"
+    }
+   ],
+   "collector_number": "149",
+   "color_identity": [
+    "B",
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Magecraft",
+    "Double strike"
+   ],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Extus, Oriq Overlord // Awaken the Blood Avatar",
+   "object": "card",
+   "oracle_id": "0b299983-9f0f-404a-acd1-8f142572b1f1",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-04-23",
+   "set": "stx",
+   "set_name": "Strixhaven: School of Mages",
+   "set_type": "expansion",
+   "type_line": "Legendary Creature — Human Warlock // Sorcery"
+  },
+  "Fabled Passage": {
+   "collector_number": "529",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Fabled Passage",
+   "object": "card",
+   "oracle_id": "0c85b8f7-0bd0-4680-9ec5-d4b110460a54",
+   "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Filigree Angel": {
+   "collector_number": "199",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "colors": [
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{5}{W}{W}{U}",
+   "name": "Filigree Angel",
+   "object": "card",
+   "oracle_id": "4a261c42-825d-4965-8ea7-80d50c43474e",
+   "oracle_text": "Flying\nWhen this creature enters, you gain 3 life for each artifact you control.",
+   "power": "4",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2016-11-11",
+   "set": "c16",
+   "set_name": "Commander 2016",
+   "set_type": "commander",
+   "toughness": "4",
+   "type_line": "Artifact Creature — Angel"
+  },
+  "Flame Javelin": {
+   "collector_number": "53",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/R}{2/R}{2/R}",
+   "name": "Flame Javelin",
+   "object": "card",
+   "oracle_id": "58363090-bf89-4174-bbb2-636afc1c7a06",
+   "oracle_text": "({2/R} can be paid with any two mana or with {R}. This card's mana value is 6.)\nFlame Javelin deals 4 damage to any target.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2014-12-05",
+   "set": "jvc",
+   "set_name": "Duel Decks Anthology: Jace vs. Chandra",
+   "set_type": "duel_deck",
+   "type_line": "Instant"
+  },
+  "Flooded Strand": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Preponderant Pearl",
+     "object": "related_card",
+     "type_line": "Kindred Artifact — Merfolk",
+     "uri": "https://api.scryfall.com/cards/9ce9c2e1-3e8a-4b9a-8da6-7b7fc5a897f6"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Flooded Strand",
+     "object": "related_card",
+     "type_line": "Land",
+     "uri": "https://api.scryfall.com/cards/431eca69-ba8c-47c8-a325-22a844f83e80"
+    }
+   ],
+   "collector_number": "220",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Flooded Strand",
+   "object": "card",
+   "oracle_id": "f3c7af78-a77d-4134-82a2-a5ce84285a84",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Plains or Island card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-06-14",
+   "set": "mh3",
+   "set_name": "Modern Horizons 3",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Frontier Bivouac": {
+   "collector_number": "150",
+   "color_identity": [
+    "G",
+    "R",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Frontier Bivouac",
+   "object": "card",
+   "oracle_id": "e4cf6c2f-0f1e-4980-9ef9-e4eabcae42a9",
+   "oracle_text": "This land enters tapped.\n{T}: Add {G}, {U}, or {R}.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2026-01-23",
+   "set": "ecc",
+   "set_name": "Lorwyn Eclipsed Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Gaea's Cradle": {
+   "collector_number": "321",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "1997",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Gaea's Cradle",
+   "object": "card",
+   "oracle_id": "7c427c3d-ecd8-45ef-bebd-8f10f4a311db",
+   "oracle_text": "{T}: Add {G} for each creature you control.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "1998-10-12",
+   "set": "usg",
+   "set_name": "Urza's Saga",
+   "set_type": "expansion",
+   "type_line": "Legendary Land"
+  },
+  "Gemstone Caverns": {
+   "collector_number": "280",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Gemstone Caverns",
+   "object": "card",
+   "oracle_id": "c0adbddc-b070-4c5f-afe0-0474c72a9251",
+   "oracle_text": "If this card is in your opening hand and you're not the starting player, you may begin the game with Gemstone Caverns on the battlefield with a luck counter on it. If you do, exile a card from your hand.\n{T}: Add {C}. If Gemstone Caverns has a luck counter on it, instead add one mana of any color.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Legendary Land"
+  },
+  "Ghastlord of Fugue": {
+   "collector_number": "162",
+   "color_identity": [
+    "B",
+    "U"
+   ],
+   "colors": [
+    "B",
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U/B}{U/B}{U/B}{U/B}{U/B}",
+   "name": "Ghastlord of Fugue",
+   "object": "card",
+   "oracle_id": "fce163aa-c5d0-4147-8566-512321c0be8e",
+   "oracle_text": "This creature can't be blocked.\nWhenever this creature deals combat damage to a player, that player reveals their hand. You choose a card from it. That player exiles that card.",
+   "power": "4",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Giant Growth": {
+   "collector_number": "167",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G}",
+   "name": "Giant Growth",
+   "object": "card",
+   "oracle_id": "5748ebf1-24e3-499d-ab7c-c2cebd462a24",
+   "oracle_text": "Target creature gets +3/+3 until end of turn.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "common",
+   "released_at": "2026-06-26",
+   "set": "msh",
+   "set_name": "Marvel Super Heroes",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Gingerbread Cabin": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Food",
+     "object": "related_card",
+     "type_line": "Token Artifact — Food",
+     "uri": "https://api.scryfall.com/cards/965bef73-eb93-4512-91b4-bf2ce7d27d42"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Gingerbread Cabin",
+     "object": "related_card",
+     "type_line": "Land — Forest",
+     "uri": "https://api.scryfall.com/cards/3b583cc8-95e6-4772-afe3-d405b65836e0"
+    }
+   ],
+   "collector_number": "290",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Food"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Gingerbread Cabin",
+   "object": "card",
+   "oracle_id": "fa98c367-0312-49c6-abef-72e5ead4cc7d",
+   "oracle_text": "({T}: Add {G}.)\nThis land enters tapped unless you control three or more other Forests.\nWhen this land enters untapped, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2021-04-23",
+   "set": "c21",
+   "set_name": "Commander 2021",
+   "set_type": "commander",
+   "type_line": "Land — Forest"
+  },
+  "Glacial Chasm": {
+   "collector_number": "229",
+   "color_identity": [],
+   "colors": [],
+   "frame": "1997",
+   "keywords": [
+    "Cumulative upkeep"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Glacial Chasm",
+   "object": "card",
+   "oracle_id": "73e7a2ad-d11c-4867-b97d-f971809da778",
+   "oracle_text": "Cumulative upkeep—Pay 2 life. (At the beginning of your upkeep, put an age counter on this permanent, then sacrifice it unless you pay its upkeep cost for each age counter on it.)\nWhen this land enters, sacrifice a land.\nCreatures you control can't attack.\nPrevent all damage that would be dealt to you.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-09-22",
+   "set": "me2",
+   "set_name": "Masters Edition II",
+   "set_type": "masters",
+   "type_line": "Land"
+  },
+  "Godhead of Awe": {
+   "collector_number": "142",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "colors": [
+    "U",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W/U}{W/U}{W/U}{W/U}{W/U}",
+   "name": "Godhead of Awe",
+   "object": "card",
+   "oracle_id": "1ed5751a-4b45-4cd2-b19c-ac84508de4f8",
+   "oracle_text": "Flying\nOther creatures have base power and toughness 1/1.",
+   "power": "4",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Godless Shrine": {
+   "collector_number": "285",
+   "color_identity": [
+    "B",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Godless Shrine",
+   "object": "card",
+   "oracle_id": "73864fcc-1bde-4bc0-831e-2b93e546e417",
+   "oracle_text": "({T}: Add {W} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Plains Swamp"
+  },
+  "Golgari Charm": {
+   "collector_number": "201",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "colors": [
+    "B",
+    "G"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Regenerate"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}{G}",
+   "name": "Golgari Charm",
+   "object": "card",
+   "oracle_id": "f0ab7166-9fcf-46e5-af2c-b7f628db4789",
+   "oracle_text": "Choose one —\n• All creatures get -1/-1 until end of turn.\n• Destroy target enchantment.\n• Regenerate each creature you control.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2018-12-07",
+   "set": "uma",
+   "set_name": "Ultimate Masters",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Grixis Charm": {
+   "collector_number": "192",
+   "color_identity": [
+    "B",
+    "R",
+    "U"
+   ],
+   "colors": [
+    "B",
+    "R",
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}{B}{R}",
+   "name": "Grixis Charm",
+   "object": "card",
+   "oracle_id": "387ae7be-1cb5-4ae8-bb63-edf4941945a9",
+   "oracle_text": "Choose one —\n• Return target permanent to its owner's hand.\n• Target creature gets -4/-4 until end of turn.\n• Creatures you control get +2/+0 until end of turn.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2013-11-01",
+   "set": "c13",
+   "set_name": "Commander 2013",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Grixis Panorama": {
+   "collector_number": "407",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Grixis Panorama",
+   "object": "card",
+   "oracle_id": "743f4488-fef1-4f4d-b745-d2de92423e00",
+   "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Gruul Charm": {
+   "collector_number": "169",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "colors": [
+    "G",
+    "R"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R}{G}",
+   "name": "Gruul Charm",
+   "object": "card",
+   "oracle_id": "e552cab2-cee0-4420-9419-4bada4b2f241",
+   "oracle_text": "Choose one —\n• Creatures without flying can't block this turn.\n• Gain control of all permanents you own.\n• Gruul Charm deals 3 damage to each creature with flying.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2013-02-01",
+   "set": "gtc",
+   "set_name": "Gatecrash",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Hall of Heliod's Generosity": {
+   "collector_number": "283",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Hall of Heliod's Generosity",
+   "object": "card",
+   "oracle_id": "2fc070dc-f2f7-4648-8069-31d74790a39c",
+   "oracle_text": "{T}: Add {C}.\n{1}{W}, {T}: Put target enchantment card from your graveyard on top of your library.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-09-27",
+   "set": "dsc",
+   "set_name": "Duskmourn: House of Horror Commander",
+   "set_type": "commander",
+   "type_line": "Legendary Land"
+  },
+  "Hallowed Fountain": {
+   "collector_number": "286",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Hallowed Fountain",
+   "object": "card",
+   "oracle_id": "f1750962-a87c-49f6-b731-02ae971ac6ea",
+   "oracle_text": "({T}: Add {W} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Plains Island"
+  },
+  "Healing Salve": {
+   "collector_number": "14",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W}",
+   "name": "Healing Salve",
+   "object": "card",
+   "oracle_id": "8da8644c-75a1-4fe9-8e94-900d948d631c",
+   "oracle_text": "Choose one —\n• Target player gains 3 life.\n• Prevent the next 3 damage that would be dealt to any target this turn.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2014-12-05",
+   "set": "dvd",
+   "set_name": "Duel Decks Anthology: Divine vs. Demonic",
+   "set_type": "duel_deck",
+   "type_line": "Instant"
+  },
+  "Heliod, God of the Sun [THS]": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Cleric",
+     "object": "related_card",
+     "type_line": "Token Enchantment Creature — Cleric",
+     "uri": "https://api.scryfall.com/cards/7e4c9173-e530-4237-a03b-9aeca60ab0e4"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Heliod, God of the Sun",
+     "object": "related_card",
+     "type_line": "Legendary Enchantment Creature — God",
+     "uri": "https://api.scryfall.com/cards/e90d01c9-e76e-42ff-b0fa-8b6786242aae"
+    }
+   ],
+   "collector_number": "17",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2003",
+   "frame_effects": [
+    "enchantment"
+   ],
+   "keywords": [
+    "Indestructible"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{3}{W}",
+   "name": "Heliod, God of the Sun",
+   "object": "card",
+   "oracle_id": "4ea488b2-5ba0-4565-b928-570c8e03b926",
+   "oracle_text": "Indestructible\nAs long as your devotion to white is less than five, Heliod isn't a creature. (Each {W} in the mana costs of permanents you control counts toward your devotion to white.)\nOther creatures you control have vigilance.\n{2}{W}{W}: Create a 2/1 white Cleric enchantment creature token.",
+   "power": "5",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2013-09-27",
+   "set": "ths",
+   "set_name": "Theros",
+   "set_type": "expansion",
+   "toughness": "6",
+   "type_line": "Legendary Enchantment Creature — God"
+  },
+  "Herald's Horn": {
+   "collector_number": "493",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{3}",
+   "name": "Herald's Horn",
+   "object": "card",
+   "oracle_id": "c02c5547-b9c9-4b2d-9d12-e87bfba8f2d2",
+   "oracle_text": "As this artifact enters, choose a creature type.\nCreature spells you cast of the chosen type cost {1} less to cast.\nAt the beginning of your upkeep, look at the top card of your library. If it's a creature card of the chosen type, you may reveal it and put it into your hand.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Artifact"
+  },
+  "Hissing Quagmire": {
+   "collector_number": "171",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Hissing Quagmire",
+   "object": "card",
+   "oracle_id": "7fff5224-c002-4a32-86fe-9a4b18d78b50",
+   "oracle_text": "This land enters tapped.\n{T}: Add {B} or {G}.\n{1}{B}{G}: Until end of turn, this land becomes a 2/2 black and green Elemental creature with deathtouch. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2016-01-22",
+   "set": "ogw",
+   "set_name": "Oath of the Gatewatch",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Hypergenesis": {
+   "collector_number": "210",
+   "color_identity": [
+    "G"
+   ],
+   "color_indicator": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Hypergenesis",
+   "object": "card",
+   "oracle_id": "cf288b0a-a343-4ef7-ba02-4f83a6dabeaf",
+   "oracle_text": "Suspend 3—{1}{G}{G}\nStarting with you, each player may put an artifact, creature, enchantment, or land card from their hand onto the battlefield. Repeat this process until no one puts a card onto the battlefield.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Sorcery"
+  },
+  "Idyllic Grange": {
+   "collector_number": "246",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Idyllic Grange",
+   "object": "card",
+   "oracle_id": "23d349a0-e441-40b8-b634-13e61440a7c8",
+   "oracle_text": "({T}: Add {W}.)\nThis land enters tapped unless you control three or more other Plains.\nWhen this land enters untapped, put a +1/+1 counter on target creature you control.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Land — Plains"
+  },
+  "Insectile Aberration": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Innistrad Checklist",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/99ce1bee-8f95-4284-8e06-9de9bfcb53b5"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Delver of Secrets // Insectile Aberration",
+     "object": "related_card",
+     "type_line": "Creature — Human Wizard // Creature — Human Insect",
+     "uri": "https://api.scryfall.com/cards/871c4ccc-5a14-4583-b4c7-6f2d2aeb8253"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "U"
+     ],
+     "mana_cost": "{U}",
+     "name": "Delver of Secrets",
+     "object": "card_face",
+     "oracle_text": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform this creature.",
+     "power": "1",
+     "toughness": "1",
+     "type_line": "Creature — Human Wizard"
+    },
+    {
+     "color_indicator": [
+      "U"
+     ],
+     "colors": [
+      "U"
+     ],
+     "mana_cost": "",
+     "name": "Insectile Aberration",
+     "object": "card_face",
+     "oracle_text": "Flying",
+     "power": "3",
+     "toughness": "2",
+     "type_line": "Creature — Human Insect"
+    }
+   ],
+   "collector_number": "60",
+   "color_identity": [
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying",
+    "Transform"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Delver of Secrets // Insectile Aberration",
+   "object": "card",
+   "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2025-01-24",
+   "set": "inr",
+   "set_name": "Innistrad Remastered",
+   "set_type": "masters",
+   "type_line": "Creature — Human Wizard // Creature — Human Insect"
+  },
+  "Intervention Pact": {
+   "collector_number": "8",
+   "color_identity": [
+    "W"
+   ],
+   "color_indicator": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Intervention Pact",
+   "object": "card",
+   "oracle_id": "9f9882f5-2338-4881-b418-b15348a462b4",
+   "oracle_text": "The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.\nAt the beginning of your next upkeep, pay {1}{W}{W}. If you don't, you lose the game.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2007-05-04",
+   "set": "fut",
+   "set_name": "Future Sight",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Inventors' Fair": {
+   "collector_number": "247",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Inventors' Fair",
+   "object": "card",
+   "oracle_id": "91d4a5fe-fd6d-4b14-a63f-61b4d0ecd9c4",
+   "oracle_text": "At the beginning of your upkeep, if you control three or more artifacts, you gain 1 life.\n{T}: Add {C}.\n{4}, {T}, Sacrifice Inventors' Fair: Search your library for an artifact card, reveal it, put it into your hand, then shuffle. Activate only if you control three or more artifacts.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2016-09-30",
+   "set": "kld",
+   "set_name": "Kaladesh",
+   "set_type": "expansion",
+   "type_line": "Legendary Land"
+  },
+  "Izzet Charm": {
+   "collector_number": "190",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [
+    "R",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}{R}",
+   "name": "Izzet Charm",
+   "object": "card",
+   "oracle_id": "a07698f6-5ad5-49a3-9da2-f82d407f5cd7",
+   "oracle_text": "Choose one —\n• Counter target noncreature spell unless its controller pays {2}.\n• Izzet Charm deals 2 damage to target creature.\n• Draw two cards, then discard two cards.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2024-01-12",
+   "set": "rvr",
+   "set_name": "Ravnica Remastered",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Jeskai Charm": {
+   "collector_number": "232",
+   "color_identity": [
+    "R",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "R",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}{R}{W}",
+   "name": "Jeskai Charm",
+   "object": "card",
+   "oracle_id": "2a9a05b4-1910-4f97-a0fe-0f57017f6df0",
+   "oracle_text": "Choose one —\n• Put target creature on top of its owner's library.\n• Jeskai Charm deals 4 damage to target opponent or planeswalker.\n• Creatures you control get +1/+1 and gain lifelink until end of turn.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-07-08",
+   "set": "2x2",
+   "set_name": "Double Masters 2022",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Jund Charm": {
+   "collector_number": "195",
+   "color_identity": [
+    "B",
+    "G",
+    "R"
+   ],
+   "colors": [
+    "B",
+    "G",
+    "R"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}{R}{G}",
+   "name": "Jund Charm",
+   "object": "card",
+   "oracle_id": "7bd2ac13-d598-4cf1-a483-2a6878aed93b",
+   "oracle_text": "Choose one —\n• Exile target player's graveyard.\n• Jund Charm deals 2 damage to each creature.\n• Put two +1/+1 counters on target creature.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2013-11-01",
+   "set": "c13",
+   "set_name": "Commander 2013",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Jund Panorama": {
+   "collector_number": "408",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Jund Panorama",
+   "object": "card",
+   "oracle_id": "f39f33ac-074d-442d-ae4c-1d694ee315f3",
+   "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic Swamp, Mountain, or Forest card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Jungle Shrine": {
+   "collector_number": "154",
+   "color_identity": [
+    "G",
+    "R",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Jungle Shrine",
+   "object": "card",
+   "oracle_id": "2e69537c-c898-4e13-a72d-ce3957a90304",
+   "oracle_text": "This land enters tapped.\n{T}: Add {R}, {G}, or {W}.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2026-01-23",
+   "set": "ecc",
+   "set_name": "Lorwyn Eclipsed Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Karn's Bastion": {
+   "collector_number": "163",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Proliferate"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Karn's Bastion",
+   "object": "card",
+   "oracle_id": "9fb8cd81-403a-4988-8f1c-b8eccf8abd9c",
+   "oracle_text": "{T}: Add {C}.\n{4}, {T}: Proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2025-08-01",
+   "set": "eoc",
+   "set_name": "Edge of Eternities Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Krosan Verge": {
+   "collector_number": "304",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Krosan Verge",
+   "object": "card",
+   "oracle_id": "d9a10971-f32b-4978-952d-fed0a5bc9e36",
+   "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Search your library for a Forest card and a Plains card, put them onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2024-04-19",
+   "set": "otc",
+   "set_name": "Outlaws of Thunder Junction Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Lavaclaw Reaches": {
+   "collector_number": "245",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Lavaclaw Reaches",
+   "object": "card",
+   "oracle_id": "340de307-982a-4b26-9dc0-99113dc766cd",
+   "oracle_text": "This land enters tapped.\n{T}: Add {B} or {R}.\n{1}{B}{R}: Until end of turn, this land becomes a 2/2 black and red Elemental creature with \"{X}: This creature gets +X/+0 until end of turn.\" It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2018-12-07",
+   "set": "uma",
+   "set_name": "Ultimate Masters",
+   "set_type": "masters",
+   "type_line": "Land"
+  },
+  "Lightning Bolt": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Lightning Bolt",
+     "object": "related_card",
+     "type_line": "Instant",
+     "uri": "https://api.scryfall.com/cards/7673784e-db4b-43a1-8d55-1bb9fc1e284f"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Toralf's Disciple",
+     "object": "related_card",
+     "type_line": "Creature — Human Warrior",
+     "uri": "https://api.scryfall.com/cards/4f095067-cf24-4061-8626-dc68a66a0b36"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Thayan Evokers",
+     "object": "related_card",
+     "type_line": "Creature — Human Wizard",
+     "uri": "https://api.scryfall.com/cards/69b51576-532b-450e-a8bf-0482cac04618"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Indris, the Hydrostatic Surge",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Otter Incarnation",
+     "uri": "https://api.scryfall.com/cards/618806ea-7ea8-4cfb-a8c1-c3defa34e7dd"
+    }
+   ],
+   "collector_number": "806",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R}",
+   "name": "Lightning Bolt",
+   "object": "card",
+   "oracle_id": "4457ed35-7c10-48c8-9776-456485fdf070",
+   "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-06-26",
+   "set": "msc",
+   "set_name": "Marvel Super Heroes Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Living End": {
+   "collector_number": "121",
+   "color_identity": [
+    "B"
+   ],
+   "color_indicator": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Living End",
+   "object": "card",
+   "oracle_id": "3939fbe0-3be4-41ef-828d-c93f2cb33b4f",
+   "oracle_text": "Suspend 3—{2}{B}{B}\nEach player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Sorcery"
+  },
+  "Lotus Bloom": {
+   "collector_number": "270",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Lotus Bloom",
+   "object": "card",
+   "oracle_id": "04cf02dc-f053-414e-87d8-1537f25bcbf4",
+   "oracle_text": "Suspend 3—{0} (Rather than cast this card from your hand, pay {0} and exile it with three time counters on it. At the beginning of your upkeep, remove a time counter. When the last is removed, you may cast it without paying its mana cost.)\n{T}, Sacrifice this artifact: Add three mana of any one color.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Lumbering Falls": {
+   "collector_number": "247",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Lumbering Falls",
+   "object": "card",
+   "oracle_id": "c2878f4e-3044-4d60-8ec1-b325edfca397",
+   "oracle_text": "This land enters tapped.\n{T}: Add {G} or {U}.\n{2}{G}{U}: Until end of turn, this land becomes a 3/3 green and blue Elemental creature with hexproof. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-07-23",
+   "set": "afc",
+   "set_name": "Forgotten Realms Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Maelstrom Muse": {
+   "collector_number": "202",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [
+    "R",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{1}{U}{U/R}{R}",
+   "name": "Maelstrom Muse",
+   "object": "card",
+   "oracle_id": "30b03dda-409f-4615-b392-477d66eb49f4",
+   "oracle_text": "Flying\nWhenever this creature attacks, the next instant or sorcery spell you cast this turn costs {X} less to cast, where X is this creature's power as this ability resolves.",
+   "power": "2",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-04-23",
+   "set": "stx",
+   "set_name": "Strixhaven: School of Mages",
+   "set_type": "expansion",
+   "toughness": "4",
+   "type_line": "Creature — Djinn Wizard"
+  },
+  "Mage Slayer": {
+   "collector_number": "140",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "colors": [
+    "G",
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Equip"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{1}{R}{G}",
+   "name": "Mage Slayer",
+   "object": "card",
+   "oracle_id": "db444262-c40f-4c80-9d14-265c32f77cf1",
+   "oracle_text": "Whenever equipped creature attacks, it deals damage equal to its power to the player or planeswalker it's attacking.\nEquip {3}",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-02-18",
+   "set": "nec",
+   "set_name": "Neon Dynasty Commander",
+   "set_type": "commander",
+   "type_line": "Artifact — Equipment"
+  },
+  "Mana Confluence": {
+   "collector_number": "163",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Mana Confluence",
+   "object": "card",
+   "oracle_id": "d0ee5bdc-2b69-4b73-9a20-ffcc18783b29",
+   "oracle_text": "{T}, Pay 1 life: Add one mana of any color.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2014-05-02",
+   "set": "jou",
+   "set_name": "Journey into Nyx",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Mardu Charm": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Mardu Charm",
+     "object": "related_card",
+     "type_line": "Instant",
+     "uri": "https://api.scryfall.com/cards/c35fb7a3-7c7f-4470-b1ad-5b8709a608e6"
+    },
+    {
+     "component": "token",
+     "name": "Warrior",
+     "object": "related_card",
+     "type_line": "Token Creature — Warrior",
+     "uri": "https://api.scryfall.com/cards/af4c9101-85bf-4a4f-a496-ff6db7b531b7"
+    }
+   ],
+   "collector_number": "186",
+   "color_identity": [
+    "B",
+    "R",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R}{W}{B}",
+   "name": "Mardu Charm",
+   "object": "card",
+   "oracle_id": "147eabab-9d93-4cf4-811b-0efa3b84c5b5",
+   "oracle_text": "Choose one —\n• Mardu Charm deals 4 damage to target creature.\n• Create two 1/1 white Warrior creature tokens. They gain first strike until end of turn.\n• Target opponent reveals their hand. You choose a noncreature, nonland card from it. That player discards that card.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2014-09-26",
+   "set": "ktk",
+   "set_name": "Khans of Tarkir",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Marsh Flats": {
+   "collector_number": "248",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Marsh Flats",
+   "object": "card",
+   "oracle_id": "dab520d0-20b4-4273-ba6b-eb07f85ea433",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Plains or Swamp card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Maze's End": {
+   "collector_number": "727",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Maze's End",
+   "object": "card",
+   "oracle_id": "49479778-c4c0-43ba-a7b7-45f00d067462",
+   "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{3}, {T}, Return this land to its owner's hand: Search your library for a Gate card, put it onto the battlefield, then shuffle. If you control ten or more Gates with different names, you win the game.",
+   "promo": false,
+   "promo_types": [
+    "startercollection"
+   ],
+   "rarity": "mythic",
+   "released_at": "2024-11-15",
+   "set": "fdn",
+   "set_name": "Foundations",
+   "set_type": "core",
+   "type_line": "Land"
+  },
+  "Messenger Falcons": {
+   "collector_number": "145",
+   "color_identity": [
+    "G",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "U",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2}{G/U}{W}",
+   "name": "Messenger Falcons",
+   "object": "card",
+   "oracle_id": "01fda82a-227d-4e3d-8481-a13c3812392a",
+   "oracle_text": "Flying\nWhen this creature enters, draw a card.",
+   "power": "2",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2009-04-30",
+   "set": "arb",
+   "set_name": "Alara Reborn",
+   "set_type": "expansion",
+   "toughness": "2",
+   "type_line": "Creature — Bird"
+  },
+  "Misty Rainforest": {
+   "collector_number": "250",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Misty Rainforest",
+   "object": "card",
+   "oracle_id": "09dd85aa-47bc-4713-a9b9-8b52ff2285ed",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Mox Emerald": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Mox Emerald",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/aced2c55-7543-4076-bcdd-36c4d649b8ae"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Emerald Collector",
+     "object": "related_card",
+     "type_line": "Creature — Human Pirate",
+     "uri": "https://api.scryfall.com/cards/b40cf462-b866-4582-bd59-9e61a7e8b19b"
+    }
+   ],
+   "collector_number": "5",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Mox Emerald",
+   "object": "card",
+   "oracle_id": "376ee366-e082-402f-b4db-6592fcfcacd2",
+   "oracle_text": "{T}: Add {G}.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Mox Jet": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Mox Jet",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/5f6927e1-c580-483a-8e2a-6e2deb74800e"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Jet Collector",
+     "object": "related_card",
+     "type_line": "Creature — Merfolk Scout",
+     "uri": "https://api.scryfall.com/cards/dede6c59-f129-49c7-8df6-6bca00777c17"
+    }
+   ],
+   "collector_number": "6",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Mox Jet",
+   "object": "card",
+   "oracle_id": "0677f49e-f8bf-4349-af52-2ccde9287c2e",
+   "oracle_text": "{T}: Add {B}.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Mox Pearl": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Mox Pearl",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/ed0216a0-c5c9-4a99-b869-53e4d0256326"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Pearl Collector",
+     "object": "related_card",
+     "type_line": "Creature — Human Warlock",
+     "uri": "https://api.scryfall.com/cards/109a8321-e00b-495f-94c9-5f7415166d5b"
+    }
+   ],
+   "collector_number": "7",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Mox Pearl",
+   "object": "card",
+   "oracle_id": "824597b8-c89a-47ec-8526-7efc6e24ef0e",
+   "oracle_text": "{T}: Add {W}.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Mox Ruby": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Ruby Collector",
+     "object": "related_card",
+     "type_line": "Creature — Human Detective",
+     "uri": "https://api.scryfall.com/cards/1499a185-71f0-4d4a-9942-e7fded6f8886"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Mox Ruby",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/45fd6e91-df76-497f-b642-33dc3d5f6a5a"
+    }
+   ],
+   "collector_number": "8",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Mox Ruby",
+   "object": "card",
+   "oracle_id": "ed85fa82-e4fa-434b-92a8-36b6075708d1",
+   "oracle_text": "{T}: Add {R}.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Mox Sapphire": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Sapphire Collector",
+     "object": "related_card",
+     "type_line": "Creature — Human Mercenary",
+     "uri": "https://api.scryfall.com/cards/908b6257-be6d-4141-8e75-9edeed4f3f17"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Mox Sapphire",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/ea1feac0-d3a7-45eb-9719-1cdaf51ea0b6"
+    }
+   ],
+   "collector_number": "9",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Mox Sapphire",
+   "object": "card",
+   "oracle_id": "d5ed1233-df87-4b90-8918-13922ec95249",
+   "oracle_text": "{T}: Add {U}.",
+   "promo": false,
+   "rarity": "bonus",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Murmuring Bosk": {
+   "collector_number": "220",
+   "color_identity": [
+    "B",
+    "G",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Murmuring Bosk",
+   "object": "card",
+   "oracle_id": "42b9d383-3fe2-4fc8-ab86-f80a288d502b",
+   "oracle_text": "({T}: Add {G}.)\nAs this land enters, you may reveal a Treefolk card from your hand. If you don't, this land enters tapped.\n{T}: Add {W} or {B}. This land deals 1 damage to you.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Land — Forest"
+  },
+  "Myriad Landscape": {
+   "collector_number": "169",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Myriad Landscape",
+   "object": "card",
+   "oracle_id": "2549bc57-9ffb-4053-9f10-f2a5f792b845",
+   "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Search your library for up to two basic land cards that share a land type, put them onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2025-08-01",
+   "set": "eoc",
+   "set_name": "Edge of Eternities Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Mystic Monastery": {
+   "collector_number": "543",
+   "color_identity": [
+    "R",
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Mystic Monastery",
+   "object": "card",
+   "oracle_id": "834b8f71-9a45-42ae-9e99-e749fa6fb45e",
+   "oracle_text": "This land enters tapped.\n{T}: Add {U}, {R}, or {W}.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Mystic Sanctuary": {
+   "collector_number": "388",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Mystic Sanctuary",
+   "object": "card",
+   "oracle_id": "17b60106-a4c7-410a-8ac3-ec8e74e29a7c",
+   "oracle_text": "({T}: Add {U}.)\nThis land enters tapped unless you control three or more other Islands.\nWhen this land enters untapped, you may put target instant or sorcery card from your graveyard on top of your library.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2026-04-24",
+   "set": "soc",
+   "set_name": "Secrets of Strixhaven Commander",
+   "set_type": "commander",
+   "type_line": "Land — Island"
+  },
+  "Naya Charm": {
+   "collector_number": "162",
+   "color_identity": [
+    "G",
+    "R",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R}{G}{W}",
+   "name": "Naya Charm",
+   "object": "card",
+   "oracle_id": "20cc0f3e-de69-4e5f-88b3-ae7e6c6b5996",
+   "oracle_text": "Choose one —\n• Naya Charm deals 3 damage to target creature.\n• Return target card from a graveyard to its owner's hand.\n• Tap all creatures target player controls.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Naya Panorama": {
+   "collector_number": "417",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Naya Panorama",
+   "object": "card",
+   "oracle_id": "71e28800-c42c-48c0-95e5-0296be54a4e8",
+   "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic Mountain, Forest, or Plains card, put it onto the battlefield tapped, then shuffle.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Needle Spires": {
+   "collector_number": "278",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Needle Spires",
+   "object": "card",
+   "oracle_id": "e7bb8160-0a4b-4e46-b196-7a19fb388d8e",
+   "oracle_text": "This land enters tapped.\n{T}: Add {R} or {W}.\n{2}{R}{W}: Until end of turn, this land becomes a 2/1 red and white Elemental creature with double strike. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-02-09",
+   "set": "mkc",
+   "set_name": "Murders at Karlov Manor Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Nobilis of War": {
+   "collector_number": "195",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "colors": [
+    "R",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{R/W}{R/W}{R/W}{R/W}{R/W}",
+   "name": "Nobilis of War",
+   "object": "card",
+   "oracle_id": "4789ac35-ca91-4046-8262-24c34e751cea",
+   "oracle_text": "Flying\nAttacking creatures you control get +2/+0.",
+   "power": "3",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2015-05-22",
+   "set": "mm2",
+   "set_name": "Modern Masters 2015",
+   "set_type": "masters",
+   "toughness": "4",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Nomad Outpost": {
+   "collector_number": "544",
+   "color_identity": [
+    "B",
+    "R",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Nomad Outpost",
+   "object": "card",
+   "oracle_id": "4619de7e-3d6e-4c6b-8e6e-e24db324839d",
+   "oracle_text": "This land enters tapped.\n{T}: Add {R}, {W}, or {B}.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Nylea, God of the Hunt": {
+   "collector_number": "166",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2003",
+   "frame_effects": [
+    "enchantment"
+   ],
+   "keywords": [
+    "Indestructible"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{3}{G}",
+   "name": "Nylea, God of the Hunt",
+   "object": "card",
+   "oracle_id": "43674fdf-496f-42dc-8a0a-5c42a7c7d910",
+   "oracle_text": "Indestructible\nAs long as your devotion to green is less than five, Nylea isn't a creature. (Each {G} in the mana costs of permanents you control counts toward your devotion to green.)\nOther creatures you control have trample.\n{3}{G}: Target creature gets +2/+2 until end of turn.",
+   "power": "6",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2013-09-27",
+   "set": "ths",
+   "set_name": "Theros",
+   "set_type": "expansion",
+   "toughness": "6",
+   "type_line": "Legendary Enchantment Creature — God"
+  },
+  "Opulent Palace": {
+   "collector_number": "157",
+   "color_identity": [
+    "B",
+    "G",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Opulent Palace",
+   "object": "card",
+   "oracle_id": "f9e7e855-1e3b-42d3-91b0-64ba8b5b8982",
+   "oracle_text": "This land enters tapped.\n{T}: Add {B}, {G}, or {U}.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2026-01-23",
+   "set": "ecc",
+   "set_name": "Lorwyn Eclipsed Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Orzhov Charm": {
+   "collector_number": "185",
+   "color_identity": [
+    "B",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W}{B}",
+   "name": "Orzhov Charm",
+   "object": "card",
+   "oracle_id": "26f8626a-ce64-450c-bda5-833df2fbb4fb",
+   "oracle_text": "Choose one —\n• Return target creature you control and all Auras you control attached to it to their owner's hand.\n• Destroy target creature and you lose life equal to its toughness.\n• Return target creature card with mana value 1 or less from your graveyard to the battlefield.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2013-02-01",
+   "set": "gtc",
+   "set_name": "Gatecrash",
+   "set_type": "expansion",
+   "type_line": "Instant"
+  },
+  "Overbeing of Myth": {
+   "collector_number": "157",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [
+    "G",
+    "U"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G/U}{G/U}{G/U}{G/U}{G/U}",
+   "name": "Overbeing of Myth",
+   "object": "card",
+   "oracle_id": "5391f601-b778-413f-a31f-9f8b23b40f5c",
+   "oracle_text": "Overbeing of Myth's power and toughness are each equal to the number of cards in your hand.\nAt the beginning of your draw step, draw an additional card.",
+   "power": "*",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-07-25",
+   "set": "eve",
+   "set_name": "Eventide",
+   "set_type": "expansion",
+   "toughness": "*",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Overgrown Tomb": {
+   "collector_number": "289",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Overgrown Tomb",
+   "object": "card",
+   "oracle_id": "975ec9a3-6f20-4177-8211-82526e092538",
+   "oracle_text": "({T}: Add {B} or {G}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Swamp Forest"
+  },
+  "Oversoul of Dusk": {
+   "collector_number": "234",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [
+    "Protection"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G/W}{G/W}{G/W}{G/W}{G/W}",
+   "name": "Oversoul of Dusk",
+   "object": "card",
+   "oracle_id": "da790c72-63e7-4955-9435-d073767f9bb5",
+   "oracle_text": "Protection from blue, from black, and from red",
+   "power": "5",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "toughness": "5",
+   "type_line": "Creature — Spirit Avatar"
+  },
+  "Pact of Negation": {
+   "collector_number": "77",
+   "color_identity": [
+    "U"
+   ],
+   "color_indicator": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Pact of Negation",
+   "object": "card",
+   "oracle_id": "f3e213a4-ba5a-468a-93b3-c0a34e1bd725",
+   "oracle_text": "Counter target spell.\nAt the beginning of your next upkeep, pay {3}{U}{U}. If you don't, you lose the game.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Pact of the Titan": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Pact of the Titan",
+     "object": "related_card",
+     "type_line": "Instant",
+     "uri": "https://api.scryfall.com/cards/4612effe-8ca2-4c27-90d2-d9255acc80d9"
+    },
+    {
+     "component": "token",
+     "name": "Giant",
+     "object": "related_card",
+     "type_line": "Token Creature — Giant",
+     "uri": "https://api.scryfall.com/cards/0197284c-3c17-438b-a46d-83131d56c768"
+    }
+   ],
+   "collector_number": "179",
+   "color_identity": [
+    "R"
+   ],
+   "color_indicator": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Pact of the Titan",
+   "object": "card",
+   "oracle_id": "cf4959bf-92ae-4c9b-b631-724ce100cbb8",
+   "oracle_text": "Create a 4/4 red Giant creature token.\nAt the beginning of your next upkeep, pay {4}{R}. If you don't, you lose the game.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Polluted Delta": {
+   "collector_number": "224",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Polluted Delta",
+   "object": "card",
+   "oracle_id": "ef86989d-ce80-4e55-aece-7d11710eeffa",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for an Island or Swamp card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-06-14",
+   "set": "mh3",
+   "set_name": "Modern Horizons 3",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Prismatic Vista": {
+   "collector_number": "244",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Prismatic Vista",
+   "object": "card",
+   "oracle_id": "032b8a0d-491a-4a12-ab9f-689010054d5b",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2019-06-14",
+   "set": "mh1",
+   "set_name": "Modern Horizons",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Purphoros, God of the Forge [THS]": {
+   "collector_number": "135",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2003",
+   "frame_effects": [
+    "enchantment"
+   ],
+   "keywords": [
+    "Indestructible"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{3}{R}",
+   "name": "Purphoros, God of the Forge",
+   "object": "card",
+   "oracle_id": "4fdbbec2-e921-4b63-958d-f9ba1e417197",
+   "oracle_text": "Indestructible\nAs long as your devotion to red is less than five, Purphoros isn't a creature.\nWhenever another creature you control enters, Purphoros deals 2 damage to each opponent.\n{2}{R}: Creatures you control get +1/+0 until end of turn.",
+   "power": "6",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2013-09-27",
+   "set": "ths",
+   "set_name": "Theros",
+   "set_type": "expansion",
+   "toughness": "5",
+   "type_line": "Legendary Enchantment Creature — God"
+  },
+  "Raging Ravine": {
+   "collector_number": "160",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Raging Ravine",
+   "object": "card",
+   "oracle_id": "8d38194e-b607-4ff4-9c19-0e8636d463bf",
+   "oracle_text": "This land enters tapped.\n{T}: Add {R} or {G}.\n{2}{R}{G}: Until end of turn, this land becomes a 3/3 red and green Elemental creature with \"Whenever this creature attacks, put a +1/+1 counter on it.\" It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2026-01-23",
+   "set": "ecc",
+   "set_name": "Lorwyn Eclipsed Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Rakdos Charm": {
+   "collector_number": "125",
+   "color_identity": [
+    "B",
+    "R"
+   ],
+   "colors": [
+    "B",
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}{R}",
+   "name": "Rakdos Charm",
+   "object": "card",
+   "oracle_id": "5e62b51d-faec-4aa0-9504-cf2c282d08ea",
+   "oracle_text": "Choose one —\n• Exile target player's graveyard.\n• Destroy target artifact.\n• Each creature deals 1 damage to its controller.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2025-08-01",
+   "set": "eoc",
+   "set_name": "Edge of Eternities Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Ravager of the Fells": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Dark Ascension Checklist",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/825c61e7-bf33-45ea-af78-97ab3bc96753"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Huntmaster of the Fells // Ravager of the Fells",
+     "object": "related_card",
+     "type_line": "Creature — Human Werewolf // Creature — Werewolf",
+     "uri": "https://api.scryfall.com/cards/2ec38d40-3f96-46d4-a0ec-0b98aa622ebc"
+    },
+    {
+     "component": "token",
+     "name": "Wolf",
+     "object": "related_card",
+     "type_line": "Token Creature — Wolf",
+     "uri": "https://api.scryfall.com/cards/89b89a55-3ea2-4186-b946-06831bc16169"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "G",
+      "R"
+     ],
+     "mana_cost": "{2}{R}{G}",
+     "name": "Huntmaster of the Fells",
+     "object": "card_face",
+     "oracle_text": "Whenever this creature enters or transforms into Huntmaster of the Fells, create a 2/2 green Wolf creature token and you gain 2 life.\nAt the beginning of each upkeep, if no spells were cast last turn, transform this creature.",
+     "power": "2",
+     "toughness": "2",
+     "type_line": "Creature — Human Werewolf"
+    },
+    {
+     "color_indicator": [
+      "G",
+      "R"
+     ],
+     "colors": [
+      "G",
+      "R"
+     ],
+     "mana_cost": "",
+     "name": "Ravager of the Fells",
+     "object": "card_face",
+     "oracle_text": "Trample\nWhenever this creature transforms into Ravager of the Fells, it deals 2 damage to target opponent or planeswalker and 2 damage to up to one target creature that player or that planeswalker's controller controls.\nAt the beginning of each upkeep, if a player cast two or more spells last turn, transform this creature.",
+     "power": "4",
+     "toughness": "4",
+     "type_line": "Creature — Werewolf"
+    }
+   ],
+   "collector_number": "241",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Transform",
+    "Trample"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Huntmaster of the Fells // Ravager of the Fells",
+   "object": "card",
+   "oracle_id": "582328cd-660d-47a4-bb23-e91e80b9a907",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2025-01-24",
+   "set": "inr",
+   "set_name": "Innistrad Remastered",
+   "set_type": "masters",
+   "type_line": "Creature — Human Werewolf // Creature — Werewolf"
+  },
+  "Reaper King": {
+   "collector_number": "260",
+   "color_identity": [
+    "B",
+    "G",
+    "R",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "G",
+    "R",
+    "U",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/W}{2/U}{2/B}{2/R}{2/G}",
+   "name": "Reaper King",
+   "object": "card",
+   "oracle_id": "70034860-5198-421f-871d-7c1676337b6e",
+   "oracle_text": "({2/W} can be paid with any two mana or with {W}. This card's mana value is 10.)\nOther Scarecrow creatures you control get +1/+1.\nWhenever another Scarecrow you control enters, destroy target permanent.",
+   "power": "6",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "toughness": "6",
+   "type_line": "Legendary Artifact Creature — Scarecrow"
+  },
+  "Restore Balance": {
+   "collector_number": "36",
+   "color_identity": [
+    "W"
+   ],
+   "color_indicator": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Restore Balance",
+   "object": "card",
+   "oracle_id": "ca79d130-6387-47b0-bde8-f45dd93f9221",
+   "oracle_text": "Suspend 6—{W}\nEach player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest, then sacrifices the rest. Players sacrifice creatures and discard cards the same way.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Sorcery"
+  },
+  "Sacred Foundry": {
+   "collector_number": "295",
+   "color_identity": [
+    "R",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Sacred Foundry",
+   "object": "card",
+   "oracle_id": "45181cb8-2090-4471-ba90-e5a8f04d525f",
+   "oracle_text": "({T}: Add {R} or {W}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Mountain Plains"
+  },
+  "Sandsteppe Citadel": {
+   "collector_number": "164",
+   "color_identity": [
+    "B",
+    "G",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Sandsteppe Citadel",
+   "object": "card",
+   "oracle_id": "544dbabd-cbfc-40da-a5ba-2fea9cddb453",
+   "oracle_text": "This land enters tapped.\n{T}: Add {W}, {B}, or {G}.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2026-01-23",
+   "set": "ecc",
+   "set_name": "Lorwyn Eclipsed Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Savage Lands": {
+   "collector_number": "827",
+   "color_identity": [
+    "B",
+    "G",
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Savage Lands",
+   "object": "card",
+   "oracle_id": "a3292406-3f49-42d6-a547-e43dd5797f84",
+   "oracle_text": "This land enters tapped.\n{T}: Add {B}, {R}, or {G}.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-06-26",
+   "set": "msc",
+   "set_name": "Marvel Super Heroes Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Scalding Tarn": {
+   "collector_number": "254",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Scalding Tarn",
+   "object": "card",
+   "oracle_id": "cb027150-848c-4a66-88ad-e20222304dd8",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for an Island or Mountain card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Scion of Ugin": {
+   "collector_number": "1",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Flying"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{6}",
+   "name": "Scion of Ugin",
+   "object": "card",
+   "oracle_id": "7422f43d-0c1e-42cb-864d-1c63f2ec533a",
+   "oracle_text": "Flying",
+   "power": "4",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2017-11-17",
+   "set": "ima",
+   "set_name": "Iconic Masters",
+   "set_type": "masters",
+   "toughness": "4",
+   "type_line": "Creature — Dragon Spirit"
+  },
+  "Search for Blex": {
+   "card_faces": [
+    {
+     "colors": [
+      "G"
+     ],
+     "mana_cost": "{2}{G}",
+     "name": "Blex, Vexing Pest",
+     "object": "card_face",
+     "oracle_text": "Other Pests, Bats, Insects, Snakes, and Spiders you control get +1/+1.\nWhen Blex dies, you gain 4 life.",
+     "power": "3",
+     "toughness": "2",
+     "type_line": "Legendary Creature — Pest"
+    },
+    {
+     "colors": [
+      "B"
+     ],
+     "mana_cost": "{2}{B}{B}",
+     "name": "Search for Blex",
+     "object": "card_face",
+     "oracle_text": "Look at the top five cards of your library. You may put any number of them into your hand and the rest into your graveyard. You lose 3 life for each card you put into your hand this way.",
+     "type_line": "Sorcery"
+    }
+   ],
+   "collector_number": "148",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Blex, Vexing Pest // Search for Blex",
+   "object": "card",
+   "oracle_id": "b2c53124-e422-4786-8135-67c350d71a36",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-04-23",
+   "set": "stx",
+   "set_name": "Strixhaven: School of Mages",
+   "set_type": "expansion",
+   "type_line": "Legendary Creature — Pest // Sorcery"
+  },
+  "Seaside Citadel": {
+   "collector_number": "556",
+   "color_identity": [
+    "G",
+    "U",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Seaside Citadel",
+   "object": "card",
+   "oracle_id": "2ae77795-6a80-498b-bf69-6fd612f601e4",
+   "oracle_text": "This land enters tapped.\n{T}: Add {G}, {W}, or {U}.",
+   "promo": false,
+   "promo_types": [
+    "surgefoil",
+    "universesbeyond"
+   ],
+   "rarity": "uncommon",
+   "released_at": "2026-11-13",
+   "set": "trc",
+   "set_name": "Star Trek Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Selesnya Charm": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Knight",
+     "object": "related_card",
+     "type_line": "Token Creature — Knight",
+     "uri": "https://api.scryfall.com/cards/0c25c035-9fae-491d-aff6-db8f987952e5"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Selesnya Charm",
+     "object": "related_card",
+     "type_line": "Instant",
+     "uri": "https://api.scryfall.com/cards/6e52d1a2-064f-4dcb-983d-322aec1776f8"
+    }
+   ],
+   "collector_number": "192",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [
+    "G",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G}{W}",
+   "name": "Selesnya Charm",
+   "object": "card",
+   "oracle_id": "a1a49639-bcc4-4522-8862-c9fb13d40880",
+   "oracle_text": "Choose one —\n• Target creature gets +2/+2 and gains trample until end of turn.\n• Exile target creature with power 5 or greater.\n• Create a 2/2 white Knight creature token with vigilance.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2017-06-09",
+   "set": "cma",
+   "set_name": "Commander Anthology",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Serra's Sanctum": {
+   "collector_number": "325",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "1997",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Serra's Sanctum",
+   "object": "card",
+   "oracle_id": "34187c71-6033-4058-aadc-2bc266f762be",
+   "oracle_text": "{T}: Add {W} for each enchantment you control.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "1998-10-12",
+   "set": "usg",
+   "set_name": "Urza's Saga",
+   "set_type": "expansion",
+   "type_line": "Legendary Land"
+  },
+  "Shambling Vent": {
+   "collector_number": "914",
+   "color_identity": [
+    "B",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Shambling Vent",
+   "object": "card",
+   "oracle_id": "4725abd4-06bc-464a-bc5b-c9e0f71ec079",
+   "oracle_text": "This land enters tapped.\n{T}: Add {W} or {B}.\n{1}{W}{B}: Until end of turn, this land becomes a 2/3 white and black Elemental creature with lifelink. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-06-10",
+   "set": "clb",
+   "set_name": "Commander Legends: Battle for Baldur's Gate",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Shardless Agent": {
+   "collector_number": "292",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Cascade"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{1}{G}{U}",
+   "name": "Shardless Agent",
+   "object": "card",
+   "oracle_id": "2afbaa9a-c171-4a8b-90f3-5250d8498356",
+   "oracle_text": "Cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)",
+   "power": "2",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "toughness": "2",
+   "type_line": "Artifact Creature — Human Rogue"
+  },
+  "Simic Charm": {
+   "collector_number": "451",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G}{U}",
+   "name": "Simic Charm",
+   "object": "card",
+   "oracle_id": "c767aa2e-0a95-401f-8e36-d90a87648eab",
+   "oracle_text": "Choose one —\n• Target creature gets +3/+3 until end of turn.\n• Permanents you control gain hexproof until end of turn.\n• Return target creature to its owner's hand.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2020-11-20",
+   "set": "cmr",
+   "set_name": "Commander Legends",
+   "set_type": "draft_innovation",
+   "type_line": "Instant"
+  },
+  "Skemfar Elderhall": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Skemfar Elderhall",
+     "object": "related_card",
+     "type_line": "Land",
+     "uri": "https://api.scryfall.com/cards/82c2a0f7-0f53-4627-8be8-227fde331a69"
+    },
+    {
+     "component": "token",
+     "name": "Elf Warrior",
+     "object": "related_card",
+     "type_line": "Token Creature — Elf Warrior",
+     "uri": "https://api.scryfall.com/cards/118d0655-5719-4512-8bc1-fe759669811b"
+    }
+   ],
+   "collector_number": "268",
+   "color_identity": [
+    "B",
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Skemfar Elderhall",
+   "object": "card",
+   "oracle_id": "70965b80-c8ad-4718-ae20-12a4d8228898",
+   "oracle_text": "This land enters tapped.\n{T}: Add {G}.\n{2}{B}{B}{G}, {T}, Sacrifice this land: Up to one target creature you don't control gets -2/-2 until end of turn. Create two 1/1 green Elf Warrior creature tokens. Activate only as a sorcery.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-02-05",
+   "set": "khm",
+   "set_name": "Kaldheim",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Slaughter Pact": {
+   "collector_number": "138",
+   "color_identity": [
+    "B"
+   ],
+   "color_indicator": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Slaughter Pact",
+   "object": "card",
+   "oracle_id": "67c4b1d5-757c-46cf-8bb1-9889d9ed1a1f",
+   "oracle_text": "Destroy target nonblack creature.\nAt the beginning of your next upkeep, pay {2}{B}. If you don't, you lose the game.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Spectral Procession": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Spectral Procession",
+     "object": "related_card",
+     "type_line": "Sorcery",
+     "uri": "https://api.scryfall.com/cards/9964629e-d79e-46e4-b3fd-e7d1759cbc60"
+    },
+    {
+     "component": "token",
+     "name": "Spirit",
+     "object": "related_card",
+     "type_line": "Token Creature — Spirit",
+     "uri": "https://api.scryfall.com/cards/0000a54c-a511-4925-92dc-01b937f9afad"
+    }
+   ],
+   "collector_number": "33",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/W}{2/W}{2/W}",
+   "name": "Spectral Procession",
+   "object": "card",
+   "oracle_id": "376271a6-80f0-47a6-990a-5ec5517aae42",
+   "oracle_text": "Create three 1/1 white Spirit creature tokens with flying.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2015-05-22",
+   "set": "mm2",
+   "set_name": "Modern Masters 2015",
+   "set_type": "masters",
+   "type_line": "Sorcery"
+  },
+  "Sphinx of the Guildpact": {
+   "collector_number": "290",
+   "color_identity": [
+    "B",
+    "G",
+    "R",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "G",
+    "R",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying",
+    "Hexproof from",
+    "Hexproof"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{7}",
+   "name": "Sphinx of the Guildpact",
+   "object": "card",
+   "oracle_id": "5b410473-1df9-4d16-9b4d-c3ca8e4635b7",
+   "oracle_text": "Sphinx of the Guildpact is all colors.\nFlying\nHexproof from monocolored (This creature can't be the target of monocolored spells or abilities your opponents control.)",
+   "power": "5",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2020-08-07",
+   "set": "2xm",
+   "set_name": "Double Masters",
+   "set_type": "masters",
+   "toughness": "5",
+   "type_line": "Artifact Creature — Sphinx"
+  },
+  "Sphinx of the Steel Wind": {
+   "collector_number": "207",
+   "color_identity": [
+    "B",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Flying",
+    "Lifelink",
+    "Vigilance",
+    "First strike",
+    "Protection"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{5}{W}{U}{B}",
+   "name": "Sphinx of the Steel Wind",
+   "object": "card",
+   "oracle_id": "1c96772b-463c-4655-836b-cf6e9dc6319f",
+   "oracle_text": "Flying, first strike, vigilance, lifelink, protection from red and from green",
+   "power": "6",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2016-06-10",
+   "set": "ema",
+   "set_name": "Eternal Masters",
+   "set_type": "masters",
+   "toughness": "6",
+   "type_line": "Artifact Creature — Sphinx"
+  },
+  "Steam Vents": {
+   "collector_number": "298",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Steam Vents",
+   "object": "card",
+   "oracle_id": "17039058-822d-409f-938c-b727a366ba63",
+   "oracle_text": "({T}: Add {U} or {R}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Island Mountain"
+  },
+  "Stirring Wildwood": {
+   "collector_number": "251",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Stirring Wildwood",
+   "object": "card",
+   "oracle_id": "e900f211-dc8b-40f7-a217-1b1462b15c26",
+   "oracle_text": "This land enters tapped.\n{T}: Add {G} or {W}.\n{1}{G}{W}: Until end of turn, this land becomes a 3/4 green and white Elemental creature with reach. It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2018-12-07",
+   "set": "uma",
+   "set_name": "Ultimate Masters",
+   "set_type": "masters",
+   "type_line": "Land"
+  },
+  "Stomping Ground": {
+   "collector_number": "299",
+   "color_identity": [
+    "G",
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Stomping Ground",
+   "object": "card",
+   "oracle_id": "16052b52-ade1-406f-a06b-ce7ea607fb63",
+   "oracle_text": "({T}: Add {R} or {G}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Mountain Forest"
+  },
+  "Sultai Charm": {
+   "collector_number": "168",
+   "color_identity": [
+    "B",
+    "G",
+    "U"
+   ],
+   "colors": [
+    "B",
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{B}{G}{U}",
+   "name": "Sultai Charm",
+   "object": "card",
+   "oracle_id": "46ed38d1-e642-4cea-99ed-a9c17fd982b1",
+   "oracle_text": "Choose one —\n• Destroy target monocolored creature.\n• Destroy target artifact or enchantment.\n• Draw two cards, then discard a card.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Summoner's Pact": {
+   "collector_number": "234",
+   "color_identity": [
+    "G"
+   ],
+   "color_indicator": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{0}",
+   "name": "Summoner's Pact",
+   "object": "card",
+   "oracle_id": "782dcbc4-5a11-42f5-b8d9-4572e36d45b3",
+   "oracle_text": "Search your library for a green creature card, reveal it, put it into your hand, then shuffle.\nAt the beginning of your next upkeep, pay {2}{G}{G}. If you don't, you lose the game.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Instant"
+  },
+  "Surtland Frostpyre": {
+   "collector_number": "271",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [
+    "Scry"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Surtland Frostpyre",
+   "object": "card",
+   "oracle_id": "965aa666-3919-4053-8584-b773bdd54f0b",
+   "oracle_text": "This land enters tapped.\n{T}: Add {R}.\n{2}{U}{U}{R}, {T}, Sacrifice this land: Scry 2. This land deals 2 damage to each creature. Activate only as a sorcery.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2021-02-05",
+   "set": "khm",
+   "set_name": "Kaldheim",
+   "set_type": "expansion",
+   "type_line": "Land"
+  },
+  "Tainted Sigil": {
+   "collector_number": "83",
+   "color_identity": [
+    "B",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "W"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{1}{W}{B}",
+   "name": "Tainted Sigil",
+   "object": "card",
+   "oracle_id": "f39fd4bd-3157-42da-9a39-94e094b5f681",
+   "oracle_text": "{T}, Sacrifice this artifact: You gain life equal to the total life lost by all players this turn. (Damage causes loss of life.)",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2009-04-30",
+   "set": "arb",
+   "set_name": "Alara Reborn",
+   "set_type": "expansion",
+   "type_line": "Artifact"
+  },
+  "Tamiyo, Compleated Sage": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Tamiyo, Compleated Sage",
+     "object": "related_card",
+     "type_line": "Legendary Planeswalker — Tamiyo",
+     "uri": "https://api.scryfall.com/cards/5898a9c4-c983-4807-af06-18111702ab59"
+    },
+    {
+     "component": "token",
+     "name": "Copy",
+     "object": "related_card",
+     "type_line": "Token",
+     "uri": "https://api.scryfall.com/cards/2115c141-f2fb-4bfd-a8b5-2943bad9f418"
+    },
+    {
+     "component": "token",
+     "name": "Tamiyo's Notebook",
+     "object": "related_card",
+     "type_line": "Token Legendary Artifact",
+     "uri": "https://api.scryfall.com/cards/992cb1e0-e846-4710-b49e-a748e4ebffa5"
+    }
+   ],
+   "collector_number": "238",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "colors": [
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Compleated"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "loyalty": "5",
+   "mana_cost": "{2}{G}{G/U/P}{U}",
+   "name": "Tamiyo, Compleated Sage",
+   "object": "card",
+   "oracle_id": "021b4745-4a15-462c-a6b0-2dee1dc9d196",
+   "oracle_text": "Compleated ({G/U/P} can be paid with {G}, {U}, or 2 life. If life was paid, this planeswalker enters with two fewer loyalty counters.)\n+1: Tap up to one target artifact or creature. It doesn't untap during its controller's next untap step.\n−X: Exile target nonland permanent card with mana value X from your graveyard. Create a token that's a copy of that card.\n−7: Create Tamiyo's Notebook, a legendary colorless Book artifact token with \"Spells you cast cost {2} less to cast\" and \"{T}: Draw a card.\"",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2022-02-18",
+   "set": "neo",
+   "set_name": "Kamigawa: Neon Dynasty",
+   "set_type": "expansion",
+   "type_line": "Legendary Planeswalker — Tamiyo"
+  },
+  "Temple Garden": {
+   "collector_number": "301",
+   "color_identity": [
+    "G",
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Temple Garden",
+   "object": "card",
+   "oracle_id": "f413a83d-a40d-434c-b20a-4c707c0527fa",
+   "oracle_text": "({T}: Add {G} or {W}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Forest Plains"
+  },
+  "Temur Charm": {
+   "collector_number": "230",
+   "color_identity": [
+    "G",
+    "R",
+    "U"
+   ],
+   "colors": [
+    "G",
+    "R",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Fight"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{G}{U}{R}",
+   "name": "Temur Charm",
+   "object": "card",
+   "oracle_id": "418bc6c8-972b-4f07-aac0-8d003b9c1b17",
+   "oracle_text": "Choose one —\n• Target creature you control gets +1/+1 until end of turn. It fights target creature you don't control.\n• Counter target spell unless its controller pays {3}.\n• Creatures with power 3 or less can't block this turn.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2020-04-17",
+   "set": "c20",
+   "set_name": "Commander 2020",
+   "set_type": "commander",
+   "type_line": "Instant"
+  },
+  "Thassa, God of the Sea": {
+   "collector_number": "176",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary",
+    "enchantment"
+   ],
+   "keywords": [
+    "Indestructible",
+    "Scry"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2}{U}",
+   "name": "Thassa, God of the Sea",
+   "object": "card",
+   "oracle_id": "69e5df2f-be1f-4608-a90f-3e2f51e2fea4",
+   "oracle_text": "Indestructible\nAs long as your devotion to blue is less than five, Thassa isn't a creature. (Each {U} in the mana costs of permanents you control counts toward your devotion to blue.)\nAt the beginning of your upkeep, scry 1.\n{1}{U}: Target creature you control can't be blocked this turn.",
+   "power": "5",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2023-11-17",
+   "set": "lcc",
+   "set_name": "The Lost Caverns of Ixalan Commander",
+   "set_type": "commander",
+   "toughness": "5",
+   "type_line": "Legendary Enchantment Creature — God"
+  },
+  "The Cauldron of Eternity": {
+   "collector_number": "82",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [
+    "B"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{10}{B}{B}",
+   "name": "The Cauldron of Eternity",
+   "object": "card",
+   "oracle_id": "a7308a1f-ec46-478e-86ea-33b2ebbd995f",
+   "oracle_text": "This spell costs {2} less to cast for each creature card in your graveyard.\nWhenever a creature you control dies, put it on the bottom of its owner's library.\n{2}{B}, {T}, Pay 2 life: Return target creature card from your graveyard to the battlefield. Activate only as a sorcery.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Legendary Artifact"
+  },
+  "The Circle of Loyalty": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Knight",
+     "object": "related_card",
+     "type_line": "Token Creature — Knight",
+     "uri": "https://api.scryfall.com/cards/4bd69d39-c2ce-44b4-b2d0-5e384d69db02"
+    },
+    {
+     "component": "combo_piece",
+     "name": "The Circle of Loyalty",
+     "object": "related_card",
+     "type_line": "Legendary Artifact",
+     "uri": "https://api.scryfall.com/cards/81910ade-a742-4ed7-ab15-bca95850f8b5"
+    }
+   ],
+   "collector_number": "98",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [
+    "W"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [
+    "Affinity"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{4}{W}{W}",
+   "name": "The Circle of Loyalty",
+   "object": "card",
+   "oracle_id": "fd1b4523-2399-4771-89bf-1d65f5d67056",
+   "oracle_text": "Affinity for Knights (This spell costs {1} less to cast for each Knight you control.)\nCreatures you control get +1/+1.\nWhenever you cast a legendary spell, create a 2/2 white Knight creature token with vigilance.\n{3}{W}, {T}: Create a 2/2 white Knight creature token with vigilance.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2022-09-09",
+   "set": "dmc",
+   "set_name": "Dominaria United Commander",
+   "set_type": "commander",
+   "type_line": "Legendary Artifact"
+  },
+  "The Great Henge": {
+   "collector_number": "294",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{7}{G}{G}",
+   "name": "The Great Henge",
+   "object": "card",
+   "oracle_id": "78427103-9543-41fb-b6d4-72963fe87275",
+   "oracle_text": "This spell costs {X} less to cast, where X is the greatest power among creatures you control.\n{T}: Add {G}{G}. You gain 2 life.\nWhenever a nontoken creature you control enters, put a +1/+1 counter on it and draw a card.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2023-08-04",
+   "set": "cmm",
+   "set_name": "Commander Masters",
+   "set_type": "masters",
+   "type_line": "Legendary Artifact"
+  },
+  "The Magic Mirror": {
+   "collector_number": "51",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [
+    "U"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{6}{U}{U}{U}",
+   "name": "The Magic Mirror",
+   "object": "card",
+   "oracle_id": "9acf2701-2ba1-46fa-ad4a-b130a58181d3",
+   "oracle_text": "This spell costs {1} less to cast for each instant and sorcery card in your graveyard.\nYou have no maximum hand size.\nAt the beginning of your upkeep, put a knowledge counter on The Magic Mirror, then draw a card for each knowledge counter on The Magic Mirror.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Legendary Artifact"
+  },
+  "Thopter Foundry": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Thopter Foundry",
+     "object": "related_card",
+     "type_line": "Artifact",
+     "uri": "https://api.scryfall.com/cards/3d8dcd5e-d4d0-49ae-a591-78d80322105d"
+    },
+    {
+     "component": "token",
+     "name": "Thopter",
+     "object": "related_card",
+     "type_line": "Token Artifact Creature — Thopter",
+     "uri": "https://api.scryfall.com/cards/eef8b4fc-238f-4c1f-ad98-a1769fd44eab"
+    }
+   ],
+   "collector_number": "222",
+   "color_identity": [
+    "B",
+    "U",
+    "W"
+   ],
+   "colors": [
+    "B",
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{W/B}{U}",
+   "name": "Thopter Foundry",
+   "object": "card",
+   "oracle_id": "88bef744-550e-4f33-b1ff-a8ee990ec754",
+   "oracle_text": "{1}, Sacrifice a nontoken artifact: Create a 1/1 blue Thopter artifact creature token with flying. You gain 1 life.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2020-08-07",
+   "set": "2xm",
+   "set_name": "Double Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Thran Portal": {
+   "collector_number": "259",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Thran Portal",
+   "object": "card",
+   "oracle_id": "926ce6a2-7bdd-4380-ac65-bc902ba0c284",
+   "oracle_text": "This land enters tapped unless you control two or fewer other lands.\nAs this land enters, choose a basic land type.\nThis land is the chosen type in addition to its other types.\nMana abilities of this land cost an additional 1 life to activate.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-09-09",
+   "set": "dmu",
+   "set_name": "Dominaria United",
+   "set_type": "expansion",
+   "type_line": "Land — Gate"
+  },
+  "Tidechannel Pathway": {
+   "card_faces": [
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Barkchannel Pathway",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {G}.",
+     "type_line": "Land"
+    },
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Tidechannel Pathway",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {U}.",
+     "type_line": "Land"
+    }
+   ],
+   "collector_number": "251",
+   "color_identity": [
+    "G",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "modal_dfc",
+   "name": "Barkchannel Pathway // Tidechannel Pathway",
+   "object": "card",
+   "oracle_id": "59d22de5-e310-44d7-89cf-ef3529e40cef",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-02-05",
+   "set": "khm",
+   "set_name": "Kaldheim",
+   "set_type": "expansion",
+   "type_line": "Land // Land"
+  },
+  "Time Sieve": {
+   "collector_number": "223",
+   "color_identity": [
+    "B",
+    "U"
+   ],
+   "colors": [
+    "B",
+    "U"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{U}{B}",
+   "name": "Time Sieve",
+   "object": "card",
+   "oracle_id": "3da5977a-36d4-4f32-ab9b-8b93809d818d",
+   "oracle_text": "{T}, Sacrifice five artifacts: Take an extra turn after this one.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2020-08-07",
+   "set": "2xm",
+   "set_name": "Double Masters",
+   "set_type": "masters",
+   "type_line": "Artifact"
+  },
+  "Tolarian Academy": {
+   "collector_number": "319",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Tolarian Academy",
+   "object": "card",
+   "oracle_id": "dba4fd31-8931-42dd-bd86-45479c2abf74",
+   "oracle_text": "{T}: Add {U} for each artifact you control.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2014-06-16",
+   "set": "vma",
+   "set_name": "Vintage Masters",
+   "set_type": "masters",
+   "type_line": "Legendary Land"
+  },
+  "Tower Above": {
+   "collector_number": "131",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [
+    "G"
+   ],
+   "frame": "2003",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "{2/G}{2/G}{2/G}",
+   "name": "Tower Above",
+   "object": "card",
+   "oracle_id": "6f5d31d1-3493-4d1b-bbf9-1726e47507db",
+   "oracle_text": "({2/G} can be paid with any two mana or with {G}. This card's mana value is 6.)\nUntil end of turn, target creature gets +4/+4 and gains trample, wither, and \"When this creature attacks, target creature blocks it this turn if able.\" (It deals damage to creatures in the form of -1/-1 counters.)",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2008-05-02",
+   "set": "shm",
+   "set_name": "Shadowmoor",
+   "set_type": "expansion",
+   "type_line": "Sorcery"
+  },
+  "Urborg, Tomb of Yawgmoth": {
+   "collector_number": "287",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Urborg, Tomb of Yawgmoth",
+   "object": "card",
+   "oracle_id": "db6174d7-211d-4817-b8e4-8384594c83f9",
+   "oracle_text": "Each land is a Swamp in addition to its other land types.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Legendary Land"
+  },
+  "Urza, Planeswalker": {
+   "all_parts": [
+    {
+     "component": "token",
+     "name": "Soldier",
+     "object": "related_card",
+     "type_line": "Token Artifact Creature — Soldier",
+     "uri": "https://api.scryfall.com/cards/83981313-ff55-4030-ac82-d6a3087cf675"
+    },
+    {
+     "component": "meld_result",
+     "name": "Urza, Planeswalker",
+     "object": "related_card",
+     "type_line": "Legendary Planeswalker — Urza",
+     "uri": "https://api.scryfall.com/cards/40a01679-3224-427e-bd1d-b797b0ab68b7"
+    },
+    {
+     "component": "meld_part",
+     "name": "The Mightstone and Weakstone",
+     "object": "related_card",
+     "type_line": "Legendary Artifact — Powerstone",
+     "uri": "https://api.scryfall.com/cards/02aea379-b444-46a3-82f4-3038f698d4f4"
+    },
+    {
+     "component": "meld_part",
+     "name": "Urza, Lord Protector",
+     "object": "related_card",
+     "type_line": "Legendary Creature — Human Artificer",
+     "uri": "https://api.scryfall.com/cards/8aefe8bd-216a-4ec1-9362-3f9dbf7fd083"
+    }
+   ],
+   "collector_number": "238b",
+   "color_identity": [
+    "U",
+    "W"
+   ],
+   "color_indicator": [
+    "U",
+    "W"
+   ],
+   "colors": [
+    "U",
+    "W"
+   ],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "meld",
+   "loyalty": "7",
+   "mana_cost": "",
+   "meld_parts": {
+    "The Mightstone and Weakstone": {
+     "all_parts": [
+      {
+       "component": "meld_result",
+       "name": "Urza, Planeswalker",
+       "object": "related_card",
+       "type_line": "Legendary Planeswalker — Urza",
+       "uri": "https://api.scryfall.com/cards/40a01679-3224-427e-bd1d-b797b0ab68b7"
+      },
+      {
+       "component": "meld_part",
+       "name": "The Mightstone and Weakstone",
+       "object": "related_card",
+       "type_line": "Legendary Artifact — Powerstone",
+       "uri": "https://api.scryfall.com/cards/02aea379-b444-46a3-82f4-3038f698d4f4"
+      },
+      {
+       "component": "meld_part",
+       "name": "Urza, Lord Protector",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Human Artificer",
+       "uri": "https://api.scryfall.com/cards/8aefe8bd-216a-4ec1-9362-3f9dbf7fd083"
+      }
+     ],
+     "collector_number": "238",
+     "color_identity": [],
+     "colors": [],
+     "frame": "2015",
+     "frame_effects": [
+      "legendary"
+     ],
+     "keywords": [],
+     "lang": "en",
+     "layout": "meld",
+     "mana_cost": "{5}",
+     "name": "The Mightstone and Weakstone",
+     "object": "card",
+     "oracle_id": "c396db03-bf11-4e20-b630-4f9aa8fd78da",
+     "oracle_text": "When The Mightstone and Weakstone enters, choose one —\n• Draw two cards.\n• Target creature gets -5/-5 until end of turn.\n{T}: Add {C}{C}. This mana can't be spent to cast nonartifact spells.\n(Melds with Urza, Lord Protector.)",
+     "promo": false,
+     "rarity": "rare",
+     "released_at": "2022-11-18",
+     "set": "bro",
+     "set_name": "The Brothers' War",
+     "set_type": "expansion",
+     "type_line": "Legendary Artifact — Powerstone"
+    },
+    "Urza, Lord Protector": {
+     "all_parts": [
+      {
+       "component": "meld_result",
+       "name": "Urza, Planeswalker",
+       "object": "related_card",
+       "type_line": "Legendary Planeswalker — Urza",
+       "uri": "https://api.scryfall.com/cards/40a01679-3224-427e-bd1d-b797b0ab68b7"
+      },
+      {
+       "component": "meld_part",
+       "name": "The Mightstone and Weakstone",
+       "object": "related_card",
+       "type_line": "Legendary Artifact — Powerstone",
+       "uri": "https://api.scryfall.com/cards/02aea379-b444-46a3-82f4-3038f698d4f4"
+      },
+      {
+       "component": "meld_part",
+       "name": "Urza, Lord Protector",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Human Artificer",
+       "uri": "https://api.scryfall.com/cards/8aefe8bd-216a-4ec1-9362-3f9dbf7fd083"
+      }
+     ],
+     "collector_number": "225",
+     "color_identity": [
+      "U",
+      "W"
+     ],
+     "colors": [
+      "U",
+      "W"
+     ],
+     "frame": "2015",
+     "frame_effects": [
+      "legendary"
+     ],
+     "keywords": [
+      "Meld"
+     ],
+     "lang": "en",
+     "layout": "meld",
+     "mana_cost": "{1}{W}{U}",
+     "name": "Urza, Lord Protector",
+     "object": "card",
+     "oracle_id": "df2af646-3e5b-43a3-8f3e-50565889f456",
+     "oracle_text": "Artifact, instant, and sorcery spells you cast cost {1} less to cast.\n{7}: If you both own and control Urza, Lord Protector and an artifact named The Mightstone and Weakstone, exile them, then meld them into Urza, Planeswalker. Activate only as a sorcery.",
+     "power": "2",
+     "promo": false,
+     "rarity": "mythic",
+     "released_at": "2022-11-18",
+     "set": "bro",
+     "set_name": "The Brothers' War",
+     "set_type": "expansion",
+     "toughness": "4",
+     "type_line": "Legendary Creature — Human Artificer"
+    },
+    "Urza, Planeswalker": {
+     "all_parts": [
+      {
+       "component": "token",
+       "name": "Soldier",
+       "object": "related_card",
+       "type_line": "Token Artifact Creature — Soldier",
+       "uri": "https://api.scryfall.com/cards/83981313-ff55-4030-ac82-d6a3087cf675"
+      },
+      {
+       "component": "meld_result",
+       "name": "Urza, Planeswalker",
+       "object": "related_card",
+       "type_line": "Legendary Planeswalker — Urza",
+       "uri": "https://api.scryfall.com/cards/40a01679-3224-427e-bd1d-b797b0ab68b7"
+      },
+      {
+       "component": "meld_part",
+       "name": "The Mightstone and Weakstone",
+       "object": "related_card",
+       "type_line": "Legendary Artifact — Powerstone",
+       "uri": "https://api.scryfall.com/cards/02aea379-b444-46a3-82f4-3038f698d4f4"
+      },
+      {
+       "component": "meld_part",
+       "name": "Urza, Lord Protector",
+       "object": "related_card",
+       "type_line": "Legendary Creature — Human Artificer",
+       "uri": "https://api.scryfall.com/cards/8aefe8bd-216a-4ec1-9362-3f9dbf7fd083"
+      }
+     ],
+     "collector_number": "238b",
+     "color_identity": [
+      "U",
+      "W"
+     ],
+     "color_indicator": [
+      "U",
+      "W"
+     ],
+     "colors": [
+      "U",
+      "W"
+     ],
+     "frame": "2015",
+     "keywords": [],
+     "lang": "en",
+     "layout": "meld",
+     "loyalty": "7",
+     "mana_cost": "",
+     "name": "Urza, Planeswalker",
+     "object": "card",
+     "oracle_id": "759406d7-44ae-4260-9ef5-3bb2c92f751a",
+     "oracle_text": "You may activate the loyalty abilities of Urza twice each turn rather than only once.\n+2: Artifact, instant, and sorcery spells you cast this turn cost {2} less to cast. You gain 2 life.\n+1: Draw two cards, then discard a card.\n0: Create two 1/1 colorless Soldier artifact creature tokens.\n−3: Exile target nonland permanent.\n−10: Artifacts and planeswalkers you control gain indestructible until end of turn. Destroy all nonland permanents.",
+     "promo": false,
+     "rarity": "mythic",
+     "released_at": "2022-11-18",
+     "set": "bro",
+     "set_name": "The Brothers' War",
+     "set_type": "expansion",
+     "type_line": "Legendary Planeswalker — Urza"
+    }
+   },
+   "name": "Urza, Planeswalker",
+   "object": "card",
+   "oracle_id": "759406d7-44ae-4260-9ef5-3bb2c92f751a",
+   "oracle_text": "You may activate the loyalty abilities of Urza twice each turn rather than only once.\n+2: Artifact, instant, and sorcery spells you cast this turn cost {2} less to cast. You gain 2 life.\n+1: Draw two cards, then discard a card.\n0: Create two 1/1 colorless Soldier artifact creature tokens.\n−3: Exile target nonland permanent.\n−10: Artifacts and planeswalkers you control gain indestructible until end of turn. Destroy all nonland permanents.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2022-11-18",
+   "set": "bro",
+   "set_name": "The Brothers' War",
+   "set_type": "expansion",
+   "type_line": "Legendary Planeswalker — Urza"
+  },
+  "Verdant Catacombs": {
+   "collector_number": "260",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Verdant Catacombs",
+   "object": "card",
+   "oracle_id": "67d60b24-d429-4ded-90d9-06e49f28c396",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Swamp or Forest card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Vesuva": {
+   "collector_number": "289",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vesuva",
+   "object": "card",
+   "oracle_id": "4001b868-ada1-43f4-92e2-27ab0e80c913",
+   "oracle_text": "You may have this land enter tapped as a copy of any land on the battlefield.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Land"
+  },
+  "Vivid Crag": {
+   "collector_number": "276",
+   "color_identity": [
+    "R"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vivid Crag",
+   "object": "card",
+   "oracle_id": "d8e2efe0-33a4-4303-9e83-ac42ea5df8cb",
+   "oracle_text": "This land enters tapped with two charge counters on it.\n{T}: Add {R}.\n{T}, Remove a charge counter from this land: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2018-06-08",
+   "set": "cm2",
+   "set_name": "Commander Anthology Volume II",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Vivid Creek": {
+   "collector_number": "444",
+   "color_identity": [
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vivid Creek",
+   "object": "card",
+   "oracle_id": "2da7c49f-cc1e-45d9-9cbf-067e92b0daef",
+   "oracle_text": "This land enters tapped with two charge counters on it.\n{T}: Add {U}.\n{T}, Remove a charge counter from this land: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Vivid Grove": {
+   "collector_number": "445",
+   "color_identity": [
+    "G"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vivid Grove",
+   "object": "card",
+   "oracle_id": "b7a68899-c0d3-49e0-854b-19268ae9b89d",
+   "oracle_text": "This land enters tapped with two charge counters on it.\n{T}: Add {G}.\n{T}, Remove a charge counter from this land: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Vivid Marsh": {
+   "collector_number": "292",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vivid Marsh",
+   "object": "card",
+   "oracle_id": "20b32052-f66f-4eb8-b56e-00d531907f19",
+   "oracle_text": "This land enters tapped with two charge counters on it.\n{T}: Add {B}.\n{T}, Remove a charge counter from this land: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2017-08-25",
+   "set": "c17",
+   "set_name": "Commander 2017",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Vivid Meadow": {
+   "collector_number": "446",
+   "color_identity": [
+    "W"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Vivid Meadow",
+   "object": "card",
+   "oracle_id": "dee99df5-628f-4a4e-a203-4dfddc927373",
+   "oracle_text": "This land enters tapped with two charge counters on it.\n{T}: Add {W}.\n{T}, Remove a charge counter from this land: Add one mana of any color.",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2022-04-29",
+   "set": "ncc",
+   "set_name": "New Capenna Commander",
+   "set_type": "commander",
+   "type_line": "Land"
+  },
+  "Volrath's Stronghold": {
+   "collector_number": "248",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Volrath's Stronghold",
+   "object": "card",
+   "oracle_id": "73b8cf90-3c71-4f8b-a29f-61894b7f27c9",
+   "oracle_text": "{T}: Add {C}.\n{1}{B}, {T}: Put target creature card from your graveyard on top of your library.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2015-05-06",
+   "set": "tpr",
+   "set_name": "Tempest Remastered",
+   "set_type": "masters",
+   "type_line": "Legendary Land"
+  },
+  "Voracious Reader": {
+   "all_parts": [
+    {
+     "component": "combo_piece",
+     "name": "Eldritch Moon Checklist",
+     "object": "related_card",
+     "type_line": "Card",
+     "uri": "https://api.scryfall.com/cards/cd8586f9-97e2-438d-b74f-1e53c811f314"
+    },
+    {
+     "component": "combo_piece",
+     "name": "Curious Homunculus // Voracious Reader",
+     "object": "related_card",
+     "type_line": "Creature — Homunculus // Creature — Eldrazi Homunculus",
+     "uri": "https://api.scryfall.com/cards/22e816af-df55-4a3f-a6e7-0ff3bb1b45b5"
+    }
+   ],
+   "card_faces": [
+    {
+     "colors": [
+      "U"
+     ],
+     "mana_cost": "{1}{U}",
+     "name": "Curious Homunculus",
+     "object": "card_face",
+     "oracle_text": "{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.\nAt the beginning of your upkeep, if there are three or more instant and/or sorcery cards in your graveyard, transform this creature.",
+     "power": "1",
+     "toughness": "1",
+     "type_line": "Creature — Homunculus"
+    },
+    {
+     "colors": [],
+     "mana_cost": "",
+     "name": "Voracious Reader",
+     "object": "card_face",
+     "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nInstant and sorcery spells you cast cost {1} less to cast.",
+     "power": "3",
+     "toughness": "4",
+     "type_line": "Creature — Eldrazi Homunculus"
+    }
+   ],
+   "collector_number": "54",
+   "color_identity": [
+    "U"
+   ],
+   "frame": "2015",
+   "frame_effects": [
+    "mooneldrazidfc"
+   ],
+   "keywords": [
+    "Prowess",
+    "Transform"
+   ],
+   "lang": "en",
+   "layout": "transform",
+   "name": "Curious Homunculus // Voracious Reader",
+   "object": "card",
+   "oracle_id": "c38db10f-c0b7-4391-b49a-77079a4d087c",
+   "promo": false,
+   "rarity": "uncommon",
+   "released_at": "2016-07-22",
+   "set": "emn",
+   "set_name": "Eldritch Moon",
+   "set_type": "expansion",
+   "type_line": "Creature — Homunculus // Creature — Eldrazi Homunculus"
+  },
+  "Wandering Fumarole": {
+   "collector_number": "928",
+   "color_identity": [
+    "R",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Wandering Fumarole",
+   "object": "card",
+   "oracle_id": "741c51f1-cfbe-4c29-ac8f-ca6bcd2652f9",
+   "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.\n{2}{U}{R}: Until end of turn, this land becomes a 1/4 blue and red Elemental creature with \"{0}: Switch this creature's power and toughness until end of turn.\" It's still a land.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2022-06-10",
+   "set": "clb",
+   "set_name": "Commander Legends: Battle for Baldur's Gate",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Watery Grave": {
+   "collector_number": "306",
+   "color_identity": [
+    "B",
+    "U"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Watery Grave",
+   "object": "card",
+   "oracle_id": "fc9ec820-4245-4a96-b009-5308a818ca58",
+   "oracle_text": "({T}: Add {U} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+   "promo": false,
+   "promo_types": [
+    "universesbeyond"
+   ],
+   "rarity": "rare",
+   "released_at": "2026-11-13",
+   "set": "trk",
+   "set_name": "Star Trek",
+   "set_type": "expansion",
+   "type_line": "Land — Island Swamp"
+  },
+  "Wheel of Fate": {
+   "collector_number": "198",
+   "color_identity": [
+    "R"
+   ],
+   "color_indicator": [
+    "R"
+   ],
+   "colors": [
+    "R"
+   ],
+   "frame": "2015",
+   "keywords": [
+    "Suspend"
+   ],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Wheel of Fate",
+   "object": "card",
+   "oracle_id": "15e4938d-1cd3-4670-9de5-2dc10abe4c19",
+   "oracle_text": "Suspend 4—{1}{R} (Rather than cast this card from your hand, pay {1}{R} and exile it with four time counters on it. At the beginning of your upkeep, remove a time counter. When the last is removed, you may cast it without paying its mana cost.)\nEach player discards their hand, then draws seven cards.",
+   "promo": false,
+   "rarity": "mythic",
+   "released_at": "2021-03-19",
+   "set": "tsr",
+   "set_name": "Time Spiral Remastered",
+   "set_type": "masters",
+   "type_line": "Sorcery"
+  },
+  "Windswept Heath": {
+   "collector_number": "235",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Windswept Heath",
+   "object": "card",
+   "oracle_id": "29737a60-3ebd-40d9-b935-c4f54b90d45d",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Plains card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-06-14",
+   "set": "mh3",
+   "set_name": "Modern Horizons 3",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Witch's Cottage": {
+   "collector_number": "249",
+   "color_identity": [
+    "B"
+   ],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Witch's Cottage",
+   "object": "card",
+   "oracle_id": "6c8f276e-4e7b-4974-ab02-9356cc0ffb2b",
+   "oracle_text": "({T}: Add {B}.)\nThis land enters tapped unless you control three or more other Swamps.\nWhen this land enters untapped, you may put target creature card from your graveyard on top of your library.",
+   "promo": false,
+   "rarity": "common",
+   "released_at": "2019-10-04",
+   "set": "eld",
+   "set_name": "Throne of Eldraine",
+   "set_type": "expansion",
+   "type_line": "Land — Swamp"
+  },
+  "Wooded Foothills": {
+   "collector_number": "236",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Wooded Foothills",
+   "object": "card",
+   "oracle_id": "6587a463-a108-4854-b6d1-944e89b8c8a4",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Mountain or Forest card, put it onto the battlefield, then shuffle.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2024-06-14",
+   "set": "mh3",
+   "set_name": "Modern Horizons 3",
+   "set_type": "draft_innovation",
+   "type_line": "Land"
+  },
+  "Yavimaya, Cradle of Growth": {
+   "collector_number": "261",
+   "color_identity": [],
+   "colors": [],
+   "frame": "2015",
+   "frame_effects": [
+    "legendary"
+   ],
+   "keywords": [],
+   "lang": "en",
+   "layout": "normal",
+   "mana_cost": "",
+   "name": "Yavimaya, Cradle of Growth",
+   "object": "card",
+   "oracle_id": "8dd5f5af-d2d8-4356-8617-8381081b930c",
+   "oracle_text": "Each land is a Forest in addition to its other land types.",
+   "promo": false,
+   "rarity": "rare",
+   "released_at": "2021-06-18",
+   "set": "mh2",
+   "set_name": "Modern Horizons 2",
+   "set_type": "draft_innovation",
+   "type_line": "Legendary Land"
+  }
+ }
+}

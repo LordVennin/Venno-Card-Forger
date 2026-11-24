@@ -13,4 +13,5 @@ path = "src/main.rs"
 [dependencies]
 cardsmith-core = { path = "../core" }
 cardsmith-cards = { path = "../cards" }
+cardsmith-scryfall = { path = "../scryfall" }
 serde_json = "1"
