@@ -223,6 +223,12 @@ fn set_symbol(shared: State<Shared>, set: String, rarity: String, type_line: Str
     set_extras(&mut client, &set, &rarity, basic_land_type(&json!({ "type_line": type_line })))
 }
 
+/// Every set, newest first, for the set picker.
+#[tauri::command(async)]
+fn sets(shared: State<Shared>) -> Answer<Vec<cardsmith_scryfall::SetEntry>> {
+    shared.client.lock().unwrap().sets().map_err(|e| e.to_string())
+}
+
 // ---- fills -------------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -299,7 +305,7 @@ pub fn run() {
             app.manage(Shared { settings_file, settings: Mutex::new(settings), client: Mutex::new(Client::new(&cache)), cache, fills: Mutex::new((0, HashMap::new())) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, autocomplete, printings, card, set_symbol, fill_tiers, fill, fill_image])
+        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
         .run(tauri::generate_context!())
         .expect("error while running Cardsmith");
 }

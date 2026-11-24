@@ -32,6 +32,17 @@ pub struct SetInfo {
     pub size: Option<u32>,
 }
 
+/// A set, for a list to choose from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SetEntry {
+    pub code: String,
+    pub name: String,
+    /// The day it came out, "2007-07-13".
+    pub released: String,
+    /// "core", "expansion", "masters", "token", ...
+    pub kind: String,
+}
+
 fn fresh(path: &Path) -> bool {
     std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|at| SystemTime::now().duration_since(at).ok()).is_some_and(|age| age < FRESH)
 }
@@ -51,6 +62,18 @@ impl<T: Transport> Client<T> {
         }
         let count = |key: &str| data[key].as_u64().map(|n| n as u32);
         SetInfo { symbol: data["code_symbol"].as_str().unwrap_or("DEFAULT").to_uppercase(), size: count("count_printed").or(count("count_cards")).filter(|n| *n > 0) }
+    }
+
+    /// Every set, newest first, for choosing one by name.
+    pub fn sets(&mut self) -> Result<Vec<SetEntry>, Error> {
+        let sets = self.get_json(&format!("{API}/sets/"))?;
+        let text = |set: &serde_json::Value, key: &str| set[key].as_str().unwrap_or_default().to_string();
+        let mut all: Vec<SetEntry> = sets
+            .as_object()
+            .map(|sets| sets.iter().map(|(code, set)| SetEntry { code: code.clone(), name: text(set, "name"), released: text(set, "date_released"), kind: text(set, "type") }).collect())
+            .unwrap_or_default();
+        all.sort_by(|a, b| b.released.cmp(&a.released).then(a.name.cmp(&b.name)));
+        Ok(all)
     }
 
     /// Make sure the symbols package is unpacked in the cache, downloading it

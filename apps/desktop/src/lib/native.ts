@@ -16,6 +16,7 @@ export type Printing = { set: string; setName: string; number: string; year: str
 export type Extras = { setSize: number | null; symbolSvg: string | null; watermarkSvg: string | null };
 /** Scryfall's JSON for a card with its layout settled, the face wanted, and what goes with its set. */
 export type Found = { scryfall: Record<string, any>; name: string; extras: Extras };
+export type SetEntry = { code: string; name: string; released: string; kind: string };
 export type TierState = { id: "sd" | "lama" | "patchmatch"; ok: boolean; reason: string | null };
 export type FillResult = { ticket: number | null; provider: string; notices: string[]; ms: number; workWidth: number };
 
@@ -34,6 +35,7 @@ export const native = {
   printings: (name: string) => invoke<Printing[]>("printings", { name }),
   card: (name: string, set?: string, number?: string) => invoke<Found>("card", { name, set, number }),
   setSymbol: (set: string, rarity: string, typeLine: string) => invoke<Extras>("set_symbol", { set, rarity, typeLine }),
+  sets: () => invoke<SetEntry[]>("sets"),
   fillTiers: () => invoke<TierState[]>("fill_tiers"),
   fill: (artPath: string, info: FillInfo, tier: string, seed: number, prompt: string) => invoke<FillResult>("fill", { artPath, info, tier, seed, prompt }),
   fillImage: (ticket: number) => bytes("fill_image", { ticket }),

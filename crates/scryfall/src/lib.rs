@@ -25,7 +25,7 @@ mod hexproof;
 mod models;
 
 pub use bulk::{BulkCards, BulkKind};
-pub use hexproof::SetInfo;
+pub use hexproof::{SetEntry, SetInfo};
 
 use cardsmith_cards::file_name::CardInfo;
 use cardsmith_cards::layout::{card_data, process_card_data, CardData, CardInput};

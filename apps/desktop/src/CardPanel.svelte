@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BuildReport, Core } from "./lib/core";
-  import { native, type Extras, type Printing, type Settings, type TemplateEntry, type TierState } from "./lib/native";
+  import { native, type Extras, type Printing, type SetEntry, type Settings, type TemplateEntry, type TierState } from "./lib/native";
+  import { SYMBOL_GROUPS, symbolColor } from "./lib/symbols";
 
   // The card panel: choose a template, find a card (or write one), give it
   // art, and the card is built on the canvas and rebuilt as its fields change.
@@ -45,6 +46,15 @@
   let filling = $state("");
   let warnings = $state<string[]>([]);
 
+  // Sets to choose from by name, and a symbol of the user's own in place of the set's.
+  let sets = $state.raw<SetEntry[]>([]);
+  let setName = $state("");
+  let ownSymbol = $state(false);
+
+  // The symbol palette: open under the field it types into, narrowed by what follows a "{".
+  let palette = $state<{ field: "mana_cost" | "oracle_text"; filter: string } | null>(null);
+  let paletteTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
+
   const RARITIES = ["common", "uncommon", "rare", "mythic", "special"];
   const TIER_NAMES: Record<string, string> = { sd: "Stable Diffusion", lama: "LaMa model", patchmatch: "PatchMatch" };
   const fail = (what: string) => (err: unknown) => say(`${what}: ${err instanceof Error ? err.message : err}`);
@@ -55,6 +65,7 @@
     .then(async (saved) => {
       settings = saved;
       tiers = await native.fillTiers();
+      native.sets().then((all) => (sets = all)).catch(() => {});
       await Promise.all([loadFonts(), listTemplates()]);
       await demo();
     })
@@ -67,7 +78,7 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string };
+    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean };
     tier = want.tier ?? tier;
     folder = want.template;
     await openTemplate();
@@ -77,6 +88,7 @@
     }
     search = want.card;
     await find();
+    if (want.symbols) palette = { field: "oracle_text", filter: "" };
   }
 
   // ---- folders ---------------------------------------------------------------------
@@ -223,8 +235,77 @@
     const key = `${raw.set}/${raw.rarity}/${side?.type_line}`;
     if (key === symbolFor) return;
     symbolFor = key;
-    extras = await native.setSymbol(String(raw.set ?? ""), String(raw.rarity ?? ""), String(side?.type_line ?? "")).catch(() => extras);
+    const found = await native.setSymbol(String(raw.set ?? ""), String(raw.rarity ?? ""), String(side?.type_line ?? "")).catch(() => extras);
+    extras = ownSymbol ? { ...found, symbolSvg: extras.symbolSvg } : found;
     rebuild();
+  }
+
+  /** The sets whose name or code has what was typed, newest first; the real sets before their token and promo sets. */
+  const setChoices = $derived.by(() => {
+    const typed = setName.trim().toLowerCase();
+    if (typed.length < 2) return [];
+    const main = (s: SetEntry) => ["core", "expansion", "masters", "draft_innovation", "commander", "funny"].includes(s.kind);
+    const hits = sets.filter((s) => s.name.toLowerCase().includes(typed) || s.code === typed);
+    return [...hits.filter(main), ...hits.filter((s) => !main(s))].slice(0, 30);
+  });
+
+  function setPicked() {
+    const typed = setName.trim().toLowerCase();
+    const set = sets.find((s) => s.name.toLowerCase() === typed) ?? sets.find((s) => s.code === typed);
+    if (!set || !raw) return;
+    raw.set = set.code;
+    setChanged();
+  }
+
+  const currentSet = $derived(sets.find((s) => s.code === String(raw?.set ?? "").toLowerCase()));
+
+  async function ownSymbolChosen(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    extras = { ...extras, symbolSvg: await file.text() };
+    ownSymbol = true;
+    rebuild();
+  }
+
+  function setsSymbolAgain() {
+    ownSymbol = false;
+    symbolFor = "";
+    setChanged();
+  }
+
+  // ---- the symbol palette --------------------------------------------------------------
+
+  /** After typing in a field that takes symbols: an unfinished "{…" before the cursor opens the palette. */
+  function symbolsTyped(field: "mana_cost" | "oracle_text", el: HTMLInputElement | HTMLTextAreaElement) {
+    const before = el.value.slice(0, el.selectionStart ?? el.value.length);
+    const open = /\{([^{}\s]*)$/.exec(before);
+    paletteTarget = el;
+    palette = open ? { field, filter: open[1]!.toUpperCase() } : palette?.field === field && !palette.filter ? palette : null;
+  }
+
+  function togglePalette(field: "mana_cost" | "oracle_text", el: HTMLInputElement | HTMLTextAreaElement | null) {
+    paletteTarget = el;
+    palette = palette?.field === field ? null : { field, filter: "" };
+  }
+
+  const offered = $derived(
+    SYMBOL_GROUPS.map((g) => ({ name: g.name, symbols: g.symbols.filter((s) => !palette?.filter || s.slice(1).startsWith(palette.filter)) })).filter((g) => g.symbols.length),
+  );
+
+  /** Put a symbol in at the cursor, in place of an unfinished "{…" if one was being typed. */
+  function insertSymbol(symbol: string) {
+    const el = paletteTarget;
+    if (!el || !palette) return;
+    const at = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, at).replace(/\{[^{}\s]*$/, "");
+    const text = before + symbol + el.value.slice(el.selectionEnd ?? at);
+    edit(palette.field, text);
+    palette = { field: palette.field, filter: "" };
+    el.value = text;
+    el.focus();
+    el.setSelectionRange(before.length + symbol.length, before.length + symbol.length);
   }
 
   // ---- art and building ------------------------------------------------------------------
@@ -288,6 +369,20 @@
   }
 </script>
 
+{#snippet symbols()}
+  <div class="palette">
+    {#each offered as group}
+      <div class="row">
+        {#each group.symbols as symbol}
+          <button class="sym" style:background={symbolColor(symbol)} onclick={() => insertSymbol(symbol)} title={symbol}>{symbol.slice(1, -1)}</button>
+        {/each}
+      </div>
+    {:else}
+      <span class="path">No symbol starts with that.</span>
+    {/each}
+  </div>
+{/snippet}
+
 <aside class="card">
   <h2>Folders</h2>
   <div class="row">
@@ -324,17 +419,31 @@
 
   {#if raw && side}
     <label>Name <input value={side.name ?? ""} oninput={(e) => edit("name", e.currentTarget.value)} /></label>
-    <label title={"Symbols in braces: {2}{G}{G}"}>Mana cost <input value={side.mana_cost ?? ""} placeholder={"{1}{G}"} oninput={(e) => edit("mana_cost", e.currentTarget.value)} /></label>
+    <label title={"Type { for the symbols"}
+      >Mana cost
+      <input value={side.mana_cost ?? ""} placeholder={"{1}{G}"} oninput={(e) => (edit("mana_cost", e.currentTarget.value), symbolsTyped("mana_cost", e.currentTarget))} />
+      <button class="chip" onclick={(e) => togglePalette("mana_cost", e.currentTarget.previousElementSibling as HTMLInputElement)} title="Symbols">{"{ }"}</button>
+    </label>
+    {#if palette?.field === "mana_cost"}{@render symbols()}{/if}
     <label>Type <input value={side.type_line ?? ""} oninput={(e) => edit("type_line", e.currentTarget.value)} onchange={setChanged} /></label>
-    <label class="tall" title={"Symbols in braces: {T}: Add {G}."}>Rules <textarea rows="5" value={side.oracle_text ?? ""} oninput={(e) => edit("oracle_text", e.currentTarget.value)}></textarea></label>
+    <label class="tall" title={"Type { for the symbols"}
+      ><span class="row">Rules <button class="chip" onclick={(e) => togglePalette("oracle_text", e.currentTarget.closest("label")!.querySelector("textarea"))} title="Symbols">{"{ }"}</button></span>
+      <textarea rows="5" value={side.oracle_text ?? ""} oninput={(e) => (edit("oracle_text", e.currentTarget.value), symbolsTyped("oracle_text", e.currentTarget))}></textarea>
+    </label>
+    {#if palette?.field === "oracle_text"}{@render symbols()}{/if}
     <label class="tall">Flavor <textarea rows="3" value={side.flavor_text ?? ""} oninput={(e) => edit("flavor_text", e.currentTarget.value)}></textarea></label>
     <div class="row">
       <label>Power <input class="short" value={side.power ?? ""} oninput={(e) => edit("power", e.currentTarget.value)} /></label>
       <label>Toughness <input class="short" value={side.toughness ?? ""} oninput={(e) => edit("toughness", e.currentTarget.value)} /></label>
     </div>
     <label>Artist <input value={side.artist ?? raw.artist ?? ""} oninput={(e) => edit("artist", e.currentTarget.value)} /></label>
+    <label title="Type part of a set's name"
+      >Set
+      <input list="set-names" placeholder={currentSet?.name ?? "Set name"} bind:value={setName} onchange={setPicked} />
+      <datalist id="set-names">{#each setChoices as s}<option value={s.name}>{s.code.toUpperCase()} · {s.released.slice(0, 4)}</option>{/each}</datalist>
+    </label>
     <div class="row">
-      <label>Set <input class="short" value={raw.set ?? ""} oninput={(e) => edit("set", e.currentTarget.value.toLowerCase(), "card")} onchange={setChanged} /></label>
+      <label>Code <input class="short" value={raw.set ?? ""} oninput={(e) => edit("set", e.currentTarget.value.toLowerCase(), "card")} onchange={setChanged} /></label>
       <label>No. <input class="short" value={raw.collector_number ?? ""} oninput={(e) => edit("collector_number", e.currentTarget.value, "card")} /></label>
       <label
         >Rarity
@@ -342,6 +451,14 @@
           {#each RARITIES as r}<option value={r}>{r}</option>{/each}
         </select>
       </label>
+    </div>
+    <div class="row">
+      {#if extras.symbolSvg}
+        <img class="symbol" alt="The set symbol" src={"data:image/svg+xml;utf8," + encodeURIComponent(extras.symbolSvg)} />
+      {/if}
+      <span class="path">{ownSymbol ? "Your own symbol" : currentSet ? `${currentSet.name}, ${currentSet.released.slice(0, 4)}` : extras.symbolSvg ? "Set symbol" : "No set symbol"}</span>
+      <label class="file quiet">Use an SVG… <input type="file" accept=".svg,image/svg+xml" onchange={ownSymbolChosen} /></label>
+      {#if ownSymbol}<button class="quiet" onclick={setsSymbolAgain}>Use the set's</button>{/if}
     </div>
   {/if}
 
@@ -405,4 +522,11 @@
   button:disabled { opacity: 0.4; }
   .quiet { background: none; border: none; color: #8ea1e1; text-align: left; padding: 0; }
   .warning { color: #f0b232; margin: 0; }
+  .chip { padding: 0 6px; font-size: 11px; color: #b5b7bd; }
+  .palette { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #1e1f22; border: 1px solid #50545c; border-radius: 4px; }
+  .palette .row { gap: 3px; }
+  .sym { min-width: 24px; height: 24px; padding: 0 4px; border-radius: 12px; border: 1px solid #111; color: #111; font-size: 11px; font-weight: 600; }
+  .symbol { width: 26px; height: 26px; object-fit: contain; background: #d8d8d8; border-radius: 4px; padding: 2px; }
+  label.file { cursor: pointer; }
+  label.file input { display: none; }
 </style>

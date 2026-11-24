@@ -328,3 +328,18 @@ fn card_names_are_completed_from_three_letters_and_printings_listed_newest_first
     assert_eq!((prints[0].set.as_str(), prints[0].number.as_str(), prints[0].year.as_str(), prints[0].thumbnail.as_deref()), ("fdn", "227", "2024", Some("https://cards.scryfall.io/small/a.jpg")));
     assert_eq!((prints[1].set_name.as_str(), prints[1].artist.as_str(), prints[1].thumbnail.as_deref()), ("Limited Edition Alpha", "Anson Maddocks", None));
 }
+
+#[test]
+fn sets_are_listed_newest_first_for_choosing_by_name() {
+    let dir = temp("sets");
+    let net = Fake::default();
+    net.page("https://api.hexproof.io/sets/", json!({
+        "lea": { "name": "Limited Edition Alpha", "date_released": "1993-08-05", "type": "core" },
+        "fdn": { "name": "Foundations", "date_released": "2024-11-15", "type": "core" },
+        "tfdn": { "name": "Foundations Tokens", "date_released": "2024-11-15", "type": "token" }
+    }));
+    let sets = Client::with_transport(net, &dir).sets().unwrap();
+    let listed: Vec<(&str, &str)> = sets.iter().map(|s| (s.code.as_str(), s.name.as_str())).collect();
+    assert_eq!(listed, [("fdn", "Foundations"), ("tfdn", "Foundations Tokens"), ("lea", "Limited Edition Alpha")]);
+    assert_eq!((sets[2].released.as_str(), sets[1].kind.as_str()), ("1993-08-05", "token"));
+}

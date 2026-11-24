@@ -165,3 +165,19 @@ fn empty_text_gives_empty_rich_text() {
     let out = format_rules_text("", "", &format());
     assert!(out.content.runs.is_empty() && out.content.paragraphs.is_empty());
 }
+
+#[test]
+fn every_symbol_the_apps_palette_offers_can_be_drawn() {
+    // The palette's list is TypeScript; its symbols are the quoted, braced strings in it.
+    let source = include_str!("../../../apps/desktop/src/lib/symbols.ts");
+    let mut offered = Vec::new();
+    let mut rest = source;
+    while let Some(start) = rest.find("\"{") {
+        let end = rest[start + 1..].find('"').unwrap();
+        offered.push(&rest[start + 1..start + 1 + end]);
+        rest = &rest[start + 2 + end..];
+    }
+    assert!(offered.len() > 40, "the palette's symbols were not found: {offered:?}");
+    let unknown: Vec<&&str> = offered.iter().filter(|s| cardsmith_cards::rules_text::symbol_chars(s).is_none()).collect();
+    assert!(unknown.is_empty(), "the palette offers symbols the engine cannot draw: {unknown:?}");
+}
