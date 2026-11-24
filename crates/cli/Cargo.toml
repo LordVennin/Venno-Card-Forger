@@ -15,5 +15,5 @@ cardsmith-core = { path = "../core" }
 cardsmith-cards = { path = "../cards" }
 cardsmith-scryfall = { path = "../scryfall" }
 cardsmith-engine = { path = "../engine" }
-cardsmith-fill = { path = "../fill", features = ["onnx"] }
+cardsmith-fill = { path = "../fill", features = ["onnx", "sdcpp"] }
 serde_json = "1"

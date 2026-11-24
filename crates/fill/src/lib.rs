@@ -10,6 +10,7 @@
 
 pub mod lama;
 pub mod patchmatch;
+pub mod sdcpp;
 
 /// Art as it sits on a card: straight-alpha RGBA pixels and where they go.
 pub struct Placed<'a> {

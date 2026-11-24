@@ -116,6 +116,7 @@ name = "cardsmith-fill"
 version = "0.0.0"
 dependencies = [
  "ort",
+ "png",
 ]
 
 [[package]]

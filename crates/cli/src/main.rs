@@ -6,10 +6,11 @@
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
-//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|lama|patchmatch|none] [--seed <n>]
+//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--sd-model <path>] [--sd-arg <arg>]...
 //!                                                         build a card from an imported template
 //! cardsmith symbols [--cache <dir>]                      download set symbols and set data (hexproof.io) for offline use
 //! cardsmith models [--cache <dir>]                       download the LaMa fill model and ONNX Runtime (about 240 MB)
+//! cardsmith models sd [--cache <dir>]                    download the Stable Diffusion 1.5 inpainting model (4.3 GB)
 //! cardsmith sheet -o <out.png> [--across N] [--shrink N] <image.png>...    many images on one sheet
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
@@ -23,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|lama|patchmatch|none] [--seed <n>]\n       cardsmith symbols [--cache <dir>]\n       cardsmith models [--cache <dir>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--sd-model <path>] [--sd-arg <arg>]...\n       cardsmith symbols [--cache <dir>]\n       cardsmith models [sd] [--cache <dir>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -179,15 +180,29 @@ fn run(args: &[String]) -> Result<(), String> {
             Ok(())
         }
         Some("models") => {
-            // cardsmith models [--cache <dir>]: download what the model-based fill tier needs.
-            let cache = match (args.get(1).map(String::as_str), args.get(2)) {
-                (Some("--cache"), Some(dir)) => PathBuf::from(dir),
-                (None, _) => scryfall_cache(),
-                _ => return Err(USAGE.into()),
-            };
+            // cardsmith models [sd] [--cache <dir>]: download what a model-based fill tier needs.
+            let mut cache = scryfall_cache();
+            let mut sd = false;
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "--cache" => cache = PathBuf::from(rest.next().ok_or(USAGE)?),
+                    "sd" => sd = true,
+                    "lama" => sd = false,
+                    _ => return Err(USAGE.into()),
+                }
+            }
+            let mut client = cardsmith_scryfall::Client::new(&cache);
+            if sd {
+                use cardsmith_fill::sdcpp::{MODEL_BYTES, MODEL_FILE, MODEL_URL};
+                eprintln!("The Stable Diffusion 1.5 inpainting model is {:.1} GB. Downloading it into {} unless it is there ...", MODEL_BYTES as f64 / 1e9, cache.display());
+                let model = client.fetch_file(MODEL_URL, "models", MODEL_FILE, Some(MODEL_BYTES)).map_err(|e| e.to_string())?;
+                eprintln!("model: {}", model.display());
+                eprintln!("The sd-cli program of stable-diffusion.cpp is not downloaded: get or build one for your graphics card and give its path with --sd-cli, or put it at {}.", cache.join("sdcpp").join(SD_CLI_FILE).display());
+                return Ok(());
+            }
             use cardsmith_fill::lama::{MODEL_BYTES, MODEL_FILE, MODEL_URL};
             eprintln!("The LaMa fill model is {} MB and ONNX Runtime about 30 MB. Downloading what is missing into {} ...", MODEL_BYTES / 1_000_000, cache.display());
-            let mut client = cardsmith_scryfall::Client::new(&cache);
             let model = client.fetch_file(MODEL_URL, "models", MODEL_FILE, Some(MODEL_BYTES)).map_err(|e| e.to_string())?;
             let (platform, machine) = (if cfg!(target_os = "windows") { "win" } else if cfg!(target_os = "macos") { "macosx" } else { "manylinux" }, if cfg!(target_arch = "aarch64") { if cfg!(target_os = "macos") { "arm64" } else { "aarch64" } } else if cfg!(target_os = "windows") { "amd64" } else { "x86_64" });
             let runtime = client.onnx_runtime(RUNTIME_FILE, platform, machine).map_err(|e| e.to_string())?;
@@ -279,6 +294,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let (mut out, mut fonts, mut art, mut cache) = (None, None, None, None);
             let mut symbol = true;
             let (mut fill, mut seed) = (Some("auto".to_string()), 1u64);
+            let mut sd = SdOptions::default();
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
@@ -291,16 +307,21 @@ fn run(args: &[String]) -> Result<(), String> {
                     // How the space around the art is filled: "patchmatch" (the default) or "none".
                     "--fill" => fill = match rest.next().map(String::as_str) {
                         Some("none") => None,
-                        Some(tier @ ("auto" | "lama" | "patchmatch")) => Some(tier.to_string()),
+                        Some(tier @ ("auto" | "sd" | "lama" | "patchmatch")) => Some(tier.to_string()),
                         _ => return Err(USAGE.into()),
                     },
                     // A different seed gives a different fill.
                     "--seed" => seed = rest.next().and_then(|n| n.parse().ok()).ok_or(USAGE)?,
+                    // For --fill sd: where the sd-cli program and its model are, what to paint, and extra arguments for sd-cli.
+                    "--sd-cli" => sd.program = Some(PathBuf::from(rest.next().ok_or(USAGE)?)),
+                    "--sd-model" => sd.model = Some(PathBuf::from(rest.next().ok_or(USAGE)?)),
+                    "--prompt" => sd.prompt = Some(rest.next().ok_or(USAGE)?.clone()),
+                    "--sd-arg" => sd.extra.push(rest.next().ok_or(USAGE)?.clone()),
                     _ => plain.push(arg),
                 }
             }
             let (Some(dir), Some(what), Some(out)) = (plain.first(), plain.get(1), out) else { return Err(USAGE.into()) };
-            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from), symbol, fill.map(|tier| (tier, seed)))
+            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from), symbol, fill.map(|tier| (tier, seed)), sd)
         }
         Some("text") => {
             let mut input = None;
@@ -355,6 +376,18 @@ fn contact_sheet(images: &[cardsmith_core::render::RenderResult], across: u32, s
     encode_png(sw, sh, &sheet).map_err(|e| e.to_string())
 }
 
+/// What stable-diffusion.cpp's command-line program is called on this system.
+const SD_CLI_FILE: &str = if cfg!(target_os = "windows") { "sd-cli.exe" } else { "sd-cli" };
+
+/// Choices for the Stable Diffusion fill tier.
+#[derive(Default)]
+struct SdOptions {
+    program: Option<PathBuf>,
+    model: Option<PathBuf>,
+    prompt: Option<String>,
+    extra: Vec<String>,
+}
+
 /// What the ONNX Runtime library file is called on this system.
 const RUNTIME_FILE: &str = if cfg!(target_os = "windows") { "onnxruntime.dll" } else if cfg!(target_os = "macos") { "libonnxruntime.dylib" } else { "libonnxruntime.so" };
 
@@ -368,7 +401,7 @@ fn scryfall_cache() -> PathBuf {
 /// `what` is a card name (with Proxyshop's art file tags if wanted), looked up
 /// on Scryfall through the cache, or a JSON file holding card data as
 /// `cardsmith card` prints it, for custom cards and for tests.
-fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>, symbol: bool, fill: Option<(String, u64)>) -> Result<(), String> {
+fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>, symbol: bool, fill: Option<(String, u64)>, sd: SdOptions) -> Result<(), String> {
     use cardsmith_engine::{Art, Options, Template};
     let read = |name: &str| std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{}: {e}", dir.join(name).display()));
     let template = Template::from_json(&read("doc.json")?, &read("manifest.json")?)?;
@@ -430,20 +463,28 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
         let placed = cardsmith_fill::Placed { width: image.w as u32, height: image.h as u32, rgba: &image.data, x: plan.art_position.0, y: plan.art_position.1, scale: plan.art_scale };
         // A quarter of the card's size is plenty for made-up background, and quick.
         let work_width = plan.canvas.0 / 4;
-        let request = cardsmith_fill::FillRequest { art: placed, canvas: plan.canvas, keep: plan.keep, seed, prompt: None };
+        let request = cardsmith_fill::FillRequest { art: placed, canvas: plan.canvas, keep: plan.keep, seed, prompt: sd.prompt.as_deref() };
         // Best first: the model if it is there (or was asked for), then PatchMatch, which always is.
         let models = cache.unwrap_or_else(scryfall_cache);
         let runtime = std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from).unwrap_or_else(|| models.join("onnxruntime").join(RUNTIME_FILE));
         let mut lama = cardsmith_fill::lama::Lama::new(runtime, models.join("models").join(cardsmith_fill::lama::MODEL_FILE), work_width);
         let mut patchmatch = cardsmith_fill::PatchMatch { work_width };
+        // Stable Diffusion is only used when asked for: it wants a graphics card and a 4 GB model.
+        let program = sd.program.clone().or_else(|| std::env::var_os("CARDSMITH_SD_CLI").map(PathBuf::from)).unwrap_or_else(|| models.join("sdcpp").join(SD_CLI_FILE));
+        let model = sd.model.clone().unwrap_or_else(|| models.join("models").join(cardsmith_fill::sdcpp::MODEL_FILE));
+        let mut diffusion = cardsmith_fill::sdcpp::SdCpp::new(program, model, models.join("sdcpp").join("last-run"), work_width);
+        diffusion.extra_args = sd.extra.clone();
         let mut providers: Vec<&mut dyn cardsmith_fill::FillProvider> = Vec::new();
+        if tier == "sd" {
+            providers.push(&mut diffusion);
+        }
         if tier != "patchmatch" {
             providers.push(&mut lama);
         }
         providers.push(&mut patchmatch);
         let outcome = cardsmith_fill::fill_with_fallback(&mut providers, &request)?;
-        // Falling back is only worth a word when the better tier was asked for by name.
-        if tier == "lama" {
+        // Falling back is only worth a word when a better tier was asked for by name.
+        if tier == "lama" || tier == "sd" {
             for notice in &outcome.notices {
                 eprintln!("warning: {notice}; used {} instead", outcome.provider);
             }

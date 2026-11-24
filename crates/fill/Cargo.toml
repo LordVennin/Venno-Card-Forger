@@ -11,6 +11,10 @@ rust-version.workspace = true
 # a library file, so the default build stays pure Rust and needs nothing installed.
 ort = { version = "=2.0.0-rc.15", optional = true, default-features = false, features = ["std", "load-dynamic", "api-17"] }
 
+# For handing pictures to, and taking them back from, a program that is run to do the filling.
+png = { version = "0.18", optional = true }
+
 [features]
 default = []
 onnx = ["dep:ort"]
+sdcpp = ["dep:png"]
