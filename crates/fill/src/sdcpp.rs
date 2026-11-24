@@ -18,10 +18,10 @@
 //! Like the LaMa tier, the model works on a 512 x 512 picture, so its answer
 //! guides PatchMatch, which fills at the working size.
 //!
-//! **Not yet run against the real program.** The machine this was written on
-//! has no graphics card. The plumbing is tested with a stand-in program; what
-//! `sd-cli` actually does with the script, how much memory it needs and how
-//! long it takes are for the first run on real hardware to show.
+//! Run once against the real program, on the owner's machine: a borderless
+//! card filled in 18.5 seconds. The tests here use a stand-in program, since
+//! they cannot assume a graphics card. Its memory use, and what `sd-cli` does
+//! when it runs out, are still not known. See `docs/TIER3.md`.
 
 use crate::{Availability, FillProvider, FillRequest, Filled};
 use std::path::PathBuf;

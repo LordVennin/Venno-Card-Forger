@@ -4,9 +4,11 @@ Tier 3 fills the space around card art with Stable Diffusion 1.5 inpainting, run
 `sd-cli` program of [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp).
 It is the equivalent of Photoshop's Generative Fill, and it is opt-in: `--fill auto` never uses it.
 
-**Status: written but not yet run against the real program.** It was built on a machine with no
-graphics card. Its plumbing is tested with a stand-in program (`crates/fill/tests/sdcpp.rs`). The
-first run on real hardware is the test. This page says how to do that run and what to report.
+**Status: run once on real hardware, and it worked.** On the owner's Linux desktop, with `sd-cli`
+and the model installed by `tools/install-tier3.sh`, a borderless card was filled in 18.5 seconds
+(model loading included) and the result was accepted. It was written on a machine with no graphics
+card, so the automated tests use a stand-in program (`crates/fill/tests/sdcpp.rs`) and never run
+the real one. This page says how to set it up and what to look at when it fails.
 
 ## The quick way
 
@@ -82,10 +84,11 @@ The first checks the script without loading the model; the second runs it exactl
 - The script is the project's own SD 1.5 inpainting example with Cardsmith's values filled in, and
   full strength (the missing area is painted from nothing). `sd-cli` has no command-line options
   for the picture, mask or prompt, which is why a script is written for every fill.
-- That white means "paint here" is read from the example script, not stated in the project's
-  documentation.
+- White in the mask means "paint here". That was read from the example script, and the first real
+  run bore it out: the art was kept and the space around it painted.
 - The model works at 512 × 512. As with Tier 2, its answer is a guide: PatchMatch then fills at the
   working size from it, so the result has the art's own texture.
-- Not known until it is run: memory use, speed, whether a `.ckpt` loads as readily as
-  `.safetensors`, and what `sd-cli` prints and returns when it runs out of memory. A failure of any
+- The `.ckpt` model loads, and a fill took 18.5 seconds on the owner's machine. Still not known:
+  how much graphics memory it uses, how it does on an 8 GB card, the CUDA build, and what `sd-cli`
+  prints and returns when it runs out of memory. A failure of any
   kind, or ten minutes without finishing, falls back to the next tier.
