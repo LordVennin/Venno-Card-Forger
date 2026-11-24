@@ -38,7 +38,7 @@ packages/doc/          TypeScript types for the document JSON (no logic)
 apps/desktop/          Tauri app (src-tauri/ = Rust shell, src/ = Svelte UI)
 packages/importer/     PSD -> template package converter + feature survey (TypeScript, offline)
 crates/engine/         Card engine (pure, builds for WASM): template + card data -> one undoable batch edit
-packages/fill/         FillProvider interface + glue to Rust/HTTP backends
+crates/fill/           Filling the space around art: the FillProvider trait, fallback between tiers, and Tier 1 (PatchMatch, pure Rust)
 tests/golden/          Reference images and the golden-image runner
 reference/Proxyshop/   Clone of Proxyshop for reference only (gitignored)
 ```
@@ -98,7 +98,7 @@ cargo run --release -p cardsmith-cli -- samples <dir>                           
 cargo run --release -p cardsmith-cli -- text <suite.json> -o <dir> --fonts <dir>     # render a suite of rules text boxes
 cargo run --release -p cardsmith-cli -- card "<name or art file name>" [--set <code>] [--number <n>] [--raw]   # a card from Scryfall (cached); --raw for Scryfall's own JSON
 cargo run --release -p cardsmith-cli -- bulk <oracle | default>                      # download Scryfall bulk data for offline lookups
-cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.json> -o <png | .cardsmith> [--fonts <dir>] [--art <image>] [--no-symbol]   # build a card from an imported template
+cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.json> -o <png | .cardsmith> [--fonts <dir>] [--art <image>] [--no-symbol] [--fill patchmatch|none] [--seed <n>]   # build a card from an imported template, filling around the art where the frame shows past it
 cargo run --release -p cardsmith-cli -- symbols [--cache <dir>]                      # download set symbols and set data from hexproof.io for offline use
 cargo run --release -p cardsmith-cli -- sheet -o <png> [--across N] [--shrink N] <images...>   # many images on one sheet
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
@@ -130,11 +130,12 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 - `crates/cards`: `rules_text.rs` (ported from Proxyshop, MPL header): `italic_ranges`/`generate_italics`, `strip_reminder_text`, the symbol map and colors, and `format_rules_text`, which turns oracle and flavor text into the `RichText` of a rules box. Proxyshop's italics cases are in `tests/data/text_italic.toml`.
 - `crates/cards` also has `frame_logic.rs` (background, pinlines and name boxes from a card's cost, types and text), `layout.rs` (`process_card_data` settles the layout, `card_data` reads every field into `CardData`) and `file_name.rs` (`Name (Artist) [SET] {num} $creator`), all ported with MPL headers. Proxyshop's cases are in `tests/data/`: `frame_data.toml` runs against `frame_cards.json`, which `tools/fetch-frame-cards.py` refreshes from Scryfall.
 - `crates/engine`: `lib.rs` (`Template`, `Bindings`, `Options`, `build_card`, the shared text and art steps, raster frames) and `vector.rs` (the borderless vector template's frame: shapes by textbox height, clipped color layers, masks), ported from Proxyshop's template classes with an MPL header. Its tests build cards on a small made-up template with the rectangle font.
+- `crates/fill`: `patchmatch.rs` (the inpainter), `lib.rs` (`fill_edges`, `FillProvider`, `PatchMatch`, `fill_with_fallback`). The engine's `FillPlan` says what to fill; `FillPlan::edit` adds the result as a `fill` layer beneath the art.
 - `crates/engine/src/svg.rs`: the SVG reader that turns a set symbol into shape layers. `cargo run --release -p cardsmith-engine --example svg_check -- <dir>` runs it over a folder of SVGs and lists what it could not read.
 - `crates/scryfall`: `lib.rs` (`Client`, the `Transport` trait tests replace, the cache, `card_data`), `bulk.rs` (bulk download, index and lookups), `hexproof.rs` (set symbols package and set data from hexproof.io). Its tests use a pretend network; nothing in `cargo test` touches the real one.
 - Text tests use `crates/core/tests/fixtures/blocks.ttf`, a font of rectangles made by `tools/make-test-font.py`. Real fonts are only ever read from `fixtures/local/fonts`.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
 - `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text | card | bulk | symbols | build | sheet`.
 - `packages/importer/src/import`: `convert.ts` (PSD layer tree to document), `paths.ts` (vector paths), `effects.ts` (layer effects), `bindings.ts` (Proxyshop layer names to bindings), `cli.ts`.
-- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`. `tests/cards`: `run.ts`, `cards.json` (refreshed by `tools/fetch-suite-cards.py`), `art.png`.
+- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`. `tests/cards`: `run.ts`, `cards.json` (refreshed by `tools/fetch-suite-cards.py`), `art.png` (a made-up scene from `tools/make-test-art.py`).
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

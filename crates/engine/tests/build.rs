@@ -563,3 +563,56 @@ fn a_basic_land_shows_its_land_symbol_in_place_of_rules_text() {
     let (doc, _) = build(&card(json!({})), &Options { basic_watermark: Some(tiny_svg()), ..Options::default() });
     assert!(tree::find(&doc, "card-watermark").is_none());
 }
+
+// ---- filling around the art ------------------------------------------------------
+
+fn art(width: u32, height: u32) -> Options {
+    Options { art: Some(Art { asset: "pic".into(), path: "assets/pic.png".into(), width, height }), ..Options::default() }
+}
+
+#[test]
+fn an_ordinary_frame_needs_no_fill_but_a_full_art_one_does_unless_the_art_is_tall() {
+    let template = template();
+    // An ordinary card: the frame hides everything past the art area.
+    let built = build_card(&template, &card(json!({})), &fonts(), &art(400, 300)).unwrap();
+    assert!(built.fill.is_none());
+    // A colorless card is full-art: its frame shows past the ordinary art area (200..1800 x 400..1400).
+    let eldrazi = card(json!({ "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [] }));
+    let built = build_card(&template, &eldrazi, &fonts(), &art(400, 300)).unwrap();
+    let plan = built.fill.clone().expect("a full-art frame is filled");
+    // The art is 1600 x 1200 from (200, 300). The template is 2000 px wide, so Proxyshop's 10 px margin is 6.
+    assert_eq!((plan.art_position, plan.art_scale, plan.canvas), ((200.0, 300.0), 4.0, (2000, 3000)));
+    assert_eq!(plan.keep, [206.0, 306.0, 1794.0, 1494.0]);
+    let mut doc = template.doc.clone();
+    apply(&mut doc, &built.edit).unwrap();
+    // The art shows only inside the trusted area, with its corners rounded.
+    let mask = layer(&doc, "card-art").base().vector_mask.clone().unwrap();
+    assert!(mask.path.d.starts_with("M") && mask.enabled.is_none() && mask.inverted.is_none(), "{}", mask.path.d);
+    // The finished fill goes on its own layer directly beneath the art, and remembers how it was made.
+    let edit = plan.edit("card-fill", "assets/card-fill.png", 500, 750, 4.0, "patchmatch", json!({ "seed": 1 })).unwrap();
+    let undo = apply(&mut doc, &edit).unwrap();
+    let order: Vec<&str> = doc.root.children.iter().map(|l| l.id()).take(3).collect();
+    assert_eq!(order, ["placeholder", "card-fill", "card-art"]);
+    let Layer::Fill(fill) = layer(&doc, "card-fill") else { panic!() };
+    assert_eq!((fill.source.as_str(), fill.params["seed"].as_i64(), fill.transform, fill.base.role.as_deref()), ("patchmatch", Some(1), [4.0, 0.0, 0.0, 0.0, 4.0, 0.0], Some("card.fill")));
+    assert_eq!((doc.assets["card-fill"].width, doc.assets["card-fill"].height), (Some(500), Some(750)));
+    // Adding the fill is its own step: undoing it leaves the card as built.
+    apply(&mut doc, &undo).unwrap();
+    assert!(tree::find(&doc, "card-fill").is_none() && tree::find(&doc, "card-art").is_some());
+    // Tall art goes in the full-art area, which the frame was made for: nothing to fill.
+    assert!(build_card(&template, &eldrazi, &fonts(), &art(300, 600)).unwrap().fill.is_none());
+}
+
+#[test]
+fn extended_and_borderless_templates_always_fill_and_trust_the_art_up_to_the_cards_edge() {
+    // The made-up vector template: its short art area is the top 2000 px of the card, edge to edge.
+    let template = vector_template();
+    let built = build_card(&template, &card(json!({})), &fonts(), &Options { font_italic: "Blocks-Regular".into(), ..art(400, 300) }).unwrap();
+    let plan = built.fill.expect("a borderless frame is always filled");
+    // 400 x 300 covers 2000 x 2000 at 6.67: it overhangs left and right, so only the bottom edge is pulled in.
+    assert_eq!((plan.keep[0], plan.keep[1], plan.keep[2], plan.keep[3]), (0.0, 0.0, 2000.0, 1994.0));
+    // A raster template says so in its bindings.
+    let mut extended = self::template();
+    extended.bindings.art_fill = Some("always".into());
+    assert!(build_card(&extended, &card(json!({})), &fonts(), &art(400, 300)).unwrap().fill.is_some());
+}

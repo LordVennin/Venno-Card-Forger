@@ -20,3 +20,8 @@ codegen-units = 1
 opt-level = 2
 [profile.test.package.cardsmith-core]
 opt-level = 2
+# So is filling.
+[profile.dev.package.cardsmith-fill]
+opt-level = 3
+[profile.test.package.cardsmith-fill]
+opt-level = 3

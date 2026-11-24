@@ -13,7 +13,7 @@
  *
  * With no templates or no fonts it skips cleanly. Output goes to
  * out/cards/<template>/: one image per card and sheet.png with all of them.
- * The art is tests/cards/art.png, a gradient standing in for a picture.
+ * The art is tests/cards/art.png, a made-up scene (tools/make-test-art.py) standing in for card art.
  *
  * `--update` replaces references with the current renders. Do that only after
  * a person has looked at the new output and confirmed it is right.

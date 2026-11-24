@@ -53,6 +53,8 @@ pub struct Bindings {
     pub layers: BTreeMap<String, String>,
     /// The template's placeholder for the art.
     pub art: Option<String>,
+    /// "always" for templates whose art never reaches the edges of what shows (extended and borderless frames).
+    pub art_fill: Option<String>,
 }
 
 /// An imported template: its document and what its layers are for.
@@ -113,11 +115,51 @@ impl Default for Options {
     }
 }
 
+/// Empty space around the art that should be filled with made-up picture.
+///
+/// The engine only says that it should be done and where; making the picture
+/// needs the art's pixels and real work, which is the caller's (see the
+/// `cardsmith-fill` crate). The caller then asks for the edit that puts the
+/// result in the document with [`FillPlan::edit`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct FillPlan {
+    /// The art to carry on from, and where it sits: document position of its top-left corner, and its scale.
+    pub art_asset: String,
+    pub art_position: (f64, f64),
+    pub art_scale: f64,
+    /// Document size in pixels.
+    pub canvas: (u32, u32),
+    /// The part of the art that is trusted (left, top, right, bottom): the art
+    /// where it shows, less a margin at its edges, where scans often have a
+    /// border. Everything outside this is to be filled.
+    pub keep: [f64; 4],
+    parent: String,
+    index: usize,
+}
+
+impl FillPlan {
+    /// The edit that adds a finished fill: an image of the whole card area,
+    /// one pixel of it covering `scale` document pixels, on its own layer
+    /// just beneath the art. `source` names what made it ("patchmatch") and
+    /// `params` records how (seed, size), so it can be made again differently.
+    pub fn edit(&self, asset: &str, path: &str, width: u32, height: u32, scale: f64, source: &str, params: Value) -> Result<Edit, String> {
+        let layer: Layer = serde_json::from_value(json!({
+            "kind": "fill", "id": "card-fill", "name": "Art Fill", "visible": true, "opacity": 1, "blend": "normal", "clip": false, "role": "card.fill",
+            "source": source, "params": params, "asset": asset, "transform": [scale, 0.0, 0.0, 0.0, scale, 0.0]
+        }))
+        .map_err(|e| e.to_string())?;
+        let image = serde_json::from_value(json!({ "kind": "image", "path": path, "width": width, "height": height })).map_err(|e| e.to_string())?;
+        Ok(Edit::Batch { edits: vec![Edit::SetAsset { id: asset.to_string(), asset: Some(image) }, Edit::AddLayer { parent: self.parent.clone(), layer, index: Some(self.index) }] })
+    }
+}
+
 /// What building a card gives back.
 #[derive(Clone, Debug)]
 pub struct Built {
     /// One step that turns the template into the card. Apply it with the core's command system.
     pub edit: Edit,
+    /// Set when the art leaves space that should be filled.
+    pub fill: Option<FillPlan>,
     /// Things that could not be done, in plain words: a color the template has no layer for, a font that is not loaded.
     pub warnings: Vec<String>,
 }
@@ -705,6 +747,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
 
     // ---- art -------------------------------------------------------------------------
 
+    let mut fill = None;
     if let Some(art) = &options.art {
         // Tall art, or a full-art frame when asked, goes in the full-art area if the template has one.
         let tall = art.height as f64 > art.width as f64 * 1.1;
@@ -729,7 +772,32 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
                     None => (build.doc.root.base.id.clone(), 0),
                 };
                 match layer {
-                    Ok(layer) => build.edit(Edit::AddLayer { parent, layer, index: Some(index) }),
+                    Ok(layer) => {
+                        build.edit(Edit::AddLayer { parent: parent.clone(), layer, index: Some(index) });
+                        // Extended and borderless frames always show past the art; a full-art frame (a colorless card) does
+                        // when its art sits in the ordinary art area.
+                        let always = b.kind == "vector" || b.art_fill.as_deref() == Some("always") || template.id.ends_with("-extended");
+                        let in_full_area = (tall || fullart) && build.bound(&b.art_refs, "fullArt").is_some();
+                        if always || (frame.is_colorless && !in_full_area) {
+                            let (cw, ch) = (template.doc.width as f64, template.doc.height as f64);
+                            let shown = [tx.max(0.0), ty.max(0.0), (tx + art.width as f64 * s).min(cw), (ty + art.height as f64 * s).min(ch)];
+                            // Proxyshop's selection: the art, pulled in 10 px and its corners rounded by 5, except along the card's own edges.
+                            let (pull, round) = ((10.0 * scale).round(), (5.0 * scale).round());
+                            let keep = [
+                                if shown[0] > 0.0 { shown[0] + pull } else { 0.0 },
+                                if shown[1] > 0.0 { shown[1] + pull } else { 0.0 },
+                                if shown[2] < cw { shown[2] - pull } else { cw },
+                                if shown[3] < ch { shown[3] - pull } else { ch },
+                            ];
+                            let covers = keep[0] <= 0.0 && keep[1] <= 0.0 && keep[2] >= cw && keep[3] >= ch;
+                            if !covers && keep[2] - keep[0] > 2.0 * round && keep[3] - keep[1] > 2.0 * round {
+                                // The art shows only where it is trusted; the fill underneath shows everywhere else.
+                                let outline = kurbo::Shape::to_path(&kurbo::RoundedRect::new(keep[0], keep[1], keep[2], keep[3], round), 0.05);
+                                build.set("card-art", json!({ "vectorMask": { "path": { "d": svg::path_data(&outline) } } }));
+                                fill = Some(FillPlan { art_asset: art.asset.clone(), art_position: (tx, ty), art_scale: s, canvas: (template.doc.width, template.doc.height), keep, parent, index });
+                            }
+                        }
+                    }
                     Err(e) => build.warn(format!("The art layer could not be made: {e}")),
                 }
             }
@@ -744,5 +812,5 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     props.insert("templateId".into(), json!(template.id));
     build.edit(Edit::SetDocProps { props });
 
-    Ok(Built { edit: Edit::Batch { edits: build.edits }, warnings: build.warnings })
+    Ok(Built { edit: Edit::Batch { edits: build.edits }, fill, warnings: build.warnings })
 }

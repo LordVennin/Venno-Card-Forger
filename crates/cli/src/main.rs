@@ -6,7 +6,7 @@
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
-//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol]
+//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill patchmatch|none] [--seed <n>]
 //!                                                         build a card from an imported template
 //! cardsmith symbols [--cache <dir>]                      download set symbols and set data (hexproof.io) for offline use
 //! cardsmith sheet -o <out.png> [--across N] [--shrink N] <image.png>...    many images on one sheet
@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol]\n       cardsmith symbols [--cache <dir>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill patchmatch|none] [--seed <n>]\n       cardsmith symbols [--cache <dir>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -261,6 +261,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let mut plain = Vec::new();
             let (mut out, mut fonts, mut art, mut cache) = (None, None, None, None);
             let mut symbol = true;
+            let (mut fill, mut seed) = (true, 1u64);
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
@@ -270,11 +271,19 @@ fn run(args: &[String]) -> Result<(), String> {
                     "--cache" => cache = rest.next(),
                     // Leave the set symbol off, and make no request for it.
                     "--no-symbol" => symbol = false,
+                    // How the space around the art is filled: "patchmatch" (the default) or "none".
+                    "--fill" => fill = match rest.next().map(String::as_str) {
+                        Some("patchmatch") => true,
+                        Some("none") => false,
+                        _ => return Err(USAGE.into()),
+                    },
+                    // A different seed gives a different fill.
+                    "--seed" => seed = rest.next().and_then(|n| n.parse().ok()).ok_or(USAGE)?,
                     _ => plain.push(arg),
                 }
             }
             let (Some(dir), Some(what), Some(out)) = (plain.first(), plain.get(1), out) else { return Err(USAGE.into()) };
-            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from), symbol)
+            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from), symbol, fill.then_some(seed))
         }
         Some("text") => {
             let mut input = None;
@@ -339,7 +348,7 @@ fn scryfall_cache() -> PathBuf {
 /// `what` is a card name (with Proxyshop's art file tags if wanted), looked up
 /// on Scryfall through the cache, or a JSON file holding card data as
 /// `cardsmith card` prints it, for custom cards and for tests.
-fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>, symbol: bool) -> Result<(), String> {
+fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>, symbol: bool, fill: Option<u64>) -> Result<(), String> {
     use cardsmith_engine::{Art, Options, Template};
     let read = |name: &str| std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{}: {e}", dir.join(name).display()));
     let template = Template::from_json(&read("doc.json")?, &read("manifest.json")?)?;
@@ -353,6 +362,7 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
     };
 
     let mut options = Options::default();
+    let mut art_pixels = None;
     if symbol {
         // The set's symbol in this card's rarity, and the set's size for the collector line, from hexproof.io through the cache.
         let mut client = cardsmith_scryfall::Client::new(cache.unwrap_or_else(scryfall_cache));
@@ -380,6 +390,7 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
         let image = cardsmith_core::render::decode_image(&bytes).ok_or(format!("{file}: not a readable image"))?;
         options.art = Some(Art { asset: "card-art".into(), path: "assets/card-art.png".into(), width: image.w as u32, height: image.h as u32 });
         assets.insert("card-art".into(), bytes);
+        art_pixels = Some(image);
     }
 
     let mut renderer = cardsmith_core::render::Renderer::new();
@@ -392,6 +403,27 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
     }
     let mut doc = template.doc.clone();
     cardsmith_core::commands::apply(&mut doc, &built.edit).map_err(|e| e.to_string())?;
+
+    // Fill the space the art leaves, on a layer of its own beneath it.
+    if let (Some(plan), Some(seed), Some(image)) = (&built.fill, fill, &art_pixels) {
+        let started = Instant::now();
+        let placed = cardsmith_fill::Placed { width: image.w as u32, height: image.h as u32, rgba: &image.data, x: plan.art_position.0, y: plan.art_position.1, scale: plan.art_scale };
+        // A quarter of the card's size is plenty for made-up background, and quick.
+        let work_width = plan.canvas.0 / 4;
+        let request = cardsmith_fill::FillRequest { art: placed, canvas: plan.canvas, keep: plan.keep, seed, prompt: None };
+        // Only the first tier exists so far; the others will go in front of it here.
+        let outcome = cardsmith_fill::fill_with_fallback(&mut [&mut cardsmith_fill::PatchMatch { work_width }], &request)?;
+        for notice in &outcome.notices {
+            eprintln!("warning: {notice}");
+        }
+        if let Some(filled) = outcome.filled {
+            let png = encode_png(filled.width, filled.height, &filled.rgba).map_err(|e| e.to_string())?;
+            let edit = plan.edit("card-fill", "assets/card-fill.png", filled.width, filled.height, filled.scale, outcome.provider, serde_json::json!({ "seed": seed, "workWidth": work_width }))?;
+            assets.insert("card-fill".into(), png);
+            cardsmith_core::commands::apply(&mut doc, &edit).map_err(|e| e.to_string())?;
+            eprintln!("filled around the art in {} ms ({}×{})", started.elapsed().as_millis(), filled.width, filled.height);
+        }
+    }
 
     if out.extension().is_some_and(|e| e == "cardsmith") {
         write(out, &save_cardsmith(&doc, &assets).map_err(|e| e.to_string())?)?;

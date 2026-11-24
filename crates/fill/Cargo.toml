@@ -1,0 +1,9 @@
+[package]
+name = "cardsmith-fill"
+description = "Filling the empty space around card art. Tier 1: PatchMatch, on the CPU, always available."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

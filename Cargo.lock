@@ -82,6 +82,7 @@ dependencies = [
  "cardsmith-cards",
  "cardsmith-core",
  "cardsmith-engine",
+ "cardsmith-fill",
  "cardsmith-scryfall",
  "serde_json",
 ]
@@ -109,6 +110,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "cardsmith-fill"
+version = "0.0.0"
 
 [[package]]
 name = "cardsmith-scryfall"
