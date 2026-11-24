@@ -443,7 +443,7 @@ pub fn parse_svg(text: &str) -> Result<SvgArt, String> {
 // ---- into layers ------------------------------------------------------------------
 
 /// A path as absolute SVG commands.
-fn path_data(path: &BezPath) -> String {
+pub(crate) fn path_data(path: &BezPath) -> String {
     let p = |point: Point| format!("{} {}", (point.x * 1000.0).round() / 1000.0, (point.y * 1000.0).round() / 1000.0);
     path.elements()
         .iter()

@@ -776,6 +776,134 @@
     ],
     "watermark": ""
    }
+  },
+  {
+   "case": "Color Indicator",
+   "card": {
+    "artist": "Eric Fortune",
+    "collectorNumber": 273,
+    "collectorNumberRaw": "273",
+    "colorIdentity": [
+     "G"
+    ],
+    "colorIndicator": "G",
+    "creator": "",
+    "flavorText": "It had waited a long time to be found.",
+    "frame": {
+     "background": "Land",
+     "identity": "G",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "G",
+     "twins": "G"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": true,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Dryad Arbor",
+    "nickname": "",
+    "oracleText": "(This land isn't a spell, it's affected by summoning sickness, and it has \"{T}: Add {G}.\")",
+    "otherFace": null,
+    "power": "1",
+    "rarity": "rare",
+    "releasedAt": "2024-09-27",
+    "set": "DSC",
+    "subtypes": [
+     "Forest",
+     "Dryad"
+    ],
+    "supertypes": [],
+    "toughness": "1",
+    "transformIcon": "",
+    "typeLine": "Land Creature — Forest Dryad",
+    "types": [
+     "Land",
+     "Creature"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "No Rules Text",
+   "card": {
+    "artist": "D. J. Cleland-Hura",
+    "collectorNumber": 268,
+    "collectorNumberRaw": "268",
+    "colorIdentity": [
+     "G"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "G",
+     "identity": "G",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "G",
+     "twins": "G"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": true,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{1}{G}",
+    "name": "Grizzly Bears",
+    "nickname": "",
+    "oracleText": "",
+    "otherFace": null,
+    "power": "2",
+    "rarity": "common",
+    "releasedAt": "2007-07-13",
+    "set": "10E",
+    "subtypes": [
+     "Bear"
+    ],
+    "supertypes": [],
+    "toughness": "2",
+    "transformIcon": "",
+    "typeLine": "Creature — Bear",
+    "types": [
+     "Creature"
+    ],
+    "watermark": ""
+   }
   }
  ]
 }

@@ -322,7 +322,7 @@ fn vector_template() -> Template {
         text(&format!("rules-c-{size}"), "Rules Text - Creature", false, "Words", json!({ "box": { "x": 250, "y": 1650, "w": 1500, "h": 900 }, "effectsEnabled": false })),
     ]);
     let mut assets = json!({ "m": { "kind": "image", "path": "assets/m.png", "width": 4, "height": 4 }, "ref": { "kind": "image", "path": "assets/ref.png", "width": 1600, "height": 800 } });
-    for size in sizes {
+    for size in sizes.iter().chain(["Textless", "1/2"].iter()) {
         assets[format!("cut-{size}")] = json!({ "kind": "image", "path": format!("assets/cut-{size}.png"), "width": 4, "height": 4 });
     }
     let doc = json!({
@@ -334,40 +334,56 @@ fn vector_template() -> Template {
             group("textbox", "Textbox", true, vec![group("textbox-shape", "Shape", true, by_size("tb", 1600.0))]),
             with(group("pinlines", "Pinlines", true, vec![group("pin-shape", "Shape", true, vec![
                 group("pin-name", "Card Name", true, vec![group("pin-name-normal", "Normal", false, vec![])]),
-                group("pin-type", "Typeline", true, by_size("pin-type", 1400.0)),
+                group("pin-type", "Typeline", true, [by_size("pin-type", 1400.0), vec![rect("pin-type-Textless", "Textless", false, [200.0, 2700.0, 1800.0, 2800.0])]].concat()),
                 group("pin-textbox", "Textbox", true, by_size("pin-tb", 1600.0)),
             ])]), json!({ "vectorMask": { "path": { "d": "M0 0L2000 0L2000 500L0 500Z" }, "inverted": true, "enabled": false } })),
             group("crown", "Legendary Crown", true, vec![group("crown-inner", "Legendary Crown", false, vec![])]),
             group("twins", "Name & Title Boxes", true, vec![group("twins-shape", "Shape", true, vec![
                 group("twins-name", "Card Name", true, vec![rect("twins-name-normal", "Normal", false, [200.0, 200.0, 1800.0, 350.0])]),
-                group("twins-type", "Typeline", true, by_size("twins-type", 1400.0)),
+                group("twins-type", "Typeline", true, [by_size("twins-type", 1400.0), vec![rect("twins-type-Textless", "Textless", false, [200.0, 2700.0, 1800.0, 2800.0])]].concat()),
             ])]),
-            group("ptbox", "PT Box", false, vec![]),
+            group("ptbox", "PT Box", false, vec![group("ptbox-shape", "Shape", true, vec![rect("ptbox-box", "PT Box", true, [1500.0, 2400.0, 1800.0, 2600.0])])]),
+            group("ptbox-low", "PT Box Textless", false, vec![group("ptbox-low-shape", "Shape", true, vec![rect("ptbox-low-box", "PT Box", true, [1500.0, 2700.0, 1800.0, 2900.0])])]),
+            group("border", "Border", true, vec![]),
+            group("dot", "Color Indicator", false, vec![
+                group("dot-shape", "Shape", true, vec![rect("dot-circle", "Circle", true, [210.0, 1420.0, 250.0, 1460.0])]),
+                with(rect("dot-2", "2", false, [229.0, 1420.0, 231.0, 1460.0]), json!({ "clip": true })),
+            ]),
             group("g-text", "Text and Icons", true, vec![
                 rules("Tall"), rules("Normal"), rules("Medium"), rules("Short"),
                 group("refs", "Textbox Reference", true, sizes.iter().enumerate().map(|(i, s)| with(base("pixel", &format!("ref-{s}"), s, false), json!({ "asset": "ref", "transform": [1, 0, 200, 0, 1, 1700 + 100 * i] }))).collect()),
                 rect("ref-pt", "PT Reference", false, [1500.0, 2400.0, 1800.0, 2600.0]),
                 text("type", "Typeline", true, "Type", json!({ "origin": { "x": 250, "y": 1470 }, "effectsEnabled": false })),
+                text("type-shift", "Typeline Shift", false, "Type", json!({ "origin": { "x": 300, "y": 1470 }, "effectsEnabled": false })),
+                rect("ref-expansion", "Expansion Reference", false, [1600.0, 1400.0, 1750.0, 1500.0]),
                 text("pt-text", "Power / Toughness", false, "0/0", json!({ "origin": { "x": 1650, "y": 2550 }, "effectsEnabled": false })),
                 text("mana", "Mana Cost", true, "Mana", json!({ "origin": { "x": 1800, "y": 300 } })),
                 text("name", "Card Name", true, "Name", json!({ "origin": { "x": 250, "y": 300 }, "effectsEnabled": false })),
             ]),
-            group("masks", "Masks", true, vec![group("mask-pins", "Pinlines", true, sizes.iter().map(|s| masked(s)).collect())]),
+            group("masks", "Masks", true, vec![
+                group("mask-pins", "Pinlines", true, sizes.iter().map(|s| masked(s)).chain([masked("Textless")]).collect()),
+                group("mask-border", "Border", true, vec![{ let mut cut = masked("Textless"); cut["id"] = json!("cut-border-Textless"); cut }]),
+                group("mask-dot", "Color Indicator", true, vec![masked("1/2")]),
+            ]),
         ] }))
     });
-    let text_ids: serde_json::Map<String, Value> = sizes.iter().flat_map(|s| [(format!("rulesCreature.{}", s.to_lowercase()), json!(format!("rules-c-{s}"))), (format!("rulesNoncreature.{}", s.to_lowercase()), json!(format!("rules-n-{s}")))]).chain([("name", "name"), ("mana", "mana"), ("type", "type"), ("pt", "pt-text")].map(|(k, v)| (k.to_string(), json!(v)))).collect();
+    let text_ids: serde_json::Map<String, Value> = sizes.iter().flat_map(|s| [(format!("rulesCreature.{}", s.to_lowercase()), json!(format!("rules-c-{s}"))), (format!("rulesNoncreature.{}", s.to_lowercase()), json!(format!("rules-n-{s}")))]).chain([("name", "name"), ("mana", "mana"), ("type", "type"), ("typeShift", "type-shift"), ("pt", "pt-text")].map(|(k, v)| (k.to_string(), json!(v)))).collect();
     let manifest = json!({ "id": "mini-vector", "bindings": {
         "kind": "vector", "layouts": ["normal"],
-        "artRefs": { "short": "art-short", "tall": "art-tall" },
-        "groups": { "text": "g-text", "masks": "masks", "pinlinesShapes": "pinlines", "textboxShapes": "textbox", "twinsShapes": "twins", "ptBoxShapes": "ptbox", "crownShapes": "crown" },
-        "text": text_ids, "textRefs": { "textbox": "refs", "pt": "ref-pt" }, "toggles": {}, "layers": {}, "art": "placeholder"
+        "artRefs": { "short": "art-short", "tall": "art-tall", "textless": "art-short" },
+        "groups": { "text": "g-text", "masks": "masks", "border": "border", "pinlinesShapes": "pinlines", "textboxShapes": "textbox", "twinsShapes": "twins", "ptBoxShapes": "ptbox", "crownShapes": "crown" },
+        "text": text_ids, "textRefs": { "textbox": "refs", "pt": "ref-pt", "expansion": "ref-expansion" }, "toggles": {}, "layers": {}, "art": "placeholder"
     } });
     Template::from_json(&doc.to_string(), &manifest.to_string()).unwrap()
 }
 
 fn build_vector(card: &CardData) -> (Doc, Vec<String>) {
+    build_vector_with(card, Options::default())
+}
+
+fn build_vector_with(card: &CardData, more: Options) -> (Doc, Vec<String>) {
     let template = vector_template();
-    let options = Options { font_italic: "Blocks-Regular".into(), art: Some(Art { asset: "pic".into(), path: "assets/pic.png".into(), width: 400, height: 300 }), ..Options::default() };
+    let options = Options { font_italic: "Blocks-Regular".into(), art: Some(Art { asset: "pic".into(), path: "assets/pic.png".into(), width: 400, height: 300 }), ..more };
     let built = build_card(&template, card, &fonts(), &options).unwrap();
     let mut doc = template.doc.clone();
     let undo = apply(&mut doc, &built.edit).unwrap();
@@ -471,4 +487,79 @@ fn the_set_symbol_fills_its_areas_height_at_the_right_and_the_type_line_stops_sh
     assert!(ink(&doc, "type")[2] <= 1532.0, "{:?}", ink(&doc, "type"));
     // With the set's size known, the collector line is number over size.
     assert_eq!(runs(&doc, "col-top"), "007/280 R");
+}
+
+fn tiny_svg() -> cardsmith_engine::svg::SvgArt {
+    cardsmith_engine::svg::parse_svg(r##"<svg width="20" height="10"><path d="M0 0h20v10H0z" fill="#ff0000"/></svg>"##).unwrap()
+}
+
+#[test]
+fn a_vector_card_with_no_rules_text_has_no_textbox_and_its_type_line_at_the_foot() {
+    let blank = card(json!({ "oracle_text": "", "mana_cost": "{U}" }));
+    // No set symbol: the creature keeps a P/T box, the lower one, and its numbers move down with it.
+    let (doc, warnings) = build_vector(&blank);
+    assert!(warnings.iter().all(|w| w.contains("Proxyglyph")), "{warnings:?}");
+    for shown in ["pin-type-Textless", "twins-type-Textless", "ptbox-low"] {
+        assert!(layer(&doc, shown).base().visible, "{shown}");
+    }
+    assert!(!layer(&doc, "ptbox").base().visible && !layer(&doc, "tb-Short").base().visible && tree::find(&doc, "card-color-textbox").is_none());
+    assert!(["rules-c-Short", "rules-c-Tall"].iter().all(|id| !layer(&doc, id).base().visible));
+    assert_eq!(layer(&doc, "pinlines").base().mask.as_ref().unwrap().asset, "cut-Textless");
+    // The border is cut for it, without hiding its effects.
+    let border = layer(&doc, "border").base().mask.clone().unwrap();
+    assert_eq!((border.asset.as_str(), border.hides_effects), ("cut-Textless", None));
+    let Layer::Text(pt) = layer(&doc, "pt-text") else { panic!() };
+    assert_eq!((pt.origin.unwrap().y, runs(&doc, "pt-text")), (2850.0, "2/3".into()));
+    // The type line is 1300 px lower than in the tall frame and a touch to the left (10 px at 3264 wide: 6 here).
+    let Layer::Text(type_line) = layer(&doc, "type") else { panic!() };
+    assert_eq!((type_line.origin.unwrap().x, type_line.origin.unwrap().y, runs(&doc, "type")), (244.0, 2770.0, "Creature — Cat".into()));
+
+    // With a set symbol the corner is the symbol's: power and toughness end the type line, and there is no box.
+    let (doc, _) = build_vector_with(&blank, Options { symbol: Some(tiny_svg()), ..Options::default() });
+    assert_eq!(runs(&doc, "type"), "Creature — Cat — 2/3");
+    assert!(!layer(&doc, "ptbox-low").base().visible && !layer(&doc, "pt-text").base().visible);
+    let Layer::Group(symbol) = layer(&doc, "card-symbol") else { panic!() };
+    let Layer::Shape(shape) = &symbol.children[0] else { panic!() };
+    // The symbol follows the type line down (1300) and sits 6 px further right.
+    assert!(shape.path.d.starts_with("M1556 2700"), "{}", shape.path.d);
+}
+
+#[test]
+fn a_vector_card_shows_its_color_indicator_split_for_two_colors() {
+    let (doc, warnings) = build_vector(&card(json!({ "mana_cost": "", "color_indicator": ["W", "U"], "colors": ["W", "U"], "oracle_text": "a\na\na\na\na\na\na" })));
+    assert!(warnings.iter().all(|w| w.contains("Proxyglyph")), "{warnings:?}");
+    assert!(layer(&doc, "dot").base().visible && layer(&doc, "dot-2").base().visible && layer(&doc, "type-shift").base().visible);
+    // Two color layers clipped to the dot's shape: the first color underneath, the second on top, cut in half.
+    let Layer::Group(dot) = layer(&doc, "dot") else { panic!() };
+    let order: Vec<&str> = dot.children.iter().map(|l| l.id()).collect();
+    assert_eq!(order, ["dot-shape", "card-color-color-indicator-w", "card-color-color-indicator-u", "dot-2"]);
+    assert_eq!(color_of(&doc, "card-color-color-indicator-w"), shade(248, 244, 240));
+    assert_eq!(layer(&doc, "card-color-color-indicator-u").base().mask.as_ref().unwrap().asset, "cut-1/2");
+    assert!(layer(&doc, "card-color-color-indicator-w").base().mask.is_none());
+
+    // In a shorter textbox the dot moves down with the type line, shapes, colors and mask alike.
+    let (doc, _) = build_vector(&card(json!({ "mana_cost": "", "color_indicator": ["W", "U"], "colors": ["W", "U"] })));
+    let Layer::Shape(circle) = layer(&doc, "dot-circle") else { panic!() };
+    assert!(circle.path.d.starts_with("M210 1720"), "{}", circle.path.d);
+    assert_eq!(layer(&doc, "card-color-color-indicator-u").base().mask.as_ref().unwrap().offset.y, 300.0);
+}
+
+#[test]
+fn a_basic_land_shows_its_land_symbol_in_place_of_rules_text() {
+    let land = card(json!({ "name": "Island", "mana_cost": "", "type_line": "Basic Land — Island", "oracle_text": "({T}: Add {U}.)", "power": null, "toughness": null }));
+    let (doc, _) = build(&land, &Options { basic_watermark: Some(tiny_svg()), ..Options::default() });
+    // Under the text group, three quarters of the textbox's height (1000), centered in it.
+    let at = doc.root.children.iter().position(|l| l.id() == "g-text").unwrap();
+    assert_eq!(doc.root.children[at - 1].id(), "card-watermark");
+    let Layer::Group(mark) = layer(&doc, "card-watermark") else { panic!() };
+    let shape = serde_json::to_value(&mark.children[0]).unwrap();
+    assert_eq!(shape["path"]["d"], "M250 1725L1750 1725L1750 2475L250 2475Z");
+    assert_eq!(shape["fill"]["color"], shade(0, 115, 178));
+    assert!(matches!(mark.base.effects.as_deref(), Some([cardsmith_core::doc::Effect::Bevel { .. }])));
+    assert!(!layer(&doc, "rules-n").base().visible && !layer(&doc, "rules-c").base().visible);
+    // Without the symbol the rules text is written as usual; other cards never get one.
+    let (doc, _) = build(&land, &Options::default());
+    assert!(layer(&doc, "rules-n").base().visible && tree::find(&doc, "card-watermark").is_none());
+    let (doc, _) = build(&card(json!({})), &Options { basic_watermark: Some(tiny_svg()), ..Options::default() });
+    assert!(tree::find(&doc, "card-watermark").is_none());
 }

@@ -16,9 +16,9 @@
 //! Layers are found by name, as Proxyshop's script finds them, starting from
 //! the groups the importer bound.
 //!
-//! Built so far: cards of the normal layout with rules text. Not yet:
-//! textless cards (built with the short textbox, with a warning), the color
-//! indicator, nicknames, tokens, and the transform and modal faces.
+//! Built: cards of the normal layout, with or without rules text, and the
+//! color indicator. Not yet: nicknames, tokens, and the transform and modal
+//! faces.
 
 use super::{plain, Builder, Options, Plan};
 use cardsmith_cards::frame_logic::GOLD;
@@ -114,9 +114,9 @@ fn paint(colors: &str, map: fn(&str) -> Option<Color>) -> Paint {
 }
 
 /// Color a group: a layer just above it, clipped to it, covering the card.
-fn color(build: &mut Builder, group: &str, what: &str, paint: Paint) {
-    let Some(path) = tree::locate(&build.doc, group) else { return };
-    let Some((at, parent)) = path.split_last() else { return };
+fn color(build: &mut Builder, group: &str, what: &str, paint: Paint) -> Option<String> {
+    let path = tree::locate(&build.doc, group)?;
+    let (at, parent) = path.split_last()?;
     let parent = if parent.is_empty() { build.doc.root.base.id.clone() } else { tree::layer_at(&build.doc, parent).id().to_string() };
     let (w, h) = (build.doc.width as f64, build.doc.height as f64);
     let slug: String = what.to_lowercase().replace(' ', "-");
@@ -132,17 +132,40 @@ fn color(build: &mut Builder, group: &str, what: &str, paint: Paint) {
         }
     }
     match serde_json::from_value::<Layer>(layer) {
-        Ok(layer) => build.edit(Edit::AddLayer { parent, layer, index: Some(at + 1) }),
-        Err(e) => build.warn(format!("The {what} color layer could not be made: {e}")),
+        Ok(layer) => {
+            build.edit(Edit::AddLayer { parent, layer, index: Some(at + 1) });
+            Some(format!("card-color-{slug}"))
+        }
+        Err(e) => {
+            build.warn(format!("The {what} color layer could not be made: {e}"));
+            None
+        }
     }
 }
 
-/// Give `to` the mask of `from`, set to hide the layer's effects too.
-fn copy_mask(build: &mut Builder, from: &str, to: &str) {
+/// Give `to` the mask of `from`, optionally set to hide the layer's effects too.
+fn copy_mask(build: &mut Builder, from: &str, to: &str, hides_effects: bool) {
     let Some(mut mask) = tree::find(&build.doc, from).and_then(|l| serde_json::to_value(l).ok()).map(|v| v["mask"].clone()).filter(Value::is_object) else { return };
     mask["enabled"] = json!(true);
-    mask["hidesEffects"] = json!(true);
+    if hides_effects {
+        mask["hidesEffects"] = json!(true);
+    }
     build.set(to, json!({ "mask": mask }));
+}
+
+/// The dot beside the type line of a card whose color is not in its cost.
+fn indicator(key: &str) -> Option<Color> {
+    Some(match key {
+        "W" => rgb(248, 244, 240),
+        "U" => rgb(0, 109, 174),
+        "B" => rgb(57, 52, 49),
+        "R" => rgb(222, 60, 35),
+        "G" => rgb(0, 109, 66),
+        "Artifact" => rgb(181, 197, 205),
+        "Colorless" => rgb(214, 214, 220),
+        "Land" => rgb(165, 150, 132),
+        _ => return None,
+    })
 }
 
 fn center_y(build: &mut Builder, id: Option<&String>) -> Option<f64> {
@@ -159,11 +182,11 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
 
     let oracle = if options.remove_reminder { strip_reminder_text(&card.oracle_text) } else { card.oracle_text.clone() };
     let flavor = if options.remove_flavor { "" } else { card.flavor_text.as_str() };
+    // Nothing to write and not a basic land: no textbox at all, and the type line at the foot of the card.
     let textless = oracle.is_empty() && flavor.is_empty() && !card.is_basic_land;
-    if textless {
-        build.warn("Cards with no rules text are not built without a textbox yet on this template; the short textbox is used.".into());
-    }
-    let size = if card.is_basic_land || textless {
+    let size = if textless {
+        "Textless"
+    } else if card.is_basic_land {
         "Short"
     } else {
         // By how many lines the text takes in the tallest textbox, counting one more for flavor text.
@@ -184,27 +207,35 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
     // ---- which shapes ----------------------------------------------------------------
 
     let group = |name: &str| build.bound(&b.groups, name);
-    let (pin, twins, textbox, pt, crown_outer, masks) = (group("pinlinesShapes"), group("twinsShapes"), group("textboxShapes"), group("ptBoxShapes"), group("crownShapes"), group("masks"));
+    let (pin, twins, textbox, pt, crown_outer, masks, border) = (group("pinlinesShapes"), group("twinsShapes"), group("textboxShapes"), group("ptBoxShapes"), group("crownShapes"), group("masks"), group("border"));
     let type_shape = build.named(pin.as_deref(), &["Shape", "Typeline", size]);
-    let shapes = [
+    let mut shapes = vec![
         build.named(pin.as_deref(), &["Shape", "Card Name", "Normal"]),
         type_shape.clone(),
-        build.named(pin.as_deref(), &["Shape", "Textbox", size]),
         build.named(twins.as_deref(), &["Shape", "Card Name", "Normal"]),
         build.named(twins.as_deref(), &["Shape", "Typeline", size]),
-        build.named(textbox.as_deref(), &["Shape", size]),
     ];
+    if !textless {
+        shapes.push(build.named(pin.as_deref(), &["Shape", "Textbox", size]));
+        shapes.push(build.named(textbox.as_deref(), &["Shape", size]));
+    }
     for shape in &shapes {
         match shape {
             Some(id) => build.show(id),
-            None => build.warn(format!("The template is missing one of the shapes of its {size} textbox.")),
+            None => build.warn(format!("The template is missing one of the shapes of its {} frame.", size.to_lowercase())),
+        }
+    }
+    // With no textbox the border is cut differently at the foot of the card.
+    if textless {
+        if let (Some(cut), Some(border)) = (build.named(masks.as_deref(), &["Border", "Textless"]), border) {
+            copy_mask(build, &cut, &border, false);
         }
     }
 
     // The pinlines are cut where this textbox height needs them cut, stroke and all.
     let cut = build.named(masks.as_deref(), &["Pinlines", size]);
     if let (Some(cut), Some(pin)) = (&cut, &pin) {
-        copy_mask(build, cut, pin);
+        copy_mask(build, cut, pin, true);
     }
 
     // ---- colors ----------------------------------------------------------------------
@@ -227,8 +258,20 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
     // An artifact's textbox stays artifact-colored whatever its color.
     let text_color = if card.is_artifact { "Artifact" } else if f.is_hybrid || few { f.identity.as_str() } else { f.twins.as_str() };
 
-    if card.is_creature {
-        if let Some(pt) = &pt {
+    // Without a textbox a creature's power and toughness go on the type line when there is a set symbol
+    // (the symbol has the corner); otherwise in a P/T box of their own, lower down.
+    let pt_in_type = textless && options.symbol.is_some();
+    let mut pt_shift = (0.0, 0.0);
+    if card.is_creature && !pt_in_type {
+        let lower = if textless { build.named(None, &["PT Box Textless"]) } else { None };
+        if let (Some(lower), Some(usual)) = (&lower, &pt) {
+            // The numbers move with the box: by the distance between the two boxes' shapes.
+            let center = |build: &mut Builder, id: &str| build.named(Some(id), &["Shape", "PT Box"]).and_then(|shape| build.area(&shape)).map(|a| ((a[0] + a[2]) / 2.0, (a[1] + a[3]) / 2.0));
+            if let (Some(to), Some(from)) = (center(build, lower), center(build, usual)) {
+                pt_shift = (to.0 - from.0, to.1 - from.1);
+            }
+        }
+        if let Some(pt) = lower.as_ref().or(pt.as_ref()) {
             build.show(pt);
             color(build, pt, "PT Box", paint(pt_color, dark));
         }
@@ -240,14 +283,14 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
     if let Some(twins) = &twins {
         color(build, twins, "Name and Title Boxes", paint(boxes, dark));
     }
-    if let Some(textbox) = &textbox {
+    if let (Some(textbox), false) = (&textbox, textless) {
         color(build, textbox, "Textbox", paint(text_color, dark));
     }
     if card.is_legendary {
         if let Some(outer) = &crown_outer {
             // The crown is cut by the same mask as the pinlines, and the pinlines make way for it.
             if let Some(cut) = &cut {
-                copy_mask(build, cut, outer);
+                copy_mask(build, cut, outer, true);
             }
             if let Some(mut vector) = pin.as_deref().and_then(|id| tree::find(&build.doc, id)).and_then(|l| serde_json::to_value(l).ok()).map(|v| v["vectorMask"].clone()).filter(Value::is_object) {
                 vector["enabled"] = json!(true);
@@ -262,10 +305,6 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
             }
         }
     }
-    if !card.color_indicator.is_empty() {
-        build.warn("The color indicator is not built yet on this template.".into());
-    }
-
     // ---- what the later steps need ---------------------------------------------------
 
     // One type line serves every textbox height: it moves with its bar.
@@ -274,17 +313,60 @@ pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> 
         (Some(this), Some(tall)) => this - tall,
         _ => 0.0,
     };
+    // At the foot of the card the type line sits a little further left and the symbol a little further right.
+    let nudge = if textless { (10.0 * build.doc.width as f64 / 3264.0).round() } else { 0.0 };
+
+    // The color indicator: a dot in the card's color, split in halves or thirds for two or three.
+    let letters: Vec<String> = card.color_indicator.chars().map(String::from).collect();
+    if let (false, Some(dot)) = (letters.is_empty(), build.named(None, &["Color Indicator"])) {
+        build.show(&dot);
+        let divider = match letters.len() {
+            2 => Some("2"),
+            3 => Some("3"),
+            _ => None,
+        };
+        if let Some(lines) = divider.and_then(|name| build.named(Some(&dot), &[name])) {
+            build.show(&lines);
+        }
+        let cuts: &[&str] = match letters.len() {
+            2 => &["1/2"],
+            3 => &["1/3", "2/3"],
+            _ => &[],
+        };
+        // The last color goes on top, cut away to show the ones under it.
+        if let Some(shape) = build.named(Some(&dot), &["Shape"]) {
+            // Each is added just above the shape, so adding them last color first leaves the first color at the bottom.
+            for (from_top, letter) in letters.iter().rev().enumerate() {
+                let Some(layer) = color(build, &shape, &format!("Color Indicator {letter}"), Paint::Flat(indicator(letter).unwrap_or([0.0, 0.0, 0.0, 1.0]))) else { continue };
+                if let Some(cut) = cuts.get(from_top).and_then(|name| build.named(masks.as_deref(), &["Color Indicator", name])) {
+                    copy_mask(build, &cut, &layer, false);
+                }
+            }
+        }
+        build.translate(&dot, -nudge, type_dy);
+    }
     let textbox_ref = build.bound(&b.text_refs, "textbox").and_then(|id| build.named(Some(&id), &[size])).and_then(|id| build.area(&id));
     Plan {
         pt_white: false,
-        rules: build.bound(&b.text, &format!("{kind}.{key}")),
+        rules: if textless { None } else { build.bound(&b.text, &format!("{kind}.{key}")) },
         textbox: textbox_ref,
         art_ref: build.bound(&b.art_refs, &key).or_else(|| build.bound(&b.art_refs, "normal")),
         type_dy,
         // White text on art needs its shadow; a basic land has no rules text to shadow.
         shadows: true,
         shadow_rules: !card.is_basic_land,
-        textless: false,
+        textless,
+        type_dx: -nudge,
+        symbol_dx: if card.is_creature && !pt_in_type { 0.0 } else { nudge },
+        pt_in_type,
+        pt_shift,
+        // Proxyshop sizes the bevel to the textbox.
+        watermark_bevel: match size {
+            "Short" => 20.0,
+            "Medium" => 22.0,
+            "Normal" => 25.0,
+            _ => 28.0,
+        },
     }
 }
 

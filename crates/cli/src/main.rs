@@ -362,6 +362,18 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
             Some(Err(e)) => eprintln!("warning: The set symbol for {} could not be read: {e}", card.set),
             None => eprintln!("warning: No set symbol for {} could be found; the card is built without one.", card.set),
         }
+        // A basic land's textbox shows its land type's symbol.
+        if card.is_basic_land {
+            let name = match card.frame.pinlines.as_str() {
+                "W" => "plains",
+                "U" => "island",
+                "B" => "swamp",
+                "R" => "mountain",
+                "G" => "forest",
+                _ => "wastes",
+            };
+            options.basic_watermark = client.watermark_svg(name).and_then(|svg| cardsmith_engine::svg::parse_svg(&svg).ok());
+        }
     }
     if let Some(file) = art {
         let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;

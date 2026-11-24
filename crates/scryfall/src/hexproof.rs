@@ -93,6 +93,17 @@ impl<T: Transport> Client<T> {
     }
 }
 
+impl<T: Transport> Client<T> {
+    /// The SVG of a watermark from the symbols package, by name ("mountain", "boros"), as text.
+    pub fn watermark_svg(&mut self, name: &str) -> Option<String> {
+        // A name is a file name, never a path.
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return None;
+        }
+        std::fs::read_to_string(self.symbols().ok()?.join("watermark").join(format!("{}.svg", name.to_lowercase()))).ok()
+    }
+}
+
 /// Unpack a zip into a folder. Entries that would land outside the folder are skipped.
 fn unpack(archive: &Path, into: &Path) -> Result<(), Error> {
     let bad = |e: String| Error::Other(format!("The symbols package could not be unpacked: {e}"));

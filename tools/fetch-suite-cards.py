@@ -1,5 +1,6 @@
 """Fetches the cards Proxyshop renders to test its normal layout (the [normal]
-section of src/data/tests/template_renders.toml) and writes them, as the card
+section of src/data/tests/template_renders.toml), plus two cases of our own,
+and writes them, as the card
 engine's own card data, to tests/cards/cards.json for `pnpm test:cards`.
 
 Run from the repository root after `cargo build --release -p cardsmith-cli`:
@@ -17,13 +18,17 @@ STAND_INS = [
 ]
 
 cases = tomllib.load(open("reference/Proxyshop/src/data/tests/template_renders.toml", "rb"))["normal"]
+# Two cases Proxyshop's list does not cover: a color indicator, and a card with nothing in its textbox.
+cases = {**cases, "Dryad Arbor": "Color Indicator", "Grizzly Bears": "No Rules Text"}
 cards = []
 for name, what in cases.items():
     done = subprocess.run(["target/release/cardsmith", "card", name], capture_output=True, text=True)
     if done.returncode:
         sys.exit(f"{name}: {done.stderr.strip()}")
     card = json.loads(done.stdout)
-    if card["flavorText"]:
+    if what == "No Rules Text":
+        card["flavorText"] = ""
+    elif card["flavorText"]:
         card["flavorText"] = STAND_INS[len(cards) % len(STAND_INS)]
     cards.append({"case": what, "card": card})
     print(name, "->", card["set"], card["frame"], file=sys.stderr)

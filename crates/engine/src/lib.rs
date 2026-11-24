@@ -96,6 +96,8 @@ pub struct Options {
     pub art: Option<Art>,
     /// The set symbol, already in the rarity's colors. Drawn at the right of the type line.
     pub symbol: Option<svg::SvgArt>,
+    /// The land-type symbol drawn large in a basic land's textbox in place of its rules text.
+    pub basic_watermark: Option<svg::SvgArt>,
     /// How many cards the set has, for a collector line like "012/280 R".
     pub set_size: Option<u32>,
     /// PostScript names of the fonts for italic text, bold rules text and symbols.
@@ -107,7 +109,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Options {
         let fonts = RulesFormat::for_dpi(72.0);
-        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, set_size: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
+        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, basic_watermark: None, set_size: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
     }
 }
 
@@ -244,6 +246,58 @@ impl Builder<'_> {
         group.children.iter().find(|c| c.base().name == *last).map(|c| c.id().to_string())
     }
 
+    /// Move a layer, and everything in it, by a number of pixels.
+    fn translate(&mut self, id: &str, dx: f64, dy: f64) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let Some(layer) = tree::find(&self.doc, id).cloned() else { return };
+        let moved_path = |d: &str| kurbo::BezPath::from_svg(d).ok().map(|mut path| {
+            path.apply_affine(kurbo::Affine::translate((dx, dy)));
+            svg::path_data(&path)
+        });
+        let mut props = json!({});
+        let base = layer.base();
+        if let Some(mask) = &base.mask {
+            let mut mask = serde_json::to_value(mask).unwrap_or_default();
+            mask["offset"] = json!({ "x": base.mask.as_ref().map_or(0.0, |m| m.offset.x) + dx, "y": base.mask.as_ref().map_or(0.0, |m| m.offset.y) + dy });
+            props["mask"] = mask;
+        }
+        if let Some(vector) = &base.vector_mask {
+            if let Some(d) = moved_path(&vector.path.d) {
+                let mut vector = serde_json::to_value(vector).unwrap_or_default();
+                vector["path"]["d"] = json!(d);
+                props["vectorMask"] = vector;
+            }
+        }
+        match &layer {
+            Layer::Group(group) => {
+                for child in &group.children {
+                    self.translate(child.id(), dx, dy);
+                }
+            }
+            Layer::Shape(shape) => {
+                if let Some(d) = moved_path(&shape.path.d) {
+                    let mut path = serde_json::to_value(&shape.path).unwrap_or_default();
+                    path["d"] = json!(d);
+                    props["path"] = path;
+                }
+            }
+            Layer::Text(text) => {
+                props["box"] = json!({ "x": text.bounds.x + dx, "y": text.bounds.y + dy, "w": text.bounds.w, "h": text.bounds.h });
+                if let Some(origin) = text.origin {
+                    props["origin"] = json!({ "x": origin.x + dx, "y": origin.y + dy });
+                }
+            }
+            Layer::Pixel(l) => props["transform"] = json!([l.transform[0], l.transform[1], l.transform[2] + dx, l.transform[3], l.transform[4], l.transform[5] + dy]),
+            Layer::Art(l) => props["transform"] = json!([l.transform[0], l.transform[1], l.transform[2] + dx, l.transform[3], l.transform[4], l.transform[5] + dy]),
+            Layer::Fill(l) => props["transform"] = json!([l.transform[0], l.transform[1], l.transform[2] + dx, l.transform[3], l.transform[4], l.transform[5] + dy]),
+        }
+        if props.as_object().is_some_and(|p| !p.is_empty()) {
+            self.set(id, props);
+        }
+    }
+
     fn parent_of(&self, id: &str) -> Option<String> {
         let path = tree::locate(&self.doc, id)?;
         let (_, parent) = path.split_last()?;
@@ -290,6 +344,15 @@ pub(crate) struct Plan {
     pub shadow_rules: bool,
     /// Whether rules text is drawn at all.
     pub textless: bool,
+    /// Sideways nudges of the type line and the set symbol.
+    pub type_dx: f64,
+    pub symbol_dx: f64,
+    /// Power and toughness are written at the end of the type line instead of in a box.
+    pub pt_in_type: bool,
+    /// How far the P/T numbers move to sit in a differently placed box.
+    pub pt_shift: (f64, f64),
+    /// Size of the bevel on a basic land's watermark.
+    pub watermark_bevel: f64,
 }
 
 /// Frame layers of a template whose colors are pre-drawn layers.
@@ -368,7 +431,7 @@ fn frame_raster(build: &mut Builder, card: &CardData) -> Plan {
 
     let rules = build.bound(&b.text, if card.is_creature { "rulesCreature" } else { "rulesNoncreature" });
     let textbox = build.bound(&b.text_refs, "textbox").and_then(|id| build.area(&id));
-    Plan { pt_white, rules, textbox, art_ref: build.bound(&b.art_refs, "normal"), type_dy: 0.0, shadows: false, shadow_rules: false, textless: false }
+    Plan { pt_white, rules, textbox, art_ref: build.bound(&b.art_refs, "normal"), type_dy: 0.0, shadows: false, shadow_rules: false, textless: false, type_dx: 0.0, symbol_dx: 0.0, pt_in_type: false, pt_shift: (0.0, 0.0), watermark_bevel: 28.0 }
 }
 
 /// Work out the edits that make `card` out of `template`.
@@ -486,7 +549,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     }
     // The set symbol: as tall as its reference area, against the area's right edge, centered on its height.
     let expansion = build.bound(&b.text_refs, "expansion");
-    let symbol_area = expansion.as_deref().and_then(|id| build.area(id)).map(|a| [a[0], a[1] + plan.type_dy, a[2], a[3] + plan.type_dy]);
+    let symbol_area = expansion.as_deref().and_then(|id| build.area(id)).map(|a| [a[0] + plan.symbol_dx, a[1] + plan.type_dy, a[2] + plan.symbol_dx, a[3] + plan.type_dy]);
     let mut symbol_left = None;
     if let (Some(symbol), Some(area), Some(reference)) = (&options.symbol, symbol_area, &expansion) {
         for skipped in &symbol.unsupported {
@@ -511,14 +574,10 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         // The type line stops short of the symbol, or of where one would be.
         let right = if card.is_basic_land { None } else { symbol_left.or(symbol_area.map(|a| a[0])) };
         // Templates with several textbox heights keep one type line and move it.
-        if let (true, Some(layer)) = (plan.type_dy != 0.0, build.text(&id)) {
-            let mut moved = json!({ "box": { "x": layer.bounds.x, "y": layer.bounds.y + plan.type_dy, "w": layer.bounds.w, "h": layer.bounds.h } });
-            if let Some(origin) = layer.origin {
-                moved["origin"] = json!({ "x": origin.x, "y": origin.y + plan.type_dy });
-            }
-            build.set(&id, moved);
-        }
-        fitted_line(&mut build, &id, &card.type_line, "card.type", right);
+        build.translate(&id, plan.type_dx, plan.type_dy);
+        // With no box for them, power and toughness end the type line.
+        let line = if plan.pt_in_type && card.is_creature { format!("{} — {}/{}", card.type_line, card.power, card.toughness) } else { card.type_line.clone() };
+        fitted_line(&mut build, &id, &line, "card.type", right);
         if plan.shadows {
             build.set(&id, json!({ "effectsEnabled": true }));
         }
@@ -531,7 +590,43 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     let divider = build.bound(&b.layers, "divider").filter(|_| options.flavor_divider && !oracle.is_empty() && !flavor.is_empty());
     // A few words alone in the box are centered.
     let centered = flavor.chars().count() <= 1 && oracle.chars().count() <= 70 && !oracle.contains('\n');
-    let (rules, textbox) = (plan.rules.clone().filter(|_| !plan.textless), plan.textbox);
+    // A basic land shows its land type's symbol, large, instead of rules text.
+    let mut watermarked = false;
+    if let (true, Some(mark), Some(area)) = (card.is_basic_land, &options.basic_watermark, plan.textbox) {
+        let color = match frame.pinlines.as_str() {
+            "W" => [248.0, 249.0, 243.0],
+            "U" => [0.0, 115.0, 178.0],
+            "B" => [6.0, 0.0, 0.0],
+            "R" => [212.0, 39.0, 44.0],
+            "G" => [1.0, 131.0, 69.0],
+            _ => [165.0, 150.0, 132.0],
+        };
+        // Three quarters of the textbox's height, centered in it, in the land's color.
+        let size = 0.75 * (area[3] - area[1]) / mark.height;
+        let (left, top) = ((area[0] + area[2] - mark.width * size) / 2.0, (area[1] + area[3] - mark.height * size) / 2.0);
+        let shapes: Vec<Value> = mark.layers([size, 0.0, 0.0, size, left, top], "card-watermark").iter().filter_map(|l| serde_json::to_value(l).ok()).map(|mut shape| {
+            shape["fill"] = json!({ "type": "solid", "color": [color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, 1.0] });
+            shape.as_object_mut().map(|s| s.remove("effects"));
+            shape
+        }).collect();
+        let tone = |c: f64, blend: &str, opacity: f64| json!({ "color": [c, c, c, 1], "blend": blend, "opacity": opacity });
+        let group = json!({
+            "kind": "group", "id": "card-watermark", "name": "Watermark", "visible": true, "opacity": 1, "blend": "normal", "clip": false, "role": "card.watermark", "passThrough": false, "children": shapes,
+            "effects": [{ "type": "bevel", "enabled": true, "style": "inner", "technique": "chiselHard", "direction": "up", "depth": 1, "size": plan.watermark_bevel * scale, "soften": 14.0 * scale, "angle": 45, "altitude": 22, "highlight": tone(1.0, "screen", 0.70), "shadow": tone(0.0, "multiply", 0.72) }]
+        });
+        // Under the text, over the frame.
+        let below = build.bound(&b.groups, "text").and_then(|id| tree::locate(&build.doc, &id)).and_then(|path| path.split_last().map(|(at, parent)| (*at, parent.to_vec())));
+        match (serde_json::from_value::<Layer>(group), below) {
+            (Ok(layer), Some((at, parent))) => {
+                let parent = if parent.is_empty() { build.doc.root.base.id.clone() } else { tree::layer_at(&build.doc, &parent).id().to_string() };
+                build.edit(Edit::AddLayer { parent, layer, index: Some(at) });
+                watermarked = true;
+            }
+            (Err(e), _) => build.warn(format!("The basic land watermark could not be placed: {e}")),
+            _ => {}
+        }
+    }
+    let (rules, textbox) = (plan.rules.clone().filter(|_| !plan.textless && !watermarked), plan.textbox);
     if let (Some(id), Some(layer)) = (&rules, rules.as_deref().and_then(|id| build.text(id))) {
         let formatted = format_rules_text(&oracle, &flavor, &RulesFormat { centered, divider: divider.is_some(), ..format.clone() });
         for symbol in &formatted.unknown_symbols {
@@ -597,8 +692,9 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             }
         }
     }
-    if card.is_creature {
+    if card.is_creature && !plan.pt_in_type {
         if let Some(id) = build.bound(&b.text, "pt") {
+            build.translate(&id, plan.pt_shift.0, plan.pt_shift.1);
             let more = if plan.pt_white { json!({ "style": build.text(&id).map(|t| { let mut s = t.style; s.color = [1.0, 1.0, 1.0, 1.0]; s }) }) } else { json!({}) };
             build.write(&id, &plain(&format!("{}/{}", card.power, card.toughness)), "card.pt", more);
             if plan.shadows {

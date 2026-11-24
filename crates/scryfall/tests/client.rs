@@ -237,7 +237,7 @@ fn set_symbols_and_set_sizes_come_from_hexproof_and_then_from_the_cache() {
     }));
     // A package with a symbol folder for NEO, one for a set the data calls "default", and the default itself.
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    for (name, body) in [("manifest.json", "{}"), ("set/NEO/R.svg", "<svg>neo rare</svg>"), ("set/NEO/M.svg", "<svg>neo mythic</svg>"), ("set/ODD/C.svg", "<svg>odd common</svg>"), ("set/DEFAULT/C.svg", "<svg>default common</svg>"), ("set/DEFAULT/R.svg", "<svg>default rare</svg>")] {
+    for (name, body) in [("manifest.json", "{}"), ("set/NEO/R.svg", "<svg>neo rare</svg>"), ("set/NEO/M.svg", "<svg>neo mythic</svg>"), ("set/ODD/C.svg", "<svg>odd common</svg>"), ("set/DEFAULT/C.svg", "<svg>default common</svg>"), ("set/DEFAULT/R.svg", "<svg>default rare</svg>"), ("watermark/mountain.svg", "<svg>mountain</svg>")] {
         zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
         zip.write_all(body.as_bytes()).unwrap();
     }
@@ -252,6 +252,7 @@ fn set_symbols_and_set_sizes_come_from_hexproof_and_then_from_the_cache() {
     assert_eq!(client.symbol_svg("odd", "R").as_deref(), Some("<svg>default rare</svg>"));
     assert_eq!(client.symbol_svg("nope", "C").as_deref(), Some("<svg>default common</svg>"));
     assert_eq!(client.symbol_svg("nope", "U"), None);
+    assert_eq!((client.watermark_svg("Mountain").as_deref(), client.watermark_svg("../set/NEO/R"), client.watermark_svg("island")), (Some("<svg>mountain</svg>"), None, None));
     // Printed size where known, else the card count; none when the data has neither.
     assert_eq!((client.set_info("NEO").size, client.set_info("pneo").size, client.set_info("odd").size, client.set_info("nope").size), (Some(302), Some(40), None, None));
 
