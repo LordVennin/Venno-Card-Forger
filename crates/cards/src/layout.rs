@@ -295,10 +295,19 @@ impl CardData {
 
     /// The collector line when the size of the set is not known: "R 0123".
     pub fn collector_data(&self) -> String {
+        self.collector_line(None)
+    }
+
+    /// The collector line: "012/280 R" when the set's size is known and the
+    /// card's number is within it, otherwise "R 0012".
+    pub fn collector_line(&self, set_size: Option<u32>) -> String {
         if self.collector_number_raw.is_empty() {
             return String::new();
         }
-        format!("{} {:04}", self.rarity_letter(), self.collector_number)
+        match set_size.filter(|size| *size >= self.collector_number) {
+            Some(size) => format!("{:03}/{:03} {}", self.collector_number, size, self.rarity_letter()),
+            None => format!("{} {:04}", self.rarity_letter(), self.collector_number),
+        }
     }
 }
 

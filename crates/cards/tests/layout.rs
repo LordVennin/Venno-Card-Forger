@@ -63,6 +63,8 @@ fn rarity_collector_line_artist_and_promo_come_from_the_printing() {
     let c = read(&base, CardInput { name: "Test".into(), ..CardInput::default() });
     assert_eq!((c.rarity.as_str(), c.rarity_letter().as_str()), ("timeshifted", "T"));
     assert_eq!((c.collector_number_raw.as_str(), c.collector_number, c.collector_data().as_str()), ("★12a", 12, "T 0012"));
+    // With the set's size known the line is number over size, unless the card is numbered beyond it.
+    assert_eq!((c.collector_line(Some(280)).as_str(), c.collector_line(Some(10)).as_str()), ("012/280 T", "T 0012"));
     assert_eq!(c.artist, "Jack & Jill Smith");
     assert!(c.is_promo && c.is_basic_land && c.is_snow && c.is_land && !c.is_creature);
     assert_eq!((c.set.as_str(), c.supertypes.len(), c.subtypes.as_slice()), ("TST", 2, &["Forest".to_string()][..]));

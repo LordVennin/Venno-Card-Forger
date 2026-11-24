@@ -32,6 +32,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
+pub mod svg;
 mod vector;
 
 /// Which of a template's layers play which part. Written by the importer into
@@ -84,7 +85,7 @@ pub struct Art {
 }
 
 /// Choices Proxyshop offers as settings.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Options {
     /// Show the divider between rules and flavor text.
     pub flavor_divider: bool,
@@ -93,6 +94,10 @@ pub struct Options {
     /// Frame the art in the full-art area whenever the frame is a full-art one.
     pub vertical_fullart: bool,
     pub art: Option<Art>,
+    /// The set symbol, already in the rarity's colors. Drawn at the right of the type line.
+    pub symbol: Option<svg::SvgArt>,
+    /// How many cards the set has, for a collector line like "012/280 R".
+    pub set_size: Option<u32>,
     /// PostScript names of the fonts for italic text, bold rules text and symbols.
     pub font_italic: String,
     pub font_bold: String,
@@ -102,7 +107,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Options {
         let fonts = RulesFormat::for_dpi(72.0);
-        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
+        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, set_size: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
     }
 }
 
@@ -388,7 +393,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
 
     // ---- collector line --------------------------------------------------------------
 
-    let collector_line = card.collector_data();
+    let collector_line = card.collector_line(options.set_size);
     let collector = build.bound(&b.text, "collector");
     let (artist, set) = (build.bound(&b.text, "artist"), build.bound(&b.text, "set"));
     let fill_basic = |build: &mut Builder, layer: &str, find: &str, with: &str| {
@@ -479,11 +484,32 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         build.hide(&usual);
         build.show(shift);
     }
+    // The set symbol: as tall as its reference area, against the area's right edge, centered on its height.
+    let expansion = build.bound(&b.text_refs, "expansion");
+    let symbol_area = expansion.as_deref().and_then(|id| build.area(id)).map(|a| [a[0], a[1] + plan.type_dy, a[2], a[3] + plan.type_dy]);
+    let mut symbol_left = None;
+    if let (Some(symbol), Some(area), Some(reference)) = (&options.symbol, symbol_area, &expansion) {
+        for skipped in &symbol.unsupported {
+            build.warn(format!("The set symbol uses something that is not drawn: {skipped}."));
+        }
+        let size = (area[3] - area[1]) / symbol.height;
+        let left = area[2] - symbol.width * size;
+        let layers = symbol.layers([size, 0.0, 0.0, size, left, area[1]], "card-symbol");
+        let group = json!({ "kind": "group", "id": "card-symbol", "name": "Expansion Symbol", "visible": true, "opacity": 1, "blend": "normal", "clip": false, "role": "card.symbol", "passThrough": true, "children": layers });
+        let at = tree::locate(&build.doc, reference).and_then(|path| path.split_last().map(|(at, parent)| (*at, parent.to_vec())));
+        match (serde_json::from_value::<Layer>(group), at) {
+            (Ok(layer), Some((at, parent))) => {
+                let parent = if parent.is_empty() { build.doc.root.base.id.clone() } else { tree::layer_at(&build.doc, &parent).id().to_string() };
+                build.edit(Edit::AddLayer { parent, layer, index: Some(at + 1) });
+                symbol_left = Some(left);
+            }
+            (Err(e), _) => build.warn(format!("The set symbol could not be placed: {e}")),
+            _ => {}
+        }
+    }
     if let Some(id) = shifted.or_else(|| build.bound(&b.text, "type")) {
-        let right = match (build.bound(&b.text_refs, "expansion"), card.is_basic_land) {
-            (Some(reference), false) => build.area(&reference).map(|a| a[0]),
-            _ => None,
-        };
+        // The type line stops short of the symbol, or of where one would be.
+        let right = if card.is_basic_land { None } else { symbol_left.or(symbol_area.map(|a| a[0])) };
         // Templates with several textbox heights keep one type line and move it.
         if let (true, Some(layer)) = (plan.type_dy != 0.0, build.text(&id)) {
             let mut moved = json!({ "box": { "x": layer.bounds.x, "y": layer.bounds.y + plan.type_dy, "w": layer.bounds.w, "h": layer.bounds.h } });

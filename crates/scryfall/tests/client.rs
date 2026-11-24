@@ -224,3 +224,45 @@ fn card_data_comes_back_the_same_from_the_cache_when_offline() {
     assert_eq!(net.asked().len(), asked);
     assert!(matches!(later.card_data(&parse_card_info("Shock.png")), Err(Error::Offline(_))));
 }
+
+#[test]
+fn set_symbols_and_set_sizes_come_from_hexproof_and_then_from_the_cache() {
+    use std::io::Write;
+    let dir = temp("hexproof");
+    let net = Fake::default();
+    net.page("https://api.hexproof.io/sets/", json!({
+        "neo": { "code_symbol": "neo", "count_cards": 515, "count_printed": 302 },
+        "pneo": { "code_symbol": "neo", "count_cards": 40 },
+        "odd": { "code_symbol": "default", "count_cards": 0 }
+    }));
+    // A package with a symbol folder for NEO, one for a set the data calls "default", and the default itself.
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, body) in [("manifest.json", "{}"), ("set/NEO/R.svg", "<svg>neo rare</svg>"), ("set/NEO/M.svg", "<svg>neo mythic</svg>"), ("set/ODD/C.svg", "<svg>odd common</svg>"), ("set/DEFAULT/C.svg", "<svg>default common</svg>"), ("set/DEFAULT/R.svg", "<svg>default rare</svg>")] {
+        zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(body.as_bytes()).unwrap();
+    }
+    net.pages.borrow_mut().insert("https://api.hexproof.io/symbols/package/".into(), zip.finish().unwrap().into_inner());
+
+    let mut client = Client::with_transport(net.clone(), &dir);
+    assert_eq!(client.symbol_svg("NEO", "R").as_deref(), Some("<svg>neo rare</svg>"));
+    // A promo set shares its parent's symbol; an odd rarity falls back to the mythic one.
+    assert_eq!(client.symbol_svg("pneo", "T").as_deref(), Some("<svg>neo mythic</svg>"));
+    // A set whose data names the default symbol still uses a folder of its own if there is one, then the default.
+    assert_eq!(client.symbol_svg("odd", "C").as_deref(), Some("<svg>odd common</svg>"));
+    assert_eq!(client.symbol_svg("odd", "R").as_deref(), Some("<svg>default rare</svg>"));
+    assert_eq!(client.symbol_svg("nope", "C").as_deref(), Some("<svg>default common</svg>"));
+    assert_eq!(client.symbol_svg("nope", "U"), None);
+    // Printed size where known, else the card count; none when the data has neither.
+    assert_eq!((client.set_info("NEO").size, client.set_info("pneo").size, client.set_info("odd").size, client.set_info("nope").size), (Some(302), Some(40), None, None));
+
+    // The package was fetched once; offline, a new client still has everything.
+    let asked = net.asked();
+    assert_eq!(asked.iter().filter(|u| u.contains("symbols/package")).count(), 1);
+    *net.offline.borrow_mut() = true;
+    let mut later = Client::with_transport(net.clone(), &dir);
+    assert_eq!(later.symbol_svg("neo", "R").as_deref(), Some("<svg>neo rare</svg>"));
+    assert_eq!(later.set_info("neo"), cardsmith_scryfall::SetInfo { symbol: "NEO".into(), size: Some(302) });
+    assert_eq!(net.asked().len(), asked.len());
+    // With nothing cached and no network there is simply no symbol.
+    assert_eq!(Client::with_transport(net.clone(), temp("hexproof-empty")).symbol_svg("neo", "R"), None);
+}

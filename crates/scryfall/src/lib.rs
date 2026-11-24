@@ -21,8 +21,10 @@
 //! card logic that turns Scryfall's JSON into a card lives in `cardsmith-cards`.
 
 mod bulk;
+mod hexproof;
 
 pub use bulk::{BulkCards, BulkKind};
+pub use hexproof::SetInfo;
 
 use cardsmith_cards::file_name::CardInfo;
 use cardsmith_cards::layout::{card_data, process_card_data, CardData, CardInput};

@@ -451,3 +451,24 @@ fn a_vector_template_grows_its_textbox_with_the_text_and_blends_two_colors() {
     let (doc, _) = build_vector(&card(json!({ "mana_cost": "{W}{U}{B}", "type_line": "Instant", "power": null, "toughness": null })));
     assert_eq!(color_of(&doc, "card-color-pinlines"), shade(246, 210, 98));
 }
+
+#[test]
+fn the_set_symbol_fills_its_areas_height_at_the_right_and_the_type_line_stops_short_of_it() {
+    // A 20 x 10 drawing in an area 150 x 100 ending at x 1750: ten times the size, so 200 wide from x 1550.
+    let symbol = cardsmith_engine::svg::parse_svg(r##"<svg width="20" height="10"><path d="M0 0h20v10H0z" fill="#ff0000"/></svg>"##).unwrap();
+    let options = Options { symbol: Some(symbol), set_size: Some(280), ..Options::default() };
+    let (doc, warnings) = build(&card(json!({ "type_line": "bbbbbbbbbbbbbbbbbbbb" })), &options);
+    assert!(warnings.iter().all(|w| w.contains("Proxyglyph")), "{warnings:?}");
+    let Layer::Group(group) = layer(&doc, "card-symbol") else { panic!() };
+    assert_eq!((group.base.role.as_deref(), group.children.len()), (Some("card.symbol"), 1));
+    let Layer::Shape(shape) = &group.children[0] else { panic!() };
+    assert_eq!(shape.path.d, "M1550 1450L1750 1450L1750 1550L1550 1550Z");
+    // It sits just above its reference area in the text group.
+    let Layer::Group(text) = layer(&doc, "g-text") else { panic!() };
+    let at = text.children.iter().position(|l| l.id() == "ref-expansion").unwrap();
+    assert_eq!(text.children[at + 1].id(), "card-symbol");
+    // The type line clears the symbol by the usual gap (18 px on this template).
+    assert!(ink(&doc, "type")[2] <= 1532.0, "{:?}", ink(&doc, "type"));
+    // With the set's size known, the collector line is number over size.
+    assert_eq!(runs(&doc, "col-top"), "007/280 R");
+}

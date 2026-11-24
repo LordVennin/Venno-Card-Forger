@@ -8,6 +8,7 @@
  *
  *   fixtures/local/imported/<template>/                from `pnpm import:psd`
  *   fixtures/local/fonts/                              the fonts
+ *   fixtures/local/cache/                              set symbols and set data, from `cardsmith symbols --cache fixtures/local/cache`
  *   fixtures/local/card-golden/<template>/<card>.png   references
  *
  * With no templates or no fonts it skips cleanly. Output goes to
@@ -26,6 +27,8 @@ const repo = resolve(import.meta.dirname, "../..");
 const imported = join(repo, "fixtures/local/imported");
 const fonts = join(repo, "fixtures/local/fonts");
 const golden = join(repo, "fixtures/local/card-golden");
+/** Scryfall and hexproof.io data for the suite. `cardsmith symbols --cache <this>` fills it. */
+const cache = join(repo, "fixtures/local/cache");
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { update: { type: "string" } } });
 
 /** Compared like the template goldens: see tests/golden/thresholds.json. */
@@ -45,6 +48,9 @@ if (!existsSync(fonts) || !readdirSync(fonts).some((f) => /\.(ttf|otf)$/i.test(f
 }
 for (const skipped of all.filter((n) => !buildable.includes(n))) console.log(`– ${skipped}: no bindings the card engine understands`);
 
+const haveSymbols = existsSync(join(cache, "symbols/manifest.json"));
+if (!haveSymbols) console.log(`No set symbols in ${cache} (run \`cardsmith symbols --cache ${cache}\`): cards are built without them.`);
+
 execFileSync("cargo", ["build", "-q", "--release", "-p", "cardsmith-cli"], { cwd: repo, stdio: "inherit" });
 const cardsmith = join(repo, "target/release/cardsmith");
 const suite = JSON.parse(readFileSync(join(repo, "tests/cards/cards.json"), "utf8")) as { cards: { case: string; card: { name: string } }[] };
@@ -61,7 +67,7 @@ for (const template of templates) {
     const data = join(out, `${key}.json`);
     const render = join(out, `${key}.png`);
     writeFileSync(data, JSON.stringify(card));
-    const built = spawnSync(cardsmith, ["build", join(imported, template), data, "-o", render, "--fonts", fonts, "--art", join(repo, "tests/cards/art.png")], { encoding: "utf8" });
+    const built = spawnSync(cardsmith, ["build", join(imported, template), data, "-o", render, "--fonts", fonts, "--art", join(repo, "tests/cards/art.png"), ...(haveSymbols ? ["--cache", cache] : ["--no-symbol"])], { encoding: "utf8" });
     const problems = built.stderr.split("\n").filter((line) => line.startsWith("warning:") || line.startsWith("error:")).map((line) => line.replace(/^\w+: /, ""));
     if (built.status !== 0 && problems.length === 0) problems.push(built.stderr.trim() || "the build failed");
 

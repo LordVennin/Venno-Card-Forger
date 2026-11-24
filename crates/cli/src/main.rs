@@ -6,8 +6,9 @@
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
-//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>]
+//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol]
 //!                                                         build a card from an imported template
+//! cardsmith symbols [--cache <dir>]                      download set symbols and set data (hexproof.io) for offline use
 //! cardsmith sheet -o <out.png> [--across N] [--shrink N] <image.png>...    many images on one sheet
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol]\n       cardsmith symbols [--cache <dir>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -176,6 +177,20 @@ fn run(args: &[String]) -> Result<(), String> {
             eprintln!("{}×{} in {elapsed} ms -> {out}", r.width, r.height);
             Ok(())
         }
+        Some("symbols") => {
+            // cardsmith symbols [--cache <dir>]: download the set symbols and set data for offline use.
+            let cache = match (args.get(1).map(String::as_str), args.get(2)) {
+                (Some("--cache"), Some(dir)) => PathBuf::from(dir),
+                (None, _) => scryfall_cache(),
+                _ => return Err(USAGE.into()),
+            };
+            let mut client = cardsmith_scryfall::Client::new(&cache);
+            let dir = client.symbols().map_err(|e| e.to_string())?;
+            let sets = std::fs::read_dir(dir.join("set")).map(|d| d.count()).unwrap_or(0);
+            let known = client.set_info("lea").size.is_some();
+            eprintln!("Symbols for {sets} sets in {}; set data {}.", dir.display(), if known { "downloaded" } else { "could not be downloaded" });
+            Ok(())
+        }
         Some("card") | Some("bulk") => {
             let mut what = None;
             let (mut set, mut number, mut raw) = (None, None, false);
@@ -245,6 +260,7 @@ fn run(args: &[String]) -> Result<(), String> {
         Some("build") => {
             let mut plain = Vec::new();
             let (mut out, mut fonts, mut art, mut cache) = (None, None, None, None);
+            let mut symbol = true;
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
@@ -252,11 +268,13 @@ fn run(args: &[String]) -> Result<(), String> {
                     "--fonts" => fonts = rest.next(),
                     "--art" => art = rest.next(),
                     "--cache" => cache = rest.next(),
+                    // Leave the set symbol off, and make no request for it.
+                    "--no-symbol" => symbol = false,
                     _ => plain.push(arg),
                 }
             }
             let (Some(dir), Some(what), Some(out)) = (plain.first(), plain.get(1), out) else { return Err(USAGE.into()) };
-            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from))
+            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from), symbol)
         }
         Some("text") => {
             let mut input = None;
@@ -321,7 +339,7 @@ fn scryfall_cache() -> PathBuf {
 /// `what` is a card name (with Proxyshop's art file tags if wanted), looked up
 /// on Scryfall through the cache, or a JSON file holding card data as
 /// `cardsmith card` prints it, for custom cards and for tests.
-fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>) -> Result<(), String> {
+fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>, symbol: bool) -> Result<(), String> {
     use cardsmith_engine::{Art, Options, Template};
     let read = |name: &str| std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{}: {e}", dir.join(name).display()));
     let template = Template::from_json(&read("doc.json")?, &read("manifest.json")?)?;
@@ -331,10 +349,20 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
         serde_json::from_str(&std::fs::read_to_string(what).map_err(|e| format!("{what}: {e}"))?).map_err(|e| format!("{what}: {e}"))?
     } else {
         let info = cardsmith_cards::file_name::parse_card_info(what);
-        cardsmith_scryfall::Client::new(cache.unwrap_or_else(scryfall_cache)).card_data(&info).map_err(|e| e.to_string())?
+        cardsmith_scryfall::Client::new(cache.clone().unwrap_or_else(scryfall_cache)).card_data(&info).map_err(|e| e.to_string())?
     };
 
     let mut options = Options::default();
+    if symbol {
+        // The set's symbol in this card's rarity, and the set's size for the collector line, from hexproof.io through the cache.
+        let mut client = cardsmith_scryfall::Client::new(cache.unwrap_or_else(scryfall_cache));
+        options.set_size = client.set_info(&card.set).size;
+        match client.symbol_svg(&card.set, &card.rarity_letter()).map(|svg| cardsmith_engine::svg::parse_svg(&svg)) {
+            Some(Ok(art)) => options.symbol = Some(art),
+            Some(Err(e)) => eprintln!("warning: The set symbol for {} could not be read: {e}", card.set),
+            None => eprintln!("warning: No set symbol for {} could be found; the card is built without one.", card.set),
+        }
+    }
     if let Some(file) = art {
         let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
         let image = cardsmith_core::render::decode_image(&bytes).ok_or(format!("{file}: not a readable image"))?;
