@@ -253,3 +253,30 @@ fn painting_between_layers_is_exact_whether_or_not_the_stack_can_be_split() {
         assert_frame_is_exact(&mut s);
     }
 }
+
+#[test]
+fn an_asset_that_arrives_late_is_drawn_and_hidden_layers_ask_for_nothing() {
+    let png = |rgba: [u8; 4]| cardsmith_core::render::encode_png(4, 4, &rgba.repeat(16)).unwrap();
+    let mut doc = scene_doc();
+    for (id, path) in [("red", "assets/red.png"), ("blue", "assets/blue.png")] {
+        doc.assets.insert(id.into(), serde_json::from_value(json!({ "kind": "image", "path": path, "width": 4, "height": 4 })).unwrap());
+    }
+    doc.root.children.push(pixel("shown", "red", [1.0, 0.0, 2.0, 0.0, 1.0, 2.0]));
+    doc.root.children.push(patch(pixel("hidden", "blue", [1.0, 0.0, 10.0, 0.0, 1.0, 2.0]), json!({ "visible": false })));
+    let mut s = Session::new(doc, AssetBytes::new());
+
+    // Only what shows is asked for, and without it the layer is simply not drawn.
+    assert_eq!(s.missing_assets(), vec![("red".to_string(), "assets/red.png".to_string())]);
+    assert_eq!(frame_px(&s, 3, 3), [255, 255, 255, 255]);
+
+    s.add_asset("red", png([255, 0, 0, 255])).unwrap();
+    assert_eq!(frame_px(&s, 3, 3), [255, 0, 0, 255]);
+    assert!(s.missing_assets().is_empty());
+
+    // Showing the other layer makes its image wanted.
+    s.execute(Edit::SetLayerProps { id: "hidden".into(), props: json!({ "visible": true }).as_object().unwrap().clone() }, "Show").unwrap();
+    assert_eq!(s.missing_assets(), vec![("blue".to_string(), "assets/blue.png".to_string())]);
+    s.add_asset("blue", png([0, 0, 255, 255])).unwrap();
+    assert_eq!(frame_px(&s, 11, 3), [0, 0, 255, 255]);
+    assert_frame_is_exact(&mut s);
+}

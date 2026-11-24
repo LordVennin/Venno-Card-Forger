@@ -1,0 +1,191 @@
+//! A card being made in an open document.
+//!
+//! [`build_card`](crate::build_card) turns a pristine template into a card.
+//! In the editor the card is built again and again as its fields change, in a
+//! document that has a history and that the user may have touched. The
+//! workbench does that: each build is one undoable step that takes the
+//! previous build out and puts the new one in, and a fill that arrives later
+//! (they take seconds to make) is added only if the card it was made for is
+//! still the one showing.
+//!
+//! Which build is showing is written in the document itself (`card._build`),
+//! so undo and redo need no bookkeeping here.
+
+use crate::{build_card, svg, Art, FillPlan, Options, Template};
+use cardsmith_cards::layout::CardData;
+use cardsmith_core::commands::{apply, Edit};
+use cardsmith_core::doc::Doc;
+use cardsmith_core::render::decode_image;
+use cardsmith_core::session::Session;
+use cardsmith_core::tree;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+
+/// What to build: the card, and what the engine cannot work out from it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildRequest {
+    pub card: CardData,
+    /// The set symbol as SVG text, already the one for the card's rarity.
+    #[serde(default)]
+    pub symbol_svg: Option<String>,
+    /// A basic land's land-type symbol as SVG text.
+    #[serde(default)]
+    pub watermark_svg: Option<String>,
+    #[serde(default)]
+    pub set_size: Option<u32>,
+    #[serde(default)]
+    pub remove_flavor: bool,
+    #[serde(default)]
+    pub remove_reminder: bool,
+    #[serde(default)]
+    pub hide_flavor_divider: bool,
+    #[serde(default)]
+    pub vertical_fullart: bool,
+}
+
+/// Where the art sits and what of it to trust, for whoever makes the fill.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FillInfo {
+    pub art_position: (f64, f64),
+    pub art_scale: f64,
+    pub canvas: (u32, u32),
+    pub keep: [f64; 4],
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Report {
+    /// Names this build. Give it back with the fill made for it.
+    pub build: u64,
+    pub warnings: Vec<String>,
+    /// Present when the art leaves space that should be filled.
+    pub fill: Option<FillInfo>,
+}
+
+pub struct Workbench {
+    template: Template,
+    art: Option<Art>,
+    /// How to take each build out again, and where its fill goes.
+    inverses: BTreeMap<u64, Edit>,
+    plans: BTreeMap<u64, FillPlan>,
+    next: u64,
+}
+
+const FILL_LAYER: &str = "card-fill";
+
+impl Workbench {
+    pub fn new(template: Template) -> Workbench {
+        Workbench { template, art: None, inverses: BTreeMap::new(), plans: BTreeMap::new(), next: 1 }
+    }
+
+    /// The document to open a session with: the template as imported.
+    pub fn doc(&self) -> Doc {
+        self.template.doc.clone()
+    }
+
+    pub fn template_id(&self) -> &str {
+        &self.template.id
+    }
+
+    /// The build showing in a document, if any.
+    fn showing(doc: &Doc) -> Option<u64> {
+        doc.card.as_ref()?.get("_build")?.as_u64()
+    }
+
+    /// Use this picture as the card's art from the next build on. Returns its size.
+    pub fn set_art(&mut self, session: &mut Session, bytes: Vec<u8>) -> Result<(u32, u32), String> {
+        let image = decode_image(&bytes).ok_or("That file is not a picture this app can read (PNG, JPEG or WebP).")?;
+        let id = format!("card-art-{}", self.next);
+        self.next += 1;
+        // Each picture gets its own asset, so undoing to a card built with an earlier one shows that one.
+        session.stash_asset(&id, bytes);
+        let size = (image.w as u32, image.h as u32);
+        self.art = Some(Art { path: format!("assets/{id}.png"), asset: id, width: size.0, height: size.1 });
+        Ok(size)
+    }
+
+    pub fn clear_art(&mut self) {
+        self.art = None;
+    }
+
+    /// Build the card into the session's document as one undoable step,
+    /// replacing the build that is showing, if one is.
+    pub fn build(&mut self, session: &mut Session, request: &BuildRequest) -> Result<Report, String> {
+        let read = |svg: &Option<String>| svg.as_deref().and_then(|text| svg::parse_svg(text).ok());
+        let options = Options {
+            flavor_divider: !request.hide_flavor_divider,
+            remove_flavor: request.remove_flavor,
+            remove_reminder: request.remove_reminder,
+            vertical_fullart: request.vertical_fullart,
+            art: self.art.clone(),
+            symbol: read(&request.symbol_svg),
+            basic_watermark: read(&request.watermark_svg),
+            set_size: request.set_size,
+            ..Options::default()
+        };
+        let built = build_card(&self.template, &request.card, session.fonts(), &options)?;
+        let mut warnings = built.warnings;
+        if request.symbol_svg.is_some() && options.symbol.is_none() {
+            warnings.push("The set symbol could not be read, so the card has none.".into());
+        }
+
+        // The engine's edit is always made from the bare template, so what takes it out
+        // again is what undoes it there. Layers added by hand are not touched by either.
+        let mut scratch = self.template.doc.clone();
+        let inverse = apply(&mut scratch, &built.edit).map_err(|e| e.to_string())?;
+
+        let build = self.next;
+        self.next += 1;
+        let mut edits = Vec::new();
+        let showing = Self::showing(session.doc());
+        if let Some(inverse) = showing.and_then(|n| self.inverses.get(&n)) {
+            // The fill was added after the build it belongs to, so it comes out first.
+            if tree::find(session.doc(), FILL_LAYER).is_some() {
+                edits.push(Edit::RemoveLayer { id: FILL_LAYER.into() });
+            }
+            edits.push(inverse.clone());
+        } else if showing.is_some() {
+            return Err("This document holds a card built in an earlier session. Open its template again to change the card.".into());
+        }
+        edits.push(built.edit);
+        let mut card = serde_json::to_value(&request.card).map_err(|e| e.to_string())?;
+        card["_build"] = json!(build);
+        edits.push(Edit::SetDocProps { props: json!({ "card": card }).as_object().cloned().unwrap_or_default() });
+
+        let label = if showing.is_some() { format!("Update {}", request.card.name) } else { format!("Build {}", request.card.name) };
+        session.execute(Edit::Batch { edits }, &label).map_err(|e| format!("The card could not be rebuilt, because a layer it sets was changed by hand ({e}). Undo that change, or open the template again."))?;
+        self.inverses.insert(build, inverse);
+        let fill = built.fill.map(|plan| {
+            let info = FillInfo { art_position: plan.art_position, art_scale: plan.art_scale, canvas: plan.canvas, keep: plan.keep };
+            self.plans.insert(build, plan);
+            info
+        });
+        Ok(Report { build, warnings, fill })
+    }
+
+    /// Add a finished fill (PNG bytes of the whole card area) for a build, on
+    /// its own layer beneath the art. Returns false, changing nothing, when
+    /// that build is no longer the one showing.
+    pub fn add_fill(&mut self, session: &mut Session, build: u64, png: Vec<u8>, source: &str, params: Value) -> Result<bool, String> {
+        if Self::showing(session.doc()) != Some(build) {
+            return Ok(false);
+        }
+        let plan = self.plans.get(&build).ok_or("That build needs no fill.")?;
+        let image = decode_image(&png).ok_or("The fill is not a readable picture.")?;
+        let asset = format!("card-fill-{}", self.next);
+        self.next += 1;
+        let scale = plan.canvas.0 as f64 / image.w as f64;
+        let mut edits = Vec::new();
+        // A second fill for the same card (another tier, another seed) replaces the first.
+        if tree::find(session.doc(), FILL_LAYER).is_some() {
+            edits.push(Edit::RemoveLayer { id: FILL_LAYER.into() });
+        }
+        edits.push(plan.edit(&asset, &format!("assets/{asset}.png"), image.w as u32, image.h as u32, scale, source, params)?);
+        session.stash_asset(&asset, png);
+        session.execute(Edit::Batch { edits }, "Fill around the art").map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}

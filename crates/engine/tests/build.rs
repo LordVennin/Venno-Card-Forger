@@ -616,3 +616,96 @@ fn extended_and_borderless_templates_always_fill_and_trust_the_art_up_to_the_car
     extended.bindings.art_fill = Some("always".into());
     assert!(build_card(&extended, &card(json!({})), &fonts(), &art(400, 300)).unwrap().fill.is_some());
 }
+
+// ---- the workbench: building and rebuilding in an open document ---------------------
+
+use cardsmith_core::session::Session;
+use cardsmith_engine::workbench::{BuildRequest, Workbench};
+
+fn request(card: &CardData) -> BuildRequest {
+    serde_json::from_value(json!({ "card": card })).unwrap()
+}
+
+fn picture(width: u32, height: u32) -> Vec<u8> {
+    cardsmith_core::render::encode_png(width, height, &[90, 120, 60, 255].repeat((width * height) as usize)).unwrap()
+}
+
+fn bench() -> (Workbench, Session) {
+    let bench = Workbench::new(template());
+    let session = Session::with_fonts(bench.doc(), Default::default(), fonts());
+    (bench, session)
+}
+
+#[test]
+fn rebuilding_in_an_open_document_gives_what_a_fresh_build_would_as_one_step() {
+    let (mut bench, mut session) = bench();
+    assert_eq!(bench.set_art(&mut session, picture(40, 30)).unwrap(), (40, 30));
+    let first = card(json!({}));
+    let second = card(json!({ "name": "bbbb", "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [], "oracle_text": "a\nb" }));
+
+    let report = bench.build(&mut session, &request(&first)).unwrap();
+    assert!(report.fill.is_none());
+    assert_eq!(session.labels(), ["Build ab"]);
+    let again = bench.build(&mut session, &request(&second)).unwrap();
+    assert_eq!(session.labels(), ["Build ab", "Update bbbb"]);
+    assert!(again.build != report.build);
+
+    // The same document a fresh build of the second card gives, but for the note of which build it is.
+    let art = Options { art: Some(Art { asset: "card-art-1".into(), path: "assets/card-art-1.png".into(), width: 40, height: 30 }), ..Options::default() };
+    let (mut fresh, _) = build(&second, &art);
+    let mut rebuilt = session.doc().clone();
+    assert_eq!(rebuilt.card.as_ref().unwrap()["_build"], json!(again.build));
+    (rebuilt.card, fresh.card) = (None, None);
+    assert!(rebuilt == fresh, "a rebuilt card differs from a freshly built one");
+
+    // Each build is one step back, and the first step back is the bare template.
+    assert!(session.undo());
+    assert_eq!(runs(session.doc(), "name"), "ab");
+    assert!(session.undo());
+    assert!(*session.doc() == template().doc);
+}
+
+#[test]
+fn a_fill_goes_under_the_art_of_the_card_it_was_made_for_and_leaves_with_it() {
+    let (mut bench, mut session) = bench();
+    bench.set_art(&mut session, picture(400, 300)).unwrap();
+    let eldrazi = card(json!({ "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [] }));
+    let report = bench.build(&mut session, &request(&eldrazi)).unwrap();
+    let fill = report.fill.clone().expect("a full-art frame is filled");
+    assert_eq!((fill.art_position, fill.art_scale, fill.canvas), ((200.0, 300.0), 4.0, (2000, 3000)));
+
+    assert!(bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({ "seed": 1 })).unwrap());
+    let order: Vec<&str> = session.doc().root.children.iter().map(|l| l.id()).take(3).collect();
+    assert_eq!(order, ["placeholder", "card-fill", "card-art"]);
+    let Layer::Fill(layer) = tree::find(session.doc(), "card-fill").unwrap() else { panic!() };
+    assert_eq!((layer.source.as_str(), layer.transform), ("patchmatch", [4.0, 0.0, 0.0, 0.0, 4.0, 0.0]));
+    // Another fill for the same card replaces the first, as its own step.
+    assert!(bench.add_fill(&mut session, report.build, picture(250, 375), "lama", json!({})).unwrap());
+    let fills = tree::all_ids(session.doc()).iter().filter(|id| **id == "card-fill").count();
+    let Layer::Fill(layer) = tree::find(session.doc(), "card-fill").unwrap() else { panic!() };
+    assert_eq!((fills, layer.source.as_str(), layer.transform[0]), (1, "lama", 8.0));
+
+    // Changing the card takes the fill out with the build it belonged to...
+    let renamed = card(json!({ "name": "bbbb", "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [] }));
+    let next = bench.build(&mut session, &request(&renamed)).unwrap();
+    assert!(tree::find(session.doc(), "card-fill").is_none() && next.fill.is_some());
+    // ...and a fill that was still being made for the old card is turned away.
+    assert!(!bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
+    assert!(tree::find(session.doc(), "card-fill").is_none());
+    // One step back, the old card has its fill again.
+    assert!(session.undo());
+    assert!(tree::find(session.doc(), "card-fill").is_some());
+    assert_eq!(runs(session.doc(), "name"), "ab");
+}
+
+#[test]
+fn layers_added_by_hand_survive_a_rebuild_and_a_bad_picture_is_refused() {
+    let (mut bench, mut session) = bench();
+    assert!(bench.set_art(&mut session, b"not a picture".to_vec()).unwrap_err().contains("not a picture"));
+    bench.build(&mut session, &request(&card(json!({})))).unwrap();
+    let paint = session.add_paint_layer("Touch-up").unwrap();
+    bench.build(&mut session, &request(&card(json!({ "name": "bbbb" })))).unwrap();
+    assert!(tree::find(session.doc(), &paint).is_some());
+    assert_eq!(runs(session.doc(), "name"), "bbbb");
+    assert_eq!(session.doc().root.children.last().unwrap().id(), paint);
+}

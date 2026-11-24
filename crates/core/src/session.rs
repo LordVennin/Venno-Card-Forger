@@ -503,6 +503,61 @@ impl Session {
         self.push(Step::Paint { label: label.to_string(), asset: active.asset, offset: active.offset, patches, margin: active.margin });
     }
 
+    // ---- assets -----------------------------------------------------------------
+
+    /// Supply (or replace) the bytes of an asset after the document was
+    /// opened, and redraw. A template's images can arrive this way as they
+    /// are needed, instead of all being loaded before anything is shown.
+    pub fn add_asset(&mut self, id: &str, bytes: Vec<u8>) -> Result<()> {
+        if self.stroke.is_some() {
+            return Err(err!("Finish the brush stroke first"));
+        }
+        self.assets.insert(id.to_string(), bytes);
+        self.painted.remove(id);
+        self.renderer.forget_image(id);
+        self.below = None;
+        self.renderer.sync(&self.doc);
+        self.redraw(self.whole());
+        Ok(())
+    }
+
+    /// Supply an asset's bytes without redrawing, for one that nothing shows yet.
+    pub fn stash_asset(&mut self, id: &str, bytes: Vec<u8>) {
+        self.assets.insert(id.to_string(), bytes);
+        self.renderer.forget_image(id);
+    }
+
+    /// The assets that layers which are showing need and whose bytes have not
+    /// been supplied, as (id, path), in document order without repeats.
+    pub fn missing_assets(&self) -> Vec<(String, String)> {
+        fn visit<'a>(group: &'a GroupLayer, wanted: &mut Vec<&'a str>) {
+            for layer in &group.children {
+                let base = layer.base();
+                if !base.visible {
+                    continue;
+                }
+                if let Some(mask) = &base.mask {
+                    wanted.push(&mask.asset);
+                }
+                match layer {
+                    Layer::Pixel(l) => wanted.push(&l.asset),
+                    Layer::Art(l) => wanted.extend(l.asset.as_deref()),
+                    Layer::Fill(l) => wanted.push(&l.asset),
+                    Layer::Group(g) => visit(g, wanted),
+                    _ => {}
+                }
+            }
+        }
+        let mut wanted = Vec::new();
+        visit(&self.doc.root, &mut wanted);
+        let mut seen = BTreeSet::new();
+        wanted
+            .into_iter()
+            .filter(|id| !self.assets.contains_key(*id) && seen.insert(*id))
+            .filter_map(|id| self.doc.assets.get(id).map(|asset| (id.to_string(), asset.path.clone())))
+            .collect()
+    }
+
     // ---- fonts ------------------------------------------------------------------
 
     /// Load a font file for text layers to use, and redraw. Returns the

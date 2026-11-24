@@ -33,6 +33,7 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
 pub mod svg;
+pub mod workbench;
 mod vector;
 
 /// Which of a template's layers play which part. Written by the importer into

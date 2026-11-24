@@ -978,6 +978,13 @@ impl Renderer {
         *self.versions.entry(id.to_string()).or_insert(0) += 1;
     }
 
+    /// Forget what an asset decoded to, because its bytes have arrived or
+    /// changed. It is decoded again when next drawn. Counts as a change to the image.
+    pub fn forget_image(&mut self, id: &str) {
+        self.images.remove(id);
+        *self.versions.entry(id.to_string()).or_insert(0) += 1;
+    }
+
     /// The decoded image for an asset, for editing in place. Decodes it first
     /// if needed. Counts as a change to the image.
     pub fn image_mut(&mut self, id: &str, assets: &AssetBytes) -> Option<&mut Image> {
