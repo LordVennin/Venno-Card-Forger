@@ -279,4 +279,38 @@ fn an_asset_that_arrives_late_is_drawn_and_hidden_layers_ask_for_nothing() {
     s.add_asset("blue", png([0, 0, 255, 255])).unwrap();
     assert_eq!(frame_px(&s, 11, 3), [0, 0, 255, 255]);
     assert_frame_is_exact(&mut s);
+
+    // Several images supplied together are all drawn when the last one arrives.
+    s.stash_asset("red", png([0, 255, 0, 255]));
+    assert_eq!(frame_px(&s, 3, 3), [255, 0, 0, 255]);
+    s.add_asset("blue", png([255, 255, 0, 255])).unwrap();
+    assert_eq!((frame_px(&s, 3, 3), frame_px(&s, 11, 3)), ([0, 255, 0, 255], [255, 255, 0, 255]));
+    assert_frame_is_exact(&mut s);
+}
+
+#[test]
+fn a_batch_redraws_only_what_it_changed_in_the_end() {
+    let mut doc = scene_doc();
+    doc.root.children.push(rect("far", 100.0, 60.0, 10.0, 10.0, GRAY));
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.set_view(View { scale: 1.0, x: 0.0, y: 0.0, w: 120, h: 80 });
+    let props = |v: serde_json::Value| v.as_object().unwrap().clone();
+    // The card is hidden and shown again, the far square really is hidden, and a note is made
+    // on the document: only the far square's corner is drawn again.
+    let batch = Edit::Batch { edits: vec![
+        Edit::SetLayerProps { id: "card".into(), props: props(json!({ "visible": false })) },
+        Edit::SetLayerProps { id: "card".into(), props: props(json!({ "visible": true })) },
+        Edit::SetLayerProps { id: "far".into(), props: props(json!({ "visible": false })) },
+        Edit::SetDocProps { props: props(json!({ "card": { "name": "x" } })) },
+    ] };
+    s.execute(batch, "Batch").unwrap();
+    let dirty = s.dirty_view();
+    assert!(dirty.x >= 95 && dirty.y >= 55 && dirty.area() > 0 && dirty.area() < 400, "{dirty:?}");
+    assert_frame_is_exact(&mut s);
+    // Swapping two layers that overlap redraws them; the result is still exact.
+    s.execute(Edit::MoveLayer { id: "bg".into(), parent: s.doc().root.base.id.clone(), index: 1 }, "Move").unwrap();
+    assert_frame_is_exact(&mut s);
+    s.execute(Edit::Batch { edits: vec![Edit::MoveLayer { id: "bg".into(), parent: s.doc().root.base.id.clone(), index: 0 }] }, "Move back").unwrap();
+    assert_eq!(frame_px(&s, 30, 30), [128, 128, 128, 255]);
+    assert_frame_is_exact(&mut s);
 }

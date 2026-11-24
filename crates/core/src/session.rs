@@ -14,7 +14,7 @@ use crate::raster::{Image, Raster, Region};
 use crate::render::{can_split_at, encode_png, hash, Renderer, Split};
 use crate::serialize::{save_cardsmith, AssetBytes};
 use crate::{err, Result};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 enum Step {
     Edit { label: String, edit: Edit, inverse: Edit },
@@ -61,6 +61,8 @@ impl Reach {
         match edit {
             Edit::SetLayerProps { id, .. } | Edit::RemoveLayer { id } | Edit::MoveLayer { id, .. } => Reach::Layers(vec![id.clone()]),
             Edit::AddLayer { layer, .. } => Reach::Layers(vec![layer.id().to_string()]),
+            // The card's data and the template's name are not drawn; the document's size and resolution are.
+            Edit::SetDocProps { props } if props.keys().all(|key| key == "card" || key == "templateId") => Reach::Layers(Vec::new()),
             Edit::SetAsset { .. } | Edit::SetDocProps { .. } => Reach::Everything,
             Edit::Batch { edits } => {
                 let mut all = Vec::new();
@@ -74,6 +76,46 @@ impl Reach {
             }
         }
     }
+}
+
+/// The layers that differ between two versions of a document: changed in
+/// themselves, added, removed, moved to another group, or reordered. A group
+/// is only listed for its own properties; what changed inside it is listed
+/// separately. This is what a batch of edits changed in the end, however many
+/// layers it touched on the way: rebuilding a card sets every text layer
+/// again, and most come out as they were.
+fn changed_layers(before: &Doc, after: &Doc) -> Vec<String> {
+    type Seen<'a> = BTreeMap<&'a str, (&'a str, u64)>;
+    fn note<'a>(group: &'a GroupLayer, layers: &mut Seen<'a>, order: &mut BTreeMap<&'a str, Vec<&'a str>>) {
+        for layer in &group.children {
+            let mut own = serde_json::to_value(layer).unwrap_or_default();
+            if let Some(fields) = own.as_object_mut() {
+                fields.remove("children");
+            }
+            layers.insert(layer.id(), (group.base.id.as_str(), hash(own.to_string().as_bytes())));
+            order.entry(group.base.id.as_str()).or_default().push(layer.id());
+            if let Layer::Group(inner) = layer {
+                note(inner, layers, order);
+            }
+        }
+    }
+    let (mut old, mut new, mut old_order, mut new_order) = (Seen::new(), Seen::new(), BTreeMap::new(), BTreeMap::new());
+    note(&before.root, &mut old, &mut old_order);
+    note(&after.root, &mut new, &mut new_order);
+
+    let mut changed: BTreeSet<&str> = BTreeSet::new();
+    changed.extend(old.iter().filter(|(id, seen)| new.get(*id) != Some(seen)).map(|(id, _)| *id));
+    changed.extend(new.keys().filter(|id| !old.contains_key(*id)));
+    // Layers that stayed in a group but swapped places among themselves.
+    for (group, was) in &old_order {
+        let Some(now) = new_order.get(group) else { continue };
+        let stayed_was: Vec<&str> = was.iter().copied().filter(|id| now.contains(id)).collect();
+        let stayed_now: Vec<&str> = now.iter().copied().filter(|id| was.contains(id)).collect();
+        changed.extend(stayed_was.iter().zip(&stayed_now).filter(|(a, b)| a != b).flat_map(|(a, b)| [*a, *b]));
+    }
+    // A layer added, removed or changed under a clipping layer changes what that one shows too:
+    // clipped layers are drawn through the layer below them, so their own reach covers it.
+    changed.into_iter().map(str::to_string).collect()
 }
 
 fn union(a: Option<Region>, b: Option<Region>) -> Option<Region> {
@@ -114,6 +156,8 @@ pub struct Session {
     below: Option<Below>,
     /// Image assets whose pixels differ from their encoded bytes.
     painted: BTreeSet<String>,
+    /// Assets supplied without redrawing, whose layers are still to be drawn.
+    stashed: BTreeSet<String>,
 }
 
 const HISTORY_LIMIT: usize = 200;
@@ -141,6 +185,7 @@ impl Session {
             stroke: None,
             below: None,
             painted: BTreeSet::new(),
+            stashed: BTreeSet::new(),
         };
         *session.renderer.fonts_mut() = fonts;
         session.renderer.sync(&session.doc);
@@ -302,28 +347,57 @@ impl Session {
         self.undone.clear();
     }
 
-    /// The area the layers named by `reach` can affect right now. `None` means "nothing".
-    fn area(&mut self, reach: &Reach) -> Option<Region> {
+    /// The areas the layers named by `reach` can affect right now.
+    fn areas(&mut self, reach: &Reach) -> Vec<Region> {
         match reach {
-            Reach::Everything => Some(self.whole()),
+            Reach::Everything => vec![self.whole()],
             Reach::Layers(ids) => {
                 let root = self.doc.root.base.id.clone();
-                ids.iter().fold(None, |acc, id| {
-                    if *id == root {
-                        return Some(self.whole());
-                    }
-                    union(acc, self.renderer.layer_reach(&self.doc, &self.assets, id))
-                })
+                if ids.contains(&root) {
+                    return vec![self.whole()];
+                }
+                ids.iter().filter_map(|id| self.renderer.layer_reach(&self.doc, &self.assets, id)).collect()
             }
         }
+    }
+
+    /// Redraw several areas, and leave the union of what changed on screen as the dirty view.
+    fn redraw_all(&mut self, areas: Vec<Region>) {
+        // Areas that touch are drawn as one, so nothing is drawn twice; areas apart stay
+        // apart, so a change at the top and one at the bottom do not redraw the middle.
+        let mut merged: Vec<Region> = Vec::new();
+        for mut area in areas {
+            while let Some(at) = merged.iter().position(|other| other.intersect(&area).is_some()) {
+                area = union(Some(area), Some(merged.swap_remove(at))).unwrap_or(area);
+            }
+            merged.push(area);
+        }
+        let mut dirty_view = None;
+        for area in merged {
+            self.redraw(area);
+            dirty_view = union(dirty_view, Some(self.dirty_view).filter(|d| d.area() > 0));
+        }
+        self.dirty_view = dirty_view.unwrap_or(Region::new(0, 0, 0, 0));
     }
 
     /// Apply an edit and redraw what it could have changed: where the affected
     /// layers were before, and where they are after. Returns the inverse edit.
     fn apply_and_redraw(&mut self, edit: &Edit) -> Result<Edit> {
         self.below = None;
-        let reach = Reach::of(edit);
-        let before = self.area(&reach);
+        let reach = match edit {
+            // A batch is judged by what it changes in the end, found by trying it on a copy.
+            Edit::Batch { .. } => {
+                let mut trial = self.doc.clone();
+                apply(&mut trial, edit)?;
+                if (trial.width, trial.height, trial.dpi) != (self.doc.width, self.doc.height, self.doc.dpi) {
+                    Reach::Everything
+                } else {
+                    Reach::Layers(changed_layers(&self.doc, &trial))
+                }
+            }
+            _ => Reach::of(edit),
+        };
+        let mut areas = self.areas(&reach);
         let inverse = apply(&mut self.doc, edit)?;
         self.renderer.sync(&self.doc);
         let size = (self.doc.width as i32, self.doc.height as i32);
@@ -334,12 +408,8 @@ impl Session {
             self.set_view(self.view);
             return Ok(inverse);
         }
-        let after = self.area(&reach);
-        if let Some(dirty) = union(before, after) {
-            self.redraw(dirty);
-        } else {
-            self.dirty_view = Region::new(0, 0, 0, 0);
-        }
+        areas.extend(self.areas(&reach));
+        self.redraw_all(areas);
         Ok(inverse)
     }
 
@@ -517,14 +587,32 @@ impl Session {
         self.renderer.forget_image(id);
         self.below = None;
         self.renderer.sync(&self.doc);
-        self.redraw(self.whole());
+        // Only the layers that show this image, or one supplied quietly before it, need drawing again.
+        let mut fresh = std::mem::take(&mut self.stashed);
+        fresh.insert(id.to_string());
+        let mut users = Vec::new();
+        crate::tree::walk(&self.doc.root, &mut |layer| {
+            let own = match layer {
+                Layer::Pixel(l) => fresh.contains(&l.asset),
+                Layer::Art(l) => l.asset.as_ref().is_some_and(|asset| fresh.contains(asset)),
+                Layer::Fill(l) => fresh.contains(&l.asset),
+                _ => false,
+            };
+            if own || layer.base().mask.as_ref().is_some_and(|mask| fresh.contains(&mask.asset)) {
+                users.push(layer.id().to_string());
+            }
+        });
+        let areas = self.areas(&Reach::Layers(users));
+        self.redraw_all(areas);
         Ok(())
     }
 
-    /// Supply an asset's bytes without redrawing, for one that nothing shows yet.
+    /// Supply an asset's bytes without redrawing: one that nothing shows yet,
+    /// or one of several, drawn together when the last arrives through [`Session::add_asset`].
     pub fn stash_asset(&mut self, id: &str, bytes: Vec<u8>) {
         self.assets.insert(id.to_string(), bytes);
         self.renderer.forget_image(id);
+        self.stashed.insert(id.to_string());
     }
 
     /// The assets that layers which are showing need and whose bytes have not
