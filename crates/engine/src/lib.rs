@@ -447,11 +447,33 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         build.write(id, &formatted.content, "card.rules", props);
 
         // Lift the text clear of the P/T box if its last lines run into it.
+        //
+        // Proxyshop stops there, which pushes a full box of text up over the
+        // type line. Here, if the lifted text would leave the top of the
+        // textbox, the room it is fitted to is made shorter and it is fitted
+        // again, until it clears the P/T box and stays inside.
         let pt_area = card.is_creature.then(|| build.bound(&b.text_refs, "pt")).flatten().and_then(|id| build.area(&id));
-        if let (Some(pt), Some(layout)) = (pt_area, build.layout(id)) {
-            let lowest = layout.line_ink.iter().flatten().filter(|ink| ink[2] > pt[0] && ink[0] < pt[2] && ink[3] > pt[1] && ink[1] < pt[3]).map(|ink| ink[3]).fold(f64::MIN, f64::max);
-            if lowest > pt[1] {
-                area["y"] = json!(area["y"].as_f64().unwrap_or(0.0) + (pt[1] - lowest).floor());
+        if let Some(pt) = pt_area {
+            // The same margin from the top that fitting leaves.
+            let top = textbox.map_or(layer.bounds.y, |t| t[1] + spare / 2.0);
+            let (start_y, mut height) = (area["y"].as_f64().unwrap_or(0.0), area["h"].as_f64().unwrap_or(1.0));
+            for _ in 0..40 {
+                let Some(layout) = build.layout(id) else { break };
+                // The lowest ink inside the P/T area decides how far up the text must go.
+                let lowest = layout.line_ink.iter().flatten().filter(|ink| ink[2] > pt[0] && ink[0] < pt[2] && ink[3] > pt[1] && ink[1] < pt[3]).map(|ink| ink[3].min(pt[3])).fold(f64::MIN, f64::max);
+                if lowest <= pt[1] {
+                    break;
+                }
+                let lift = (pt[1] - lowest).floor();
+                let overflow = top - (layout.ink.map_or(top, |ink| ink[1]) + lift);
+                if overflow <= 0.0 || height <= step {
+                    area["y"] = json!(area["y"].as_f64().unwrap_or(0.0) + lift);
+                    build.set(id, json!({ "box": area }));
+                    break;
+                }
+                height = (height - overflow.max(step)).max(step);
+                area["y"] = json!(start_y);
+                area["h"] = json!(height);
                 build.set(id, json!({ "box": area }));
             }
         }

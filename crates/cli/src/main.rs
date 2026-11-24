@@ -8,6 +8,7 @@
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
 //! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>]
 //!                                                         build a card from an imported template
+//! cardsmith sheet -o <out.png> [--across N] [--shrink N] <image.png>...    many images on one sheet
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -219,6 +220,28 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
             Ok(())
         }
+        Some("sheet") => {
+            // cardsmith sheet -o <out.png> [--across N] [--shrink N] <image.png>...
+            let (mut out, mut across, mut shrink) = (None, 4, 4);
+            let mut files = Vec::new();
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "-o" | "--out" => out = rest.next(),
+                    "--across" => across = rest.next().and_then(|n| n.parse().ok()).filter(|n| *n > 0).ok_or(USAGE)?,
+                    "--shrink" => shrink = rest.next().and_then(|n| n.parse().ok()).filter(|n| *n > 0).ok_or(USAGE)?,
+                    _ => files.push(arg),
+                }
+            }
+            let out = out.ok_or(USAGE)?;
+            let mut images = Vec::new();
+            for file in files {
+                let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+                let image = cardsmith_core::render::decode_image(&bytes).ok_or(format!("{file}: not a readable image"))?;
+                images.push(cardsmith_core::render::RenderResult { width: image.w as u32, height: image.h as u32, pixels: image.data, warnings: Vec::new() });
+            }
+            write(Path::new(out), &contact_sheet(&images, across, shrink)?)
+        }
         Some("build") => {
             let mut plain = Vec::new();
             let (mut out, mut fonts, mut art, mut cache) = (None, None, None, None);
@@ -252,6 +275,40 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         _ => Err(USAGE.into()),
     }
+}
+
+/// Many renders on one image, `across` to a row, each shrunk by a whole factor, over grey so transparent corners show.
+fn contact_sheet(images: &[cardsmith_core::render::RenderResult], across: u32, shrink: u32) -> Result<Vec<u8>, String> {
+    let (width, height) = (images.iter().map(|i| i.width).max().unwrap_or(1), images.iter().map(|i| i.height).max().unwrap_or(1));
+    let (cw, ch) = (width / shrink, height / shrink);
+    let rows = (images.len() as u32).div_ceil(across);
+    let (sw, sh) = (cw * across + (across + 1) * 8, ch * rows + (rows + 1) * 8);
+    const GREY: u32 = 96;
+    let mut sheet = vec![GREY as u8; (sw * sh * 4) as usize];
+    sheet.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+    for (n, image) in images.iter().enumerate() {
+        let (ox, oy) = (8 + (n as u32 % across) * (cw + 8), 8 + (n as u32 / across) * (ch + 8));
+        for y in 0..image.height / shrink {
+            for x in 0..image.width / shrink {
+                // Average the block, over the grey.
+                let mut sum = [0u32; 3];
+                for sy in 0..shrink {
+                    for sx in 0..shrink {
+                        let i = (((y * shrink + sy) * image.width + x * shrink + sx) * 4) as usize;
+                        let a = image.pixels[i + 3] as u32;
+                        for c in 0..3 {
+                            sum[c] += (image.pixels[i + c] as u32 * a + GREY * (255 - a)) / 255;
+                        }
+                    }
+                }
+                let o = (((oy + y) * sw + ox + x) * 4) as usize;
+                for c in 0..3 {
+                    sheet[o + c] = (sum[c] / (shrink * shrink)) as u8;
+                }
+            }
+        }
+    }
+    encode_png(sw, sh, &sheet).map_err(|e| e.to_string())
 }
 
 fn scryfall_cache() -> PathBuf {
@@ -383,35 +440,8 @@ fn text_suite(input: &Path, out: &Path, fonts: &str) -> Result<(), String> {
     }
 
     // One sheet of every card at a quarter size, four across.
-    const SHRINK: u32 = 4;
-    const ACROSS: u32 = 4;
-    let (cw, ch) = (width / SHRINK, height / SHRINK);
-    let rows = (images.len() as u32).div_ceil(ACROSS);
-    let (sw, sh) = (cw * ACROSS + (ACROSS + 1) * 8, ch * rows + (rows + 1) * 8);
-    let mut sheet = vec![96u8; (sw * sh * 4) as usize];
-    sheet.chunks_exact_mut(4).for_each(|p| p[3] = 255);
-    for (n, image) in images.iter().enumerate() {
-        let (ox, oy) = (8 + (n as u32 % ACROSS) * (cw + 8), 8 + (n as u32 / ACROSS) * (ch + 8));
-        for y in 0..ch {
-            for x in 0..cw {
-                let mut sum = [0u32; 4];
-                for sy in 0..SHRINK {
-                    for sx in 0..SHRINK {
-                        let i = (((y * SHRINK + sy) * image.width + x * SHRINK + sx) * 4) as usize;
-                        for c in 0..4 {
-                            sum[c] += image.pixels[i + c] as u32;
-                        }
-                    }
-                }
-                let o = (((oy + y) * sw + ox + x) * 4) as usize;
-                for c in 0..4 {
-                    sheet[o + c] = (sum[c] / (SHRINK * SHRINK)) as u8;
-                }
-            }
-        }
-    }
     if !images.is_empty() {
-        write(&out.join("sheet.png"), &encode_png(sw, sh, &sheet).map_err(|e| e.to_string())?)?;
+        write(&out.join("sheet.png"), &contact_sheet(&images, 4, 4)?)?;
     }
     write(&out.join("results.json"), serde_json::to_string_pretty(&results).unwrap_or_default().as_bytes())
 }

@@ -1,0 +1,781 @@
+{
+ "//": "The cards of Proxyshop's normal-layout render test, as card data, made by tools/fetch-suite-cards.py. Flavor text is replaced by lines written for this suite. Card data courtesy of Scryfall.",
+ "cards": [
+  {
+   "case": "Creature",
+   "card": {
+    "artist": "Ilse Gort",
+    "collectorNumber": 30,
+    "collectorNumberRaw": "30",
+    "colorIdentity": [
+     "W"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "It had waited a long time to be found.",
+    "frame": {
+     "background": "W",
+     "identity": "W",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "W",
+     "twins": "W"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": true,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Flying"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{W}",
+    "name": "Mothrider Patrol",
+    "nickname": "",
+    "oracleText": "Flying\n{3}{W}, {T}: Tap target creature.",
+    "otherFace": null,
+    "power": "1",
+    "rarity": "common",
+    "releasedAt": "2022-02-18",
+    "set": "NEO",
+    "subtypes": [
+     "Fox",
+     "Warrior"
+    ],
+    "supertypes": [],
+    "toughness": "1",
+    "transformIcon": "",
+    "typeLine": "Creature — Fox Warrior",
+    "types": [
+     "Creature"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Noncreature Dual",
+   "card": {
+    "artist": "Christopher Moeller",
+    "collectorNumber": 212,
+    "collectorNumberRaw": "212",
+    "colorIdentity": [
+     "B",
+     "G"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "\"The mountain keeps what it is given.\"\n—Miners' saying",
+    "frame": {
+     "background": "Gold",
+     "identity": "BG",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "BG",
+     "twins": "Gold"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{1}{B}{G}",
+    "name": "Pernicious Deed",
+    "nickname": "",
+    "oracleText": "{X}, Sacrifice this enchantment: Destroy each artifact, creature, and enchantment with mana value X or less.",
+    "otherFace": null,
+    "power": "",
+    "rarity": "rare",
+    "releasedAt": "2018-03-16",
+    "set": "A25",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Enchantment",
+    "types": [
+     "Enchantment"
+    ],
+    "watermark": "set"
+   }
+  },
+  {
+   "case": "Noncreature Hybrid",
+   "card": {
+    "artist": "Steven Belledin",
+    "collectorNumber": 224,
+    "collectorNumberRaw": "224",
+    "colorIdentity": [
+     "G",
+     "W"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "GW",
+     "identity": "GW",
+     "isColorless": false,
+     "isHybrid": true,
+     "pinlines": "GW",
+     "twins": "Land"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Conspire"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{G/W}",
+    "name": "Barkshell Blessing",
+    "nickname": "",
+    "oracleText": "Target creature gets +2/+2 until end of turn.\nConspire (As you cast this spell, you may tap two untapped creatures you control that share a color with it. When you do, copy it and you may choose a new target for the copy.)",
+    "otherFace": null,
+    "power": "",
+    "rarity": "common",
+    "releasedAt": "2008-05-02",
+    "set": "SHM",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Instant",
+    "types": [
+     "Instant"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Legendary Nyx",
+   "card": {
+    "artist": "Zack Stella",
+    "collectorNumber": 71,
+    "collectorNumberRaw": "71",
+    "colorIdentity": [
+     "U"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "U",
+     "identity": "U",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "U",
+     "twins": "U"
+    },
+    "frameEffects": [
+     "enchantment",
+     "legendary"
+    ],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": true,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": true,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": true,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Indestructible"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{3}{U}",
+    "name": "Thassa, Deep-Dwelling",
+    "nickname": "",
+    "oracleText": "Indestructible\nAs long as your devotion to blue is less than five, Thassa isn't a creature.\nAt the beginning of your end step, exile up to one other target creature you control, then return that card to the battlefield under your control.\n{3}{U}: Tap another target creature.",
+    "otherFace": null,
+    "power": "6",
+    "rarity": "mythic",
+    "releasedAt": "2020-01-24",
+    "set": "THB",
+    "subtypes": [
+     "God"
+    ],
+    "supertypes": [
+     "Legendary"
+    ],
+    "toughness": "5",
+    "transformIcon": "",
+    "typeLine": "Legendary Enchantment Creature — God",
+    "types": [
+     "Enchantment",
+     "Creature"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Legendary B Land",
+   "card": {
+    "artist": "Sam Burley",
+    "collectorNumber": 278,
+    "collectorNumberRaw": "278",
+    "colorIdentity": [
+     "B"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "Land",
+     "identity": "B",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "B",
+     "twins": "B"
+    },
+    "frameEffects": [
+     "legendary"
+    ],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": true,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Mill",
+     "Channel"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Takenuma, Abandoned Mire",
+    "nickname": "",
+    "oracleText": "{T}: Add {B}.\nChannel — {3}{B}, Discard this card: Mill three cards, then return a creature or planeswalker card from your graveyard to your hand. This ability costs {1} less to activate for each legendary creature you control.",
+    "otherFace": null,
+    "power": "",
+    "rarity": "rare",
+    "releasedAt": "2022-02-18",
+    "set": "NEO",
+    "subtypes": [],
+    "supertypes": [
+     "Legendary"
+    ],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Legendary Land",
+    "types": [
+     "Land"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Dual Land",
+   "card": {
+    "artist": "Raoul Vitale",
+    "collectorNumber": 246,
+    "collectorNumberRaw": "246",
+    "colorIdentity": [
+     "B",
+     "R"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "The first settlers named the valley for its silence. The second wave, arriving after the bells were hung, could not imagine why.",
+    "frame": {
+     "background": "Land",
+     "identity": "BR",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "BR",
+     "twins": "Land"
+    },
+    "frameEffects": [],
+    "isArtifact": true,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Indestructible"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Drossforge Bridge",
+    "nickname": "",
+    "oracleText": "This land enters tapped.\nIndestructible\n{T}: Add {B} or {R}.",
+    "otherFace": null,
+    "power": "",
+    "rarity": "common",
+    "releasedAt": "2021-06-18",
+    "set": "MH2",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Artifact Land",
+    "types": [
+     "Artifact",
+     "Land"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Colorless Land",
+   "card": {
+    "artist": "Igor Kieryluk",
+    "collectorNumber": 361,
+    "collectorNumberRaw": "361",
+    "colorIdentity": [],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "Land",
+     "identity": "",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "Land",
+     "twins": "Land"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Arcane Lighthouse",
+    "nickname": "",
+    "oracleText": "{T}: Add {C}.\n{1}, {T}: Until end of turn, creatures your opponents control lose hexproof and shroud and can't have hexproof or shroud.",
+    "otherFace": null,
+    "power": "",
+    "rarity": "uncommon",
+    "releasedAt": "2026-04-24",
+    "set": "SOC",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Land",
+    "types": [
+     "Land"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Gold Land",
+   "card": {
+    "artist": "John Avon",
+    "collectorNumber": 144,
+    "collectorNumberRaw": "144",
+    "colorIdentity": [],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "\"The mountain keeps what it is given.\"\n—Miners' saying",
+    "frame": {
+     "background": "Land",
+     "identity": "WUBRG",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "Gold",
+     "twins": "Gold"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Ancient Ziggurat",
+    "nickname": "",
+    "oracleText": "{T}: Add one mana of any color. Spend this mana only to cast a creature spell.",
+    "otherFace": null,
+    "power": "",
+    "rarity": "uncommon",
+    "releasedAt": "2026-01-23",
+    "set": "ECC",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Land",
+    "types": [
+     "Land"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Basic Land",
+   "card": {
+    "artist": "VEN",
+    "collectorNumber": 298,
+    "collectorNumberRaw": "298",
+    "colorIdentity": [
+     "R"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "The first settlers named the valley for its silence. The second wave, arriving after the bells were hung, could not imagine why.",
+    "frame": {
+     "background": "Land",
+     "identity": "R",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "R",
+     "twins": "R"
+    },
+    "frameEffects": [],
+    "isArtifact": false,
+    "isBasicLand": true,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": true,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": true,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "",
+    "name": "Mountain",
+    "nickname": "",
+    "oracleText": "({T}: Add {R}.)",
+    "otherFace": null,
+    "power": "",
+    "rarity": "common",
+    "releasedAt": "2027-04-09",
+    "set": "MDD",
+    "subtypes": [
+     "Mountain"
+    ],
+    "supertypes": [
+     "Basic"
+    ],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Basic Land — Mountain",
+    "types": [
+     "Land"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Vehicle",
+   "card": {
+    "artist": "Alexey Kruglov",
+    "collectorNumber": 156,
+    "collectorNumberRaw": "156",
+    "colorIdentity": [],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "Vehicle",
+     "identity": "",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "Artifact",
+     "twins": "Artifact"
+    },
+    "frameEffects": [],
+    "isArtifact": true,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": true,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": true,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": true,
+    "keywords": [
+     "Flying",
+     "Repair Barge",
+     "Crew"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{4}",
+    "name": "Ghost Ark",
+    "nickname": "",
+    "oracleText": "Flying\nRepair Barge — Whenever this Vehicle becomes crewed, each artifact creature card in your graveyard gains unearth {3} until end of turn.\nCrew 2 (Tap any number of creatures you control with total power 2 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "otherFace": null,
+    "power": "3",
+    "rarity": "rare",
+    "releasedAt": "2022-10-07",
+    "set": "40K",
+    "subtypes": [
+     "Vehicle"
+    ],
+    "supertypes": [],
+    "toughness": "3",
+    "transformIcon": "",
+    "typeLine": "Artifact — Vehicle",
+    "types": [
+     "Artifact"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Snow",
+   "card": {
+    "artist": "Svetlin Velinov",
+    "collectorNumber": 61,
+    "collectorNumberRaw": "61",
+    "colorIdentity": [
+     "U"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "\"The mountain keeps what it is given.\"\n—Miners' saying",
+    "frame": {
+     "background": "U",
+     "identity": "U",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "U",
+     "twins": "U"
+    },
+    "frameEffects": [
+     "snow"
+    ],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": false,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": true,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Scry"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{3}{U}{U}",
+    "name": "Graven Lore",
+    "nickname": "",
+    "oracleText": "Scry X, where X is the amount of {S} spent to cast this spell, then draw three cards. ({S} is mana from a snow source.)",
+    "otherFace": null,
+    "power": "",
+    "rarity": "rare",
+    "releasedAt": "2021-02-05",
+    "set": "KHM",
+    "subtypes": [],
+    "supertypes": [
+     "Snow"
+    ],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Snow Instant",
+    "types": [
+     "Instant"
+    ],
+    "watermark": ""
+   }
+  },
+  {
+   "case": "Miracle",
+   "card": {
+    "artist": "Jarel Threat",
+    "collectorNumber": 70,
+    "collectorNumberRaw": "70",
+    "colorIdentity": [
+     "W"
+    ],
+    "colorIndicator": "",
+    "creator": "",
+    "flavorText": "",
+    "frame": {
+     "background": "W",
+     "identity": "W",
+     "isColorless": false,
+     "isHybrid": false,
+     "pinlines": "W",
+     "twins": "W"
+    },
+    "frameEffects": [
+     "miracle"
+    ],
+    "isArtifact": false,
+    "isBasicLand": false,
+    "isCompanion": false,
+    "isCreature": false,
+    "isEmblem": false,
+    "isFront": true,
+    "isLand": false,
+    "isLegendary": false,
+    "isMdfc": false,
+    "isMiracle": true,
+    "isNyx": false,
+    "isPromo": false,
+    "isSnow": false,
+    "isToken": false,
+    "isTransform": false,
+    "isVehicle": false,
+    "keywords": [
+     "Miracle"
+    ],
+    "lang": "EN",
+    "layout": "normal",
+    "loyalty": "",
+    "manaCost": "{4}{W}{W}",
+    "name": "Terminus",
+    "nickname": "",
+    "oracleText": "Put all creatures on the bottom of their owners' libraries.\nMiracle {W} (You may cast this card for its miracle cost when you draw it if it's the first card you drew this turn.)",
+    "otherFace": null,
+    "power": "",
+    "rarity": "rare",
+    "releasedAt": "2024-09-27",
+    "set": "DSC",
+    "subtypes": [],
+    "supertypes": [],
+    "toughness": "",
+    "transformIcon": "",
+    "typeLine": "Sorcery",
+    "types": [
+     "Sorcery"
+    ],
+    "watermark": ""
+   }
+  }
+ ]
+}

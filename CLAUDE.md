@@ -37,7 +37,7 @@ crates/wasm/           WebAssembly bindings used by the app
 packages/doc/          TypeScript types for the document JSON (no logic)
 apps/desktop/          Tauri app (src-tauri/ = Rust shell, src/ = Svelte UI)
 packages/importer/     PSD -> template package converter + feature survey (TypeScript, offline)
-packages/engine/       Card engine: template manifest + card -> document
+crates/engine/         Card engine (pure, builds for WASM): template + card data -> one undoable batch edit
 packages/fill/         FillProvider interface + glue to Rust/HTTP backends
 tests/golden/          Reference images and the golden-image runner
 reference/Proxyshop/   Clone of Proxyshop for reference only (gitignored)
@@ -98,6 +98,8 @@ cargo run --release -p cardsmith-cli -- samples <dir>                           
 cargo run --release -p cardsmith-cli -- text <suite.json> -o <dir> --fonts <dir>     # render a suite of rules text boxes
 cargo run --release -p cardsmith-cli -- card "<name or art file name>" [--set <code>] [--number <n>] [--raw]   # a card from Scryfall (cached); --raw for Scryfall's own JSON
 cargo run --release -p cardsmith-cli -- bulk <oracle | default>                      # download Scryfall bulk data for offline lookups
+cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.json> -o <png | .cardsmith> [--fonts <dir>] [--art <image>]   # build a card from an imported template
+cargo run --release -p cardsmith-cli -- sheet -o <png> [--across N] [--shrink N] <images...>   # many images on one sheet
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
 pnpm test             # TypeScript unit tests (Vitest): the importer and survey
 pnpm typecheck        # tsc -b for packages, svelte-check for the app
@@ -114,6 +116,8 @@ pnpm import:psd <psd> -o <template-dir>     # convert a PSD into a template pack
 
 `pnpm test:text` renders the rules text of the cards in `tests/text/cards.json` (symbols, italics, bullets, flavor text, shrink to fit), checks each fits, and compares with `fixtures/local/text-golden/` where references exist. It skips cleanly without fonts. `--update <card>` or `--update all` accepts the current renders, only after a human has confirmed them.
 
+`pnpm test:cards [template...]` builds the cards in `tests/cards/cards.json` from every imported raster template, fails on any engine warning, and compares with `fixtures/local/card-golden/<template>/` where references exist. Sheets go to `out/cards/<template>/sheet.png`. `--update <template>/<card>` or `--update all` accepts renders, only after a human has confirmed them.
+
 `pnpm dev` needs the Tauri Linux libraries (`libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`) and the Rust WASM target (`rustup target add wasm32-unknown-unknown`).
 
 Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fonts text is drawn with, `templates/` holds the PSDs, `imported/` the template packages made from them, `survey/` the survey output, `golden/` the reference images.
@@ -124,10 +128,11 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 - **Two invariants the tests enforce, and that every renderer change must keep:** drawing a region gives exactly the pixels a full render has there, and a session's incrementally updated frame always equals a fresh full render.
 - `crates/cards`: `rules_text.rs` (ported from Proxyshop, MPL header): `italic_ranges`/`generate_italics`, `strip_reminder_text`, the symbol map and colors, and `format_rules_text`, which turns oracle and flavor text into the `RichText` of a rules box. Proxyshop's italics cases are in `tests/data/text_italic.toml`.
 - `crates/cards` also has `frame_logic.rs` (background, pinlines and name boxes from a card's cost, types and text), `layout.rs` (`process_card_data` settles the layout, `card_data` reads every field into `CardData`) and `file_name.rs` (`Name (Artist) [SET] {num} $creator`), all ported with MPL headers. Proxyshop's cases are in `tests/data/`: `frame_data.toml` runs against `frame_cards.json`, which `tools/fetch-frame-cards.py` refreshes from Scryfall.
+- `crates/engine`: `lib.rs` (`Template`, `Bindings`, `Options`, `build_card`), ported from Proxyshop's template classes with an MPL header. Its tests build cards on a small made-up template with the rectangle font.
 - `crates/scryfall`: `lib.rs` (`Client`, the `Transport` trait tests replace, the cache, `card_data`), `bulk.rs` (bulk download, index and lookups). Its tests use a pretend network; nothing in `cargo test` touches the real one.
 - Text tests use `crates/core/tests/fixtures/blocks.ttf`, a font of rectangles made by `tools/make-test-font.py`. Real fonts are only ever read from `fixtures/local/fonts`.
 - `crates/wasm`: the C ABI the webview calls. `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
-- `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text | card | bulk`.
+- `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text | card | bulk | build | sheet`.
 - `packages/importer/src/import`: `convert.ts` (PSD layer tree to document), `paths.ts` (vector paths), `effects.ts` (layer effects), `bindings.ts` (Proxyshop layer names to bindings), `cli.ts`.
-- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`.
+- `tests/golden`: `run.ts` (the runner), `thresholds.json`, `states.json`. `tests/text`: `run.ts`, `cards.json`. `tests/cards`: `run.ts`, `cards.json` (refreshed by `tools/fetch-suite-cards.py`), `art.png`.
 - The core takes no dependency that cannot build for `wasm32-unknown-unknown`, and uses no threads, files or clocks.

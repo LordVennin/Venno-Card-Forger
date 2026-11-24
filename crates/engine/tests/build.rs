@@ -251,6 +251,8 @@ fn rules_text_is_centered_in_the_textbox_shrunk_to_fit_and_lifted_off_the_pt_box
     let Layer::Text(rules) = layer(&doc, "rules-c") else { panic!() };
     let layout = layout_text(rules, &fonts());
     assert!(layout.line_ink.iter().flatten().all(|l| l[2] <= 1500.0 || l[3] <= 2400.0), "{:?}", layout.line_ink);
+    // And it does not leave the top of the textbox to do so: it is fitted again in less room.
+    assert!(layout.ink.unwrap()[1] >= 1619.0 && layout.scale < 1.0, "{:?} {}", layout.ink, layout.scale);
 }
 
 #[test]
