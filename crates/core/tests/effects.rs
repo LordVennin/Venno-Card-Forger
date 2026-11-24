@@ -390,3 +390,37 @@ fn clipped_layers_sit_under_the_bases_overlay_effects() {
     near(px(&scene(40, 40, vec![base], &[]), 20, 20), [191, 64, 64, 255]);
     assert_eq!(px(&r, 5, 5), CLEAR);
 }
+
+// ---- masks and effects ---------------------------------------------------------
+
+/// The gray square with a 4 px red outside stroke, and a mask that hides everything right of x = 20.
+fn stroked_and_masked(mask: Value) -> RenderResult {
+    let stroke = json!([fx(json!({ "type": "stroke", "color": [1, 0, 0, 1], "size": 4, "position": "outside" }))]);
+    let mut m = json!({ "asset": "m", "offset": { "x": 0, "y": 0 } });
+    m.as_object_mut().unwrap().extend(mask.as_object().unwrap().clone());
+    let layer = patch(patch(rect("sq", 10.0, 10.0, 20.0, 20.0, GRAY), json!({ "effects": stroke })), json!({ "mask": m }));
+    scene(40, 40, vec![layer], &[("m", png(40, 40, |x, _| if x < 20 { [255, 255, 255, 255] } else { [0, 0, 0, 255] }))])
+}
+
+#[test]
+fn a_mask_shapes_the_layer_and_its_effects_follow_the_new_edge() {
+    let r = stroked_and_masked(json!({}));
+    assert_eq!(px(&r, 15, 20), G);
+    // The stroke runs down the cut edge, into the hidden half.
+    assert_eq!(px(&r, 21, 20), [255, 0, 0, 255]);
+    assert_eq!(px(&r, 28, 20), CLEAR);
+}
+
+#[test]
+fn a_mask_that_hides_effects_cuts_the_layer_and_its_effects_alike() {
+    let r = stroked_and_masked(json!({ "hidesEffects": true }));
+    assert_eq!(px(&r, 15, 20), G);
+    // No stroke along the cut: the effect was worked out from the whole square, then hidden.
+    assert_eq!(px(&r, 21, 20), CLEAR);
+    assert_eq!(px(&r, 19, 20), G);
+    // The stroke on the visible side is still there, and the far side's is hidden.
+    assert_eq!(px(&r, 8, 20), [255, 0, 0, 255]);
+    assert_eq!(px(&r, 32, 20), CLEAR);
+    // The top stroke stops at the cut.
+    assert_eq!((px(&r, 15, 8), px(&r, 25, 8)), ([255, 0, 0, 255], CLEAR));
+}

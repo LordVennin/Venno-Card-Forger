@@ -131,6 +131,18 @@ struct StampTile {
     above: bool,
 }
 
+/// Which of a layer's masks are wanted.
+#[derive(Clone, Copy, PartialEq)]
+enum MaskPart {
+    /// Every active mask.
+    All,
+    /// The masks that shape the layer before its effects are worked out: the
+    /// vector mask, and the raster mask unless it is one that hides effects.
+    Shaping,
+    /// A raster mask that hides the finished layer, effects included.
+    Hiding,
+}
+
 /// A text layer's layout and the coverage of each of its colors, valid while
 /// the layer's text and the loaded fonts stay the same.
 struct TextCache {
@@ -381,7 +393,7 @@ impl<'a> RenderPass<'a> {
                 }
                 let mut work = target.clone();
                 self.draw_children(&mut work, &group.children);
-                let mask = self.mask_coverage(layer, &target.region);
+                let mask = self.mask_coverage(layer, &target.region, MaskPart::All);
                 return cross_fade(target, &work, opacity, mask.as_deref());
             }
         }
@@ -400,10 +412,19 @@ impl<'a> RenderPass<'a> {
             }
         }
         let fill = base.fill_opacity.unwrap_or(1.0) as f32;
+        // A mask that hides effects is applied last, to the layer and its effects together.
+        let hide = self.mask_coverage(layer, &target.region, MaskPart::Hiding);
 
         if !has_effects {
             if let Some(content) = &content {
-                composite(target, content, opacity * fill, blend, false);
+                match &hide {
+                    None => composite(target, content, opacity * fill, blend, false),
+                    Some(hide) => {
+                        let mut work = target.clone();
+                        composite(&mut work, content, fill, blend, false);
+                        cross_fade(target, &work, opacity, Some(hide));
+                    }
+                }
             }
             return;
         }
@@ -433,10 +454,10 @@ impl<'a> RenderPass<'a> {
             }
             stamps(work, true);
         };
-        if opacity < 1.0 {
+        if opacity < 1.0 || hide.is_some() {
             let mut work = target.clone();
             paint(&mut work);
-            cross_fade(target, &work, opacity, None);
+            cross_fade(target, &work, opacity, hide.as_deref());
         } else {
             paint(target);
         }
@@ -526,7 +547,7 @@ impl<'a> RenderPass<'a> {
     /// The layer's own pixels within `region`, with its masks applied. `None` when there are none.
     fn masked_content(&mut self, layer: &Layer, region: &Region) -> Option<Raster> {
         let mut content = self.content(layer, region)?;
-        if let Some(mask) = self.mask_coverage(layer, &content.region) {
+        if let Some(mask) = self.mask_coverage(layer, &content.region, MaskPart::Shaping) {
             multiply_alpha(&mut content, &mask);
         }
         Some(content)
@@ -671,13 +692,19 @@ impl<'a> RenderPass<'a> {
         Some(bounds)
     }
 
-    /// Combined raster and vector mask coverage (0..255) over `region`, or
-    /// `None` if the layer has no active mask.
-    fn mask_coverage(&mut self, layer: &Layer, region: &Region) -> Option<Vec<u8>> {
+    /// Mask coverage (0..255) over `region`, or `None` if the layer has no
+    /// active mask of the kind asked for. See [`MaskPart`].
+    fn mask_coverage(&mut self, layer: &Layer, region: &Region, part: MaskPart) -> Option<Vec<u8>> {
         let base = layer.base();
         let mut out: Option<Vec<u8>> = None;
+        let hiding = base.mask.as_ref().is_some_and(|m| m.hides());
+        let (vector, raster) = match part {
+            MaskPart::All => (true, true),
+            MaskPart::Shaping => (true, !hiding),
+            MaskPart::Hiding => (false, hiding),
+        };
 
-        if let Some(vector) = base.vector_mask.as_ref().filter(|v| v.enabled != Some(false)) {
+        if let Some(vector) = base.vector_mask.as_ref().filter(|v| vector && v.enabled != Some(false)) {
             let mut cov = self.fill_coverage(&vector.path, region).unwrap_or_else(|| vec![0; region.area()]);
             if vector.inverted == Some(true) {
                 cov.iter_mut().for_each(|c| *c = 255 - *c);
@@ -685,7 +712,7 @@ impl<'a> RenderPass<'a> {
             out = Some(cov);
         }
 
-        let Some(mask) = base.mask.as_ref().filter(|m| m.active()) else { return out };
+        let Some(mask) = base.mask.as_ref().filter(|m| raster && m.active()) else { return out };
         let Some(image) = self.image(&mask.asset, &base.name) else { return out };
         let density = mask.density.unwrap_or(1.0) as f32;
         let n = region.area();

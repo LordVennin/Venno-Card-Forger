@@ -33,7 +33,7 @@ const limits = { minPsnr: 40, maxBlockError: 7 };
 
 type Manifest = { bindings?: { kind?: string } };
 const all = existsSync(imported) ? readdirSync(imported).filter((name) => existsSync(join(imported, name, "manifest.json"))).sort() : [];
-const buildable = all.filter((name) => (JSON.parse(readFileSync(join(imported, name, "manifest.json"), "utf8")) as Manifest).bindings?.kind === "raster");
+const buildable = all.filter((name) => ["raster", "vector"].includes((JSON.parse(readFileSync(join(imported, name, "manifest.json"), "utf8")) as Manifest).bindings?.kind ?? ""));
 const templates = positionals.length ? buildable.filter((n) => positionals.includes(n)) : buildable;
 if (templates.length === 0) {
   console.log(`No imported templates the card engine can build in ${imported}. Nothing to test.`);
@@ -43,7 +43,7 @@ if (!existsSync(fonts) || !readdirSync(fonts).some((f) => /\.(ttf|otf)$/i.test(f
   console.log(`No fonts in ${fonts}. Nothing to test.`);
   process.exit(0);
 }
-for (const skipped of all.filter((n) => !buildable.includes(n))) console.log(`– ${skipped}: not a raster template; the card engine cannot build it yet`);
+for (const skipped of all.filter((n) => !buildable.includes(n))) console.log(`– ${skipped}: no bindings the card engine understands`);
 
 execFileSync("cargo", ["build", "-q", "--release", "-p", "cardsmith-cli"], { cwd: repo, stdio: "inherit" });
 const cardsmith = join(repo, "target/release/cardsmith");

@@ -17,9 +17,10 @@
 //! (rules 1 and 3): applying it gives an ordinary document in which every
 //! layer can still be edited, and undoing it gives the template back.
 //!
-//! Only templates whose frame is pre-drawn in layers per color ("raster"
-//! templates, such as Proxyshop's `normal` and `normal-extended`) are built so
-//! far. Not done yet: the set symbol, watermarks, and vector templates.
+//! Two kinds of template are built: ones whose frame is pre-drawn in layers
+//! per color ("raster", such as Proxyshop's `normal` and `normal-extended`),
+//! and Proxyshop's borderless vector template, whose shapes are colored here
+//! (see `vector.rs`). Not done yet: the set symbol and watermarks.
 
 use cardsmith_cards::layout::CardData;
 use cardsmith_cards::rules_text::{format_rules_text, strip_reminder_text, RulesFormat};
@@ -30,6 +31,8 @@ use cardsmith_core::tree;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+
+mod vector;
 
 /// Which of a template's layers play which part. Written by the importer into
 /// the template's manifest.
@@ -136,7 +139,7 @@ fn replace_text(content: &mut RichText, find: &str, with: &str) -> bool {
     false
 }
 
-struct Builder<'a> {
+pub(crate) struct Builder<'a> {
     template: &'a Template,
     fonts: &'a Fonts,
     /// The template's document with the edits so far applied, for measuring.
@@ -205,8 +208,35 @@ impl Builder<'_> {
         match tree::find(&self.doc, id)? {
             Layer::Shape(shape) => path_bounds(&shape.path.d),
             Layer::Text(_) => self.layout(id)?.ink,
+            // An image that is only moved, not scaled: where its pixels are.
+            Layer::Pixel(pixel) => {
+                let asset = self.doc.assets.get(&pixel.asset)?;
+                let (x, y) = (pixel.transform[2], pixel.transform[5]);
+                Some([x, y, x + asset.width? as f64, y + asset.height? as f64])
+            }
             _ => None,
         }
+    }
+
+    /// A layer found by the names of the groups it is in, under a starting
+    /// layer (the document's top level when `under` is None). This is how
+    /// Proxyshop's own scripts find layers.
+    fn named(&self, under: Option<&str>, names: &[&str]) -> Option<String> {
+        let mut group = match under {
+            Some(id) => match tree::find(&self.doc, id)? {
+                Layer::Group(g) => g,
+                _ => return None,
+            },
+            None => &self.doc.root,
+        };
+        let (last, groups) = names.split_last()?;
+        for name in groups {
+            group = group.children.iter().find_map(|c| match c {
+                Layer::Group(g) if g.base.name == *name => Some(g),
+                _ => None,
+            })?;
+        }
+        group.children.iter().find(|c| c.base().name == *last).map(|c| c.id().to_string())
     }
 
     fn parent_of(&self, id: &str) -> Option<String> {
@@ -238,24 +268,29 @@ fn plain(text: &str) -> RichText {
     RichText { runs: vec![TextRun { text: text.to_string(), ..TextRun::default() }], paragraphs: Vec::new() }
 }
 
-/// Work out the edits that make `card` out of `template`.
-///
-/// `fonts` are used to measure text (a name shrinks to stay clear of the mana
-/// cost; rules text moves up to stay clear of the P/T box). Without them the
-/// text is still filled in, unfitted, and a warning says which font is missing.
-pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: &Options) -> Result<Built, String> {
-    let b = &template.bindings;
-    if b.kind != "raster" {
-        return Err(format!("\"{}\" is a {} template; only raster templates can be built so far.", template.id, if b.kind.is_empty() { "unbound" } else { &b.kind }));
-    }
-    let mut build = Builder { template, fonts, doc: template.doc.clone(), edits: Vec::new(), warnings: Vec::new() };
+/// What the frame step settled for the steps after it.
+pub(crate) struct Plan {
+    /// The P/T numbers sit on a dark box and are drawn white.
+    pub pt_white: bool,
+    /// The rules text layer to fill.
+    pub rules: Option<String>,
+    /// The area rules text is fitted to and centered in.
+    pub textbox: Option<[f64; 4]>,
+    /// The layer that marks where normal (not tall) art goes.
+    pub art_ref: Option<String>,
+    /// How far the type line moves down from where the template has it.
+    pub type_dy: f64,
+    /// Switch on the drop shadows of the name, type line and P/T, and of the rules text.
+    pub shadows: bool,
+    pub shadow_rules: bool,
+    /// Whether rules text is drawn at all.
+    pub textless: bool,
+}
+
+/// Frame layers of a template whose colors are pre-drawn layers.
+fn frame_raster(build: &mut Builder, card: &CardData) -> Plan {
+    let b = &build.template.bindings;
     let frame = &card.frame;
-    // Photoshop lengths in Proxyshop are for a 3264 px wide card.
-    let scale = template.doc.width as f64 / 3264.0;
-    let step = 0.4 * template.doc.dpi / 72.0;
-
-    // ---- frame layers ----------------------------------------------------------------
-
     // Name and type boxes.
     if let Some(id) = build.toggle("twins", &frame.twins) {
         build.show(&id);
@@ -324,6 +359,32 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             }
         }
     }
+
+
+    let rules = build.bound(&b.text, if card.is_creature { "rulesCreature" } else { "rulesNoncreature" });
+    let textbox = build.bound(&b.text_refs, "textbox").and_then(|id| build.area(&id));
+    Plan { pt_white, rules, textbox, art_ref: build.bound(&b.art_refs, "normal"), type_dy: 0.0, shadows: false, shadow_rules: false, textless: false }
+}
+
+/// Work out the edits that make `card` out of `template`.
+///
+/// `fonts` are used to measure text (a name shrinks to stay clear of the mana
+/// cost; rules text moves up to stay clear of the P/T box). Without them the
+/// text is still filled in, unfitted, and a warning says which font is missing.
+pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: &Options) -> Result<Built, String> {
+    let b = &template.bindings;
+    if b.kind != "raster" && b.kind != "vector" {
+        return Err(format!("\"{}\" has no layer bindings the card engine understands; import it again with `pnpm import:psd`.", template.id));
+    }
+    let mut build = Builder { template, fonts, doc: template.doc.clone(), edits: Vec::new(), warnings: Vec::new() };
+    let frame = &card.frame;
+    // Photoshop lengths in Proxyshop are for a 3264 px wide card.
+    let scale = template.doc.width as f64 / 3264.0;
+    let step = 0.4 * template.doc.dpi / 72.0;
+
+    // ---- frame layers ----------------------------------------------------------------
+
+    let plan = if b.kind == "vector" { vector::frame(&mut build, card, options) } else { frame_raster(&mut build, card) };
 
     // ---- collector line --------------------------------------------------------------
 
@@ -409,6 +470,9 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             _ => None,
         };
         fitted_line(&mut build, &id, &card.name, "card.name", right);
+        if plan.shadows {
+            build.set(&id, json!({ "effectsEnabled": true }));
+        }
     }
     let shifted = (!card.color_indicator.is_empty()).then(|| build.bound(&b.text, "typeShift")).flatten();
     if let (Some(shift), Some(usual)) = (&shifted, build.bound(&b.text, "type")) {
@@ -420,7 +484,18 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             (Some(reference), false) => build.area(&reference).map(|a| a[0]),
             _ => None,
         };
+        // Templates with several textbox heights keep one type line and move it.
+        if let (true, Some(layer)) = (plan.type_dy != 0.0, build.text(&id)) {
+            let mut moved = json!({ "box": { "x": layer.bounds.x, "y": layer.bounds.y + plan.type_dy, "w": layer.bounds.w, "h": layer.bounds.h } });
+            if let Some(origin) = layer.origin {
+                moved["origin"] = json!({ "x": origin.x, "y": origin.y + plan.type_dy });
+            }
+            build.set(&id, moved);
+        }
         fitted_line(&mut build, &id, &card.type_line, "card.type", right);
+        if plan.shadows {
+            build.set(&id, json!({ "effectsEnabled": true }));
+        }
     }
 
     // ---- rules text and P/T ----------------------------------------------------------
@@ -430,8 +505,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     let divider = build.bound(&b.layers, "divider").filter(|_| options.flavor_divider && !oracle.is_empty() && !flavor.is_empty());
     // A few words alone in the box are centered.
     let centered = flavor.chars().count() <= 1 && oracle.chars().count() <= 70 && !oracle.contains('\n');
-    let rules = build.bound(&b.text, if card.is_creature { "rulesCreature" } else { "rulesNoncreature" });
-    let textbox = build.bound(&b.text_refs, "textbox").and_then(|id| build.area(&id));
+    let (rules, textbox) = (plan.rules.clone().filter(|_| !plan.textless), plan.textbox);
     if let (Some(id), Some(layer)) = (&rules, rules.as_deref().and_then(|id| build.text(id))) {
         let formatted = format_rules_text(&oracle, &flavor, &RulesFormat { centered, divider: divider.is_some(), ..format.clone() });
         for symbol in &formatted.unknown_symbols {
@@ -445,6 +519,9 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         let mut props = fit.clone();
         props["box"] = area.clone();
         build.write(id, &formatted.content, "card.rules", props);
+        if plan.shadow_rules {
+            build.set(id, json!({ "effectsEnabled": true }));
+        }
 
         // Lift the text clear of the P/T box if its last lines run into it.
         //
@@ -496,8 +573,11 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     }
     if card.is_creature {
         if let Some(id) = build.bound(&b.text, "pt") {
-            let more = if pt_white { json!({ "style": build.text(&id).map(|t| { let mut s = t.style; s.color = [1.0, 1.0, 1.0, 1.0]; s }) }) } else { json!({}) };
+            let more = if plan.pt_white { json!({ "style": build.text(&id).map(|t| { let mut s = t.style; s.color = [1.0, 1.0, 1.0, 1.0]; s }) }) } else { json!({}) };
             build.write(&id, &plain(&format!("{}/{}", card.power, card.toughness)), "card.pt", more);
+            if plan.shadows {
+                build.set(&id, json!({ "effectsEnabled": true }));
+            }
         }
     }
 
@@ -506,8 +586,8 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     if let Some(art) = &options.art {
         // Tall art, or a full-art frame when asked, goes in the full-art area if the template has one.
         let tall = art.height as f64 > art.width as f64 * 1.1;
-        let fullart = frame.is_colorless && options.vertical_fullart;
-        let reference = (tall || fullart).then(|| build.bound(&b.art_refs, "fullArt")).flatten().or_else(|| build.bound(&b.art_refs, "normal")).and_then(|id| build.area(&id));
+        let fullart = (frame.is_colorless || b.kind == "vector") && options.vertical_fullart;
+        let reference = (tall || fullart).then(|| build.bound(&b.art_refs, "fullArt")).flatten().or(plan.art_ref.clone()).and_then(|id| build.area(&id));
         match reference {
             Some(r) if art.width > 0 && art.height > 0 => {
                 // Cover the area, centered.

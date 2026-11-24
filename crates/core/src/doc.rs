@@ -237,6 +237,7 @@ pub enum Outside {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RasterMask {
     /// Grayscale image asset: white reveals, black hides.
     pub asset: AssetId,
@@ -256,11 +257,22 @@ pub struct RasterMask {
     /// Blur radius in pixels. Default 0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feather: Option<f64>,
+    /// Photoshop's "layer mask hides effects". Normally a mask shapes the
+    /// layer and its effects follow the new outline (a stroke runs along the
+    /// masked edge). With this on, effects are worked out from the unmasked
+    /// layer and the mask then hides layer and effects alike. Default false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hides_effects: Option<bool>,
 }
 
 impl RasterMask {
     pub fn active(&self) -> bool {
         self.enabled != Some(false) && self.density.unwrap_or(1.0) > 0.0
+    }
+
+    /// Whether the mask hides the finished layer rather than shaping it.
+    pub fn hides(&self) -> bool {
+        self.active() && self.hides_effects == Some(true)
     }
 }
 

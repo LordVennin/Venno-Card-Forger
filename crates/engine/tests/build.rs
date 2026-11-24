@@ -302,9 +302,152 @@ fn a_card_with_no_collector_number_keeps_the_plain_set_and_artist_lines() {
 }
 
 #[test]
-fn vector_templates_are_refused_for_now() {
+fn a_template_with_no_bindings_is_refused_with_a_reason() {
     let mut template = template();
-    template.bindings.kind = "vector".into();
+    template.bindings.kind = String::new();
     let error = build_card(&template, &card(json!({})), &fonts(), &Options::default()).unwrap_err();
-    assert!(error.contains("only raster templates"), "{error}");
+    assert!(error.contains("no layer bindings"), "{error}");
+}
+
+// ---- the borderless vector template --------------------------------------------
+
+/// A cut-down copy of the borderless vector template's structure: shapes by
+/// textbox height, the groups that get colored, and a pinlines mask per height.
+fn vector_template() -> Template {
+    let sizes = ["Tall", "Normal", "Medium", "Short"];
+    let by_size = |prefix: &str, top: f64| -> Vec<Value> { sizes.iter().enumerate().map(|(i, s)| rect(&format!("{prefix}-{s}"), s, false, [200.0, top + 100.0 * i as f64, 1800.0, top + 100.0 * i as f64 + 100.0])).collect() };
+    let masked = |name: &str| { let mut l = with(base("pixel", &format!("cut-{name}"), name, true), json!({ "asset": "m", "transform": [1, 0, 0, 0, 1, 0] })); l["mask"] = json!({ "asset": format!("cut-{name}"), "offset": { "x": 0, "y": 0 } }); l };
+    let rules = |size: &str| group(&format!("t-{size}"), size, true, vec![
+        text(&format!("rules-n-{size}"), "Rules Text - Noncreature", false, "Words", json!({ "box": { "x": 250, "y": 1650, "w": 1500, "h": 900 }, "effectsEnabled": false })),
+        text(&format!("rules-c-{size}"), "Rules Text - Creature", false, "Words", json!({ "box": { "x": 250, "y": 1650, "w": 1500, "h": 900 }, "effectsEnabled": false })),
+    ]);
+    let mut assets = json!({ "m": { "kind": "image", "path": "assets/m.png", "width": 4, "height": 4 }, "ref": { "kind": "image", "path": "assets/ref.png", "width": 1600, "height": 800 } });
+    for size in sizes {
+        assets[format!("cut-{size}")] = json!({ "kind": "image", "path": format!("assets/cut-{size}.png"), "width": 4, "height": 4 });
+    }
+    let doc = json!({
+        "version": 1, "width": 2000, "height": 3000, "dpi": 720, "assets": assets,
+        "root": with(base("group", "root", "Root", true), json!({ "passThrough": true, "children": [
+            with(base("pixel", "placeholder", "Layer 1", true), json!({ "asset": "m", "transform": [1, 0, 0, 0, 1, 0] })),
+            rect("art-short", "Art Frame Short", false, [0.0, 0.0, 2000.0, 2000.0]),
+            rect("art-tall", "Art Frame Tall", false, [0.0, 0.0, 2000.0, 1500.0]),
+            group("textbox", "Textbox", true, vec![group("textbox-shape", "Shape", true, by_size("tb", 1600.0))]),
+            with(group("pinlines", "Pinlines", true, vec![group("pin-shape", "Shape", true, vec![
+                group("pin-name", "Card Name", true, vec![group("pin-name-normal", "Normal", false, vec![])]),
+                group("pin-type", "Typeline", true, by_size("pin-type", 1400.0)),
+                group("pin-textbox", "Textbox", true, by_size("pin-tb", 1600.0)),
+            ])]), json!({ "vectorMask": { "path": { "d": "M0 0L2000 0L2000 500L0 500Z" }, "inverted": true, "enabled": false } })),
+            group("crown", "Legendary Crown", true, vec![group("crown-inner", "Legendary Crown", false, vec![])]),
+            group("twins", "Name & Title Boxes", true, vec![group("twins-shape", "Shape", true, vec![
+                group("twins-name", "Card Name", true, vec![rect("twins-name-normal", "Normal", false, [200.0, 200.0, 1800.0, 350.0])]),
+                group("twins-type", "Typeline", true, by_size("twins-type", 1400.0)),
+            ])]),
+            group("ptbox", "PT Box", false, vec![]),
+            group("g-text", "Text and Icons", true, vec![
+                rules("Tall"), rules("Normal"), rules("Medium"), rules("Short"),
+                group("refs", "Textbox Reference", true, sizes.iter().enumerate().map(|(i, s)| with(base("pixel", &format!("ref-{s}"), s, false), json!({ "asset": "ref", "transform": [1, 0, 200, 0, 1, 1700 + 100 * i] }))).collect()),
+                rect("ref-pt", "PT Reference", false, [1500.0, 2400.0, 1800.0, 2600.0]),
+                text("type", "Typeline", true, "Type", json!({ "origin": { "x": 250, "y": 1470 }, "effectsEnabled": false })),
+                text("pt-text", "Power / Toughness", false, "0/0", json!({ "origin": { "x": 1650, "y": 2550 }, "effectsEnabled": false })),
+                text("mana", "Mana Cost", true, "Mana", json!({ "origin": { "x": 1800, "y": 300 } })),
+                text("name", "Card Name", true, "Name", json!({ "origin": { "x": 250, "y": 300 }, "effectsEnabled": false })),
+            ]),
+            group("masks", "Masks", true, vec![group("mask-pins", "Pinlines", true, sizes.iter().map(|s| masked(s)).collect())]),
+        ] }))
+    });
+    let text_ids: serde_json::Map<String, Value> = sizes.iter().flat_map(|s| [(format!("rulesCreature.{}", s.to_lowercase()), json!(format!("rules-c-{s}"))), (format!("rulesNoncreature.{}", s.to_lowercase()), json!(format!("rules-n-{s}")))]).chain([("name", "name"), ("mana", "mana"), ("type", "type"), ("pt", "pt-text")].map(|(k, v)| (k.to_string(), json!(v)))).collect();
+    let manifest = json!({ "id": "mini-vector", "bindings": {
+        "kind": "vector", "layouts": ["normal"],
+        "artRefs": { "short": "art-short", "tall": "art-tall" },
+        "groups": { "text": "g-text", "masks": "masks", "pinlinesShapes": "pinlines", "textboxShapes": "textbox", "twinsShapes": "twins", "ptBoxShapes": "ptbox", "crownShapes": "crown" },
+        "text": text_ids, "textRefs": { "textbox": "refs", "pt": "ref-pt" }, "toggles": {}, "layers": {}, "art": "placeholder"
+    } });
+    Template::from_json(&doc.to_string(), &manifest.to_string()).unwrap()
+}
+
+fn build_vector(card: &CardData) -> (Doc, Vec<String>) {
+    let template = vector_template();
+    let options = Options { font_italic: "Blocks-Regular".into(), art: Some(Art { asset: "pic".into(), path: "assets/pic.png".into(), width: 400, height: 300 }), ..Options::default() };
+    let built = build_card(&template, card, &fonts(), &options).unwrap();
+    let mut doc = template.doc.clone();
+    let undo = apply(&mut doc, &built.edit).unwrap();
+    // Like every build, one step that undoes back to the template.
+    let mut back = doc.clone();
+    apply(&mut back, &undo).unwrap();
+    assert_eq!(back, template.doc);
+    (doc, built.warnings)
+}
+
+fn color_of(doc: &Doc, id: &str) -> Value {
+    let layer = serde_json::to_value(layer(doc, id)).unwrap();
+    assert_eq!((layer["clip"].as_bool(), layer["kind"].as_str()), (Some(true), Some("shape")), "{id}");
+    if layer["effects"].is_array() { layer["effects"][0]["gradient"]["stops"].clone() } else { layer["fill"]["color"].clone() }
+}
+
+fn shade(r: u8, g: u8, b: u8) -> Value {
+    json!([r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0, 1.0])
+}
+
+#[test]
+fn a_vector_template_gets_the_shapes_for_its_textbox_height_and_a_color_layer_on_each_part() {
+    // One line of rules text: the short textbox.
+    let (doc, warnings) = build_vector(&card(json!({ "mana_cost": "{U}", "type_line": "Legendary Creature — Cat" })));
+    assert!(warnings.iter().all(|w| w.contains("Proxyglyph")), "{warnings:?}");
+    for shown in ["pin-name-normal", "pin-type-Short", "pin-tb-Short", "twins-name-normal", "twins-type-Short", "tb-Short", "ptbox", "crown-inner", "rules-c-Short"] {
+        assert!(layer(&doc, shown).base().visible, "{shown}");
+    }
+    assert!(!layer(&doc, "tb-Tall").base().visible && !layer(&doc, "rules-c-Tall").base().visible);
+    // Each colored part has its color clipped just above it.
+    let order: Vec<&str> = doc.root.children.iter().map(|l| l.id()).collect();
+    for (part, color) in [("textbox", "card-color-textbox"), ("pinlines", "card-color-pinlines"), ("twins", "card-color-name-and-title-boxes"), ("ptbox", "card-color-pt-box")] {
+        let at = order.iter().position(|id| *id == part).unwrap();
+        assert_eq!(order[at + 1], color);
+    }
+    assert_eq!(color_of(&doc, "card-color-pinlines"), shade(0, 117, 190));
+    assert_eq!(color_of(&doc, "card-color-textbox"), shade(0x04, 0x54, 0x82));
+    assert_eq!(color_of(&doc, "card-color-legendary-crown"), shade(0x00, 0x6d, 0xae));
+    // The pinlines and the crown are cut by the mask for this height, effects and all, and the pinlines make way for the crown.
+    for cut in ["pinlines", "crown"] {
+        let mask = layer(&doc, cut).base().mask.clone().unwrap();
+        assert_eq!((mask.asset.as_str(), mask.hides_effects, mask.enabled), ("cut-Short", Some(true), Some(true)), "{cut}");
+    }
+    assert_eq!(layer(&doc, "pinlines").base().vector_mask.as_ref().unwrap().enabled, Some(true));
+    // Text shadows are switched on; the type line moved down with its bar (300 px below the tall one).
+    for text in ["name", "type", "pt-text", "rules-c-Short"] {
+        assert_eq!(layer(&doc, text).base().effects_enabled, Some(true), "{text}");
+    }
+    let Layer::Text(type_line) = layer(&doc, "type") else { panic!() };
+    assert_eq!(type_line.origin.unwrap().y, 1770.0);
+    // Rules text is fitted to this height's reference area, and the art to this height's frame.
+    let Layer::Text(rules) = layer(&doc, "rules-c-Short") else { panic!() };
+    assert!(rules.bounds.y >= 2000.0 && rules.bounds.y + rules.bounds.h <= 2800.0, "{:?}", rules.bounds);
+    let Layer::Art(art) = layer(&doc, "card-art") else { panic!() };
+    assert_eq!(art.frame_ref.h, 2000.0);
+}
+
+#[test]
+fn a_vector_template_grows_its_textbox_with_the_text_and_blends_two_colors() {
+    let lines = |n: usize| vec!["a"; n].join("\n");
+    let tall = |n: usize, flavor: &str| build_vector(&card(json!({ "oracle_text": lines(n), "flavor_text": flavor, "power": null, "toughness": null, "type_line": "Instant" }))).0;
+    assert!(layer(&tall(4, ""), "tb-Short").base().visible);
+    assert!(layer(&tall(5, ""), "tb-Medium").base().visible);
+    assert!(layer(&tall(6, ""), "tb-Normal").base().visible);
+    assert!(layer(&tall(7, ""), "tb-Tall").base().visible);
+    // Flavor text counts its own lines and one more.
+    assert!(layer(&tall(3, "d"), "tb-Medium").base().visible);
+    // In the tallest textbox nothing moves, and a noncreature has no P/T box.
+    let doc = tall(7, "");
+    let Layer::Text(type_line) = layer(&doc, "type") else { panic!() };
+    assert_eq!(type_line.origin.unwrap().y, 1470.0);
+    assert!(!layer(&doc, "ptbox").base().visible && tree::find(&doc, "card-color-pt-box").is_none());
+
+    // Two colors: pinlines and textbox blend from the first to the second; the name boxes are gold.
+    let (doc, _) = build_vector(&card(json!({ "mana_cost": "{B}{G}", "type_line": "Enchantment", "power": null, "toughness": null })));
+    let stops = color_of(&doc, "card-color-pinlines");
+    assert_eq!((stops[0]["offset"].as_f64(), stops[0]["color"].clone(), stops[1]["offset"].as_f64(), stops[1]["color"].clone()), (Some(0.40), shade(39, 38, 36), Some(0.60), shade(0, 123, 67)));
+    assert_eq!(color_of(&doc, "card-color-textbox")[1]["color"], shade(0x13, 0x4f, 0x23));
+    assert_eq!(color_of(&doc, "card-color-name-and-title-boxes"), shade(0x9a, 0x88, 0x3f));
+    // Three colors: gold throughout.
+    let (doc, _) = build_vector(&card(json!({ "mana_cost": "{W}{U}{B}", "type_line": "Instant", "power": null, "toughness": null })));
+    assert_eq!(color_of(&doc, "card-color-pinlines"), shade(246, 210, 98));
 }

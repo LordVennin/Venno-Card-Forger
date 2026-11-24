@@ -140,6 +140,8 @@ export type RasterMask = {
   density?: number;
   /** Blur radius in pixels. Default 0. */
   feather?: number;
+  /** Photoshop's "layer mask hides effects": effects are worked out from the unmasked layer, then the mask hides layer and effects alike. Default false. */
+  hidesEffects?: boolean;
 };
 
 export type VectorMask = { path: Path; enabled?: boolean; inverted?: boolean };
