@@ -48,3 +48,11 @@ if (art2) {
   time("hide the art (the whole card is drawn again)", () => core.execute({ type: "setLayerProps", id: art2.id, props: { visible: false } }, "Hide"));
   time("undo", () => core.undo());
 }
+if (art2) {
+  // Dragging the art: ten small moves, as pointer events would send them.
+  const t = [...art2.transform];
+  const started = performance.now();
+  for (let i = 1; i <= 10; i++) core.execute({ type: "setLayerProps", id: art2.id, props: { transform: [t[0], t[1], t[2] + i * 12, t[3], t[4], t[5] + i * 8] } }, "Move");
+  console.log(`${((performance.now() - started) / 10).toFixed(0).padStart(6)} ms  each step of dragging the art behind the frame`);
+  time("the full-size picture catching up afterwards (as before saving or exporting)", () => core.frameHash());
+}

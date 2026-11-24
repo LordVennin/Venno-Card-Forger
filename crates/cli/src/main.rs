@@ -143,6 +143,7 @@ fn run(args: &[String]) -> Result<(), String> {
             let mut raw = None;
             let mut fonts = None;
             let mut text_bounds = None;
+            let mut preview = None;
             let mut rest = args[1..].iter();
             while let Some(arg) = rest.next() {
                 match arg.as_str() {
@@ -153,6 +154,8 @@ fn run(args: &[String]) -> Result<(), String> {
                     "--text-bounds" => text_bounds = rest.next(),
                     // Also write the pixels as bare RGBA bytes, for tools that compare them.
                     "--raw" => raw = rest.next(),
+                    // Draw the editor's small preview (1/2, 1/4 or 1/8 size for 1, 2 or 3) instead of the real picture.
+                    "--preview" => preview = rest.next().and_then(|n| n.parse::<u32>().ok()),
                     _ => input = Some(arg),
                 }
             }
@@ -163,6 +166,11 @@ fn run(args: &[String]) -> Result<(), String> {
                 load_fonts(&mut renderer, dir)?;
             }
             let started = Instant::now();
+            if let Some(level) = preview {
+                let (width, height, pixels) = cardsmith_core::proxy::render_small(&doc, &assets, renderer.fonts(), level.min(3));
+                eprintln!("{input} -> {out} ({width}x{height} preview, {} ms)", started.elapsed().as_millis());
+                return write(Path::new(out), &encode_png(width, height, &pixels).map_err(|e| e.to_string())?);
+            }
             let r = renderer.render(&doc, &assets);
             let elapsed = started.elapsed().as_millis();
             if let Some(file) = text_bounds {

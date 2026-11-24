@@ -16,6 +16,7 @@ pub mod effects;
 pub mod error;
 pub mod field;
 pub mod paint;
+pub mod proxy;
 pub mod raster;
 pub mod render;
 pub mod samples;

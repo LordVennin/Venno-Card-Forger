@@ -637,7 +637,7 @@ fn bench() -> (Workbench, Session) {
 }
 
 #[track_caller]
-fn assert_frame_is_exact(session: &Session, images: &[(&str, Vec<u8>)]) {
+fn assert_frame_is_exact(session: &mut Session, images: &[(&str, Vec<u8>)]) {
     let mut renderer = cardsmith_core::render::Renderer::new();
     *renderer.fonts_mut() = fonts();
     let assets = images.iter().map(|(id, bytes)| (id.to_string(), bytes.clone())).collect();
@@ -670,10 +670,10 @@ fn rebuilding_in_an_open_document_gives_what_a_fresh_build_would_as_one_step() {
 
     // Only what differs between the two cards was drawn again, and the picture is still
     // exactly what drawing the whole document afresh gives.
-    assert_frame_is_exact(&session, &[("card-art-1", picture(40, 30))]);
+    assert_frame_is_exact(&mut session, &[("card-art-1", picture(40, 30))]);
     let third = card(json!({ "name": "bbbbb", "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [], "oracle_text": "a\nb" }));
     bench.build(&mut session, &request(&third)).unwrap();
-    assert_frame_is_exact(&session, &[("card-art-1", picture(40, 30))]);
+    assert_frame_is_exact(&mut session, &[("card-art-1", picture(40, 30))]);
     assert!(session.undo());
 
     // Each build is one step back, and the first step back is the bare template.
@@ -710,13 +710,13 @@ fn a_fill_goes_under_the_art_of_the_card_it_was_made_for_and_leaves_with_it() {
     // ...and a fill that was still being made for the old card is turned away.
     assert!(!bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
     assert!(tree::find(session.doc(), "card-fill").is_none());
-    assert_frame_is_exact(&session, &[("card-art-1", picture(400, 300))]);
+    assert_frame_is_exact(&mut session, &[("card-art-1", picture(400, 300))]);
     // One step back, the old card has its fill again.
     assert!(session.undo());
     assert!(tree::find(session.doc(), "card-fill").is_some());
     assert_eq!(runs(session.doc(), "name"), "ab");
     let fill = tree::find(session.doc(), "card-fill").and_then(|l| if let Layer::Fill(f) = l { Some(f.asset.clone()) } else { None }).unwrap();
-    assert_frame_is_exact(&session, &[("card-art-1", picture(400, 300)), (fill.as_str(), picture(250, 375))]);
+    assert_frame_is_exact(&mut session, &[("card-art-1", picture(400, 300)), (fill.as_str(), picture(250, 375))]);
 }
 
 #[test]

@@ -14,7 +14,8 @@ use crate::raster::{Image, Raster, Region};
 use crate::render::{can_split_at, encode_png, hash, Renderer, Split};
 use crate::serialize::{save_cardsmith, AssetBytes};
 use crate::{err, Result};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::proxy::{downscale, scale_doc, TextOutlines};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 enum Step {
     Edit { label: String, edit: Edit, inverse: Edit },
@@ -139,6 +140,36 @@ pub struct View {
     pub h: u32,
 }
 
+/// The small copy of the document the screen is drawn from while zoomed out. See [`crate::proxy`].
+struct Proxy {
+    /// The copy is 1/2^level of the document's size.
+    level: u32,
+    doc: Doc,
+    /// The document changed since the copy was made.
+    doc_stale: bool,
+    renderer: Renderer,
+    frame: Raster,
+    /// The version of each image the copy's smaller one was made from.
+    made: HashMap<String, u64>,
+    texts: TextOutlines,
+}
+
+/// The parts of `a` that are not in `b`.
+fn subtract(a: Region, b: &Region) -> Vec<Region> {
+    let Some(i) = a.intersect(b) else { return vec![a] };
+    let mut parts = Vec::new();
+    let mut add = |x: i32, y: i32, w: i32, h: i32| {
+        if w > 0 && h > 0 {
+            parts.push(Region::new(x, y, w, h));
+        }
+    };
+    add(a.x, a.y, a.w, i.y - a.y);
+    add(a.x, i.y + i.h, a.w, a.y + a.h - i.y - i.h);
+    add(a.x, i.y, i.x - a.x, i.h);
+    add(i.x + i.w, i.y, a.x + a.w - i.x - i.w, i.h);
+    parts
+}
+
 pub struct Session {
     doc: Doc,
     assets: AssetBytes,
@@ -158,6 +189,11 @@ pub struct Session {
     painted: BTreeSet<String>,
     /// Assets supplied without redrawing, whose layers are still to be drawn.
     stashed: BTreeSet<String>,
+    /// Present while the view is zoomed out far enough to be drawn from a smaller copy.
+    proxy: Option<Proxy>,
+    /// Areas of the full-size frame that changed and have not been drawn since:
+    /// off screen, or shown from the smaller copy. [`Session::settle`] draws them.
+    stale: Vec<Region>,
 }
 
 const HISTORY_LIMIT: usize = 200;
@@ -186,6 +222,8 @@ impl Session {
             below: None,
             painted: BTreeSet::new(),
             stashed: BTreeSet::new(),
+            proxy: None,
+            stale: Vec::new(),
         };
         *session.renderer.fonts_mut() = fonts;
         session.renderer.sync(&session.doc);
@@ -208,9 +246,58 @@ impl Session {
 
     // ---- drawing --------------------------------------------------------------
 
-    /// Re-render one region of the document into the frame, then into the view.
+    /// The part of the document on screen, with a little around it. The whole document until a view is set.
+    fn visible(&self) -> Region {
+        if self.view_pixels.is_empty() {
+            return self.whole();
+        }
+        let v = self.view;
+        let (x0, y0) = (v.x.floor() as i32 - 64, v.y.floor() as i32 - 64);
+        let (x1, y1) = ((v.x + v.w as f32 / v.scale).ceil() as i32 + 64, (v.y + v.h as f32 / v.scale).ceil() as i32 + 64);
+        Region::new(x0, y0, x1 - x0, y1 - y0).intersect(&self.whole()).unwrap_or(Region::new(0, 0, 0, 0))
+    }
+
+    /// Draw what changed in `region` of the document, as cheaply as the view allows:
+    ///
+    ///   - zoomed out, into the smaller copy the screen is drawn from;
+    ///   - otherwise at full size, but only the part on screen.
+    ///
+    /// What is not drawn at full size is noted and drawn when it is wanted
+    /// ([`Session::settle`]) or scrolled into view. A brush stroke always draws
+    /// at full size: its areas are small, and it works on the real pixels.
     fn redraw(&mut self, region: Region) {
         let Some(region) = region.intersect(&self.whole()) else { return };
+        if self.stroke.is_some() {
+            // Whole blocks of the smaller copy, so it can be refreshed from the frame exactly.
+            let k = self.proxy.as_ref().map_or(1, |p| 1 << p.level);
+            let (x0, y0) = (region.x.div_euclid(k) * k, region.y.div_euclid(k) * k);
+            let (x1, y1) = ((region.x + region.w + k - 1).div_euclid(k) * k, (region.y + region.h + k - 1).div_euclid(k) * k);
+            let blocks = Region::new(x0, y0, x1 - x0, y1 - y0).intersect(&self.whole()).unwrap_or(region);
+            self.draw_full(blocks);
+            self.shrink_into_proxy(blocks);
+        } else if self.proxy.is_some() {
+            self.note_stale(vec![region]);
+            self.draw_small(region);
+        } else {
+            let visible = self.visible();
+            self.note_stale(subtract(region, &visible));
+            if let Some(shown) = region.intersect(&visible) {
+                self.draw_full(shown);
+            }
+        }
+        self.update_view(region);
+    }
+
+    /// Note areas of the full-size frame as changed and not yet drawn. The noted areas never overlap.
+    fn note_stale(&mut self, areas: Vec<Region>) {
+        for area in areas {
+            self.stale = std::mem::take(&mut self.stale).into_iter().flat_map(|old| subtract(old, &area)).collect();
+            self.stale.push(area);
+        }
+    }
+
+    /// Draw one region of the document into the full-size frame.
+    fn draw_full(&mut self, region: Region) {
         let (part, warnings) = match (&mut self.below, &self.stroke) {
             // Mid-stroke: start from the cached layers beneath, then draw the painted layer and what is above it.
             (Some(below), Some(_)) => {
@@ -246,15 +333,93 @@ impl Session {
             let from = part.region.index(region.x, y) * 4;
             self.frame.data[to..to + width].copy_from_slice(&part.data[from..from + width]);
         }
-        self.update_view(region);
+        self.stale = std::mem::take(&mut self.stale).into_iter().flat_map(|old| subtract(old, &region)).collect();
+    }
+
+    /// Draw one region of the document into the smaller copy.
+    fn draw_small(&mut self, region: Region) {
+        let Some(proxy) = self.proxy.as_mut() else { return };
+        if proxy.doc_stale {
+            proxy.doc = scale_doc(&self.doc, proxy.level, self.renderer.fonts(), &mut proxy.texts);
+            proxy.doc_stale = false;
+        }
+        // Smaller versions of the images that layers now showing use, made when first needed and again when one is painted on.
+        fn showing<'a>(group: &'a GroupLayer, ids: &mut Vec<&'a str>) {
+            for layer in group.children.iter().filter(|l| l.base().visible) {
+                ids.extend(layer.base().mask.as_ref().map(|m| m.asset.as_str()));
+                match layer {
+                    Layer::Pixel(l) => ids.push(&l.asset),
+                    Layer::Fill(l) => ids.push(&l.asset),
+                    Layer::Art(l) => ids.extend(l.asset.as_deref()),
+                    Layer::Group(g) => showing(g, ids),
+                    _ => {}
+                }
+            }
+        }
+        let mut ids = Vec::new();
+        showing(&self.doc.root, &mut ids);
+        for id in ids {
+            let version = self.renderer.image_version(id);
+            if proxy.made.get(id) != Some(&version) {
+                if let Some(image) = self.renderer.decoded_image(id, &self.assets) {
+                    proxy.renderer.set_image(id, downscale(&image, proxy.level));
+                    proxy.made.insert(id.to_string(), version);
+                }
+            }
+        }
+        proxy.renderer.sync(&proxy.doc);
+        let k = 1 << proxy.level;
+        let (x0, y0) = (region.x.div_euclid(k) - 1, region.y.div_euclid(k) - 1);
+        let (x1, y1) = ((region.x + region.w + k - 1).div_euclid(k) + 1, (region.y + region.h + k - 1).div_euclid(k) + 1);
+        let Some(small) = Region::new(x0, y0, x1 - x0, y1 - y0).intersect(&proxy.frame.region) else { return };
+        let (part, warnings) = proxy.renderer.draw_region(&proxy.doc, &AssetBytes::new(), small);
+        if small == proxy.frame.region {
+            self.warnings = warnings;
+        }
+        let width = small.w as usize * 4;
+        for y in small.y..small.y + small.h {
+            let (to, from) = (proxy.frame.region.index(small.x, y) * 4, part.region.index(small.x, y) * 4);
+            proxy.frame.data[to..to + width].copy_from_slice(&part.data[from..from + width]);
+        }
+    }
+
+    /// Refresh the smaller copy from the full-size frame over `region`, which is whole blocks of it.
+    fn shrink_into_proxy(&mut self, region: Region) {
+        let Some(proxy) = self.proxy.as_mut() else { return };
+        let k = 1 << proxy.level;
+        let part = Image { w: region.w, h: region.h, data: (region.y..region.y + region.h).flat_map(|y| {
+            let at = self.frame.region.index(region.x, y) * 4;
+            self.frame.data[at..at + region.w as usize * 4].iter().copied()
+        }).collect() };
+        let small = downscale(&part, proxy.level);
+        let (sx, sy) = (region.x / k, region.y / k);
+        for y in 0..small.h {
+            if sy + y >= proxy.frame.region.h {
+                break;
+            }
+            let width = small.w.min(proxy.frame.region.w - sx).max(0) as usize * 4;
+            let (to, from) = (proxy.frame.region.index(sx, sy + y) * 4, (y * small.w) as usize * 4);
+            proxy.frame.data[to..to + width].copy_from_slice(&small.data[from..from + width]);
+        }
+    }
+
+    /// Bring the full-size frame up to date: draw every area that changed while
+    /// it was off screen or shown from the smaller copy.
+    pub fn settle(&mut self) {
+        // Drawing one area takes it out of the others, so nothing is drawn twice.
+        while let Some(region) = self.stale.pop() {
+            self.draw_full(region);
+        }
     }
 
     /// The full-resolution frame: straight RGBA, document size.
-    pub fn frame(&self) -> &[u8] {
+    pub fn frame(&mut self) -> &[u8] {
+        self.settle();
         &self.frame.data
     }
 
-    pub fn frame_hash(&self) -> u64 {
+    pub fn frame_hash(&mut self) -> u64 {
+        self.settle();
         hash(&self.frame.data)
     }
 
@@ -267,6 +432,25 @@ impl Session {
     pub fn set_view(&mut self, view: View) {
         self.view = View { scale: view.scale.max(1e-3), ..view };
         self.view_pixels = vec![0; view.w as usize * view.h as usize * 4];
+        // The smallest copy that still has a pixel or more for every screen pixel.
+        let level = if self.stroke.is_some() { self.proxy.as_ref().map_or(0, |p| p.level) } else { ((1.0 / self.view.scale).log2().floor() as i32).clamp(0, 3) as u32 };
+        if self.proxy.as_ref().map_or(0, |p| p.level) != level {
+            self.proxy = None;
+            if level > 0 {
+                let k = 1 << level;
+                let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
+                self.proxy = Some(Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() });
+                self.draw_small(self.whole());
+            }
+        }
+        if self.proxy.is_none() && self.stroke.is_none() {
+            // What was left undrawn off screen and has come into view.
+            let visible = self.visible();
+            let due: Vec<Region> = self.stale.iter().filter_map(|area| area.intersect(&visible)).collect();
+            for area in due {
+                self.draw_full(area);
+            }
+        }
         self.update_view(self.whole());
         self.dirty_view = Region::new(0, 0, view.w as i32, view.h as i32);
     }
@@ -300,18 +484,21 @@ impl Session {
         if x1 <= x0 || y1 <= y0 {
             return;
         }
-        let doc = self.whole();
-        let frame = &self.frame.data;
+        // From the smaller copy when there is one: `f` of its pixels to a document pixel.
+        let (doc, frame, f) = match &self.proxy {
+            Some(proxy) => (proxy.frame.region, &proxy.frame.data, 1.0 / (1 << proxy.level) as f32),
+            None => (self.whole(), &self.frame.data, 1.0),
+        };
         let step = 1.0 / v.scale;
         // Zoomed out, one screen pixel covers several document pixels: average a small grid of them.
-        let taps = (step.ceil() as i32).clamp(1, 4);
+        let taps = ((step * f).ceil() as i32).clamp(1, 4);
         for vy in y0..y1 {
             for vx in x0..x1 {
                 let mut acc = [0f32; 4];
                 for j in 0..taps {
                     for i in 0..taps {
-                        let dx = (v.x + (vx as f32 + (i as f32 + 0.5) / taps as f32) * step).floor() as i32;
-                        let dy = (v.y + (vy as f32 + (j as f32 + 0.5) / taps as f32) * step).floor() as i32;
+                        let dx = ((v.x + (vx as f32 + (i as f32 + 0.5) / taps as f32) * step) * f).floor() as i32;
+                        let dy = ((v.y + (vy as f32 + (j as f32 + 0.5) / taps as f32) * step) * f).floor() as i32;
                         if dx < 0 || dy < 0 || dx >= doc.w || dy >= doc.h {
                             continue;
                         }
@@ -400,11 +587,16 @@ impl Session {
         let mut areas = self.areas(&reach);
         let inverse = apply(&mut self.doc, edit)?;
         self.renderer.sync(&self.doc);
+        if let Some(proxy) = &mut self.proxy {
+            proxy.doc_stale = true;
+        }
         let size = (self.doc.width as i32, self.doc.height as i32);
         if size != (self.frame.region.w, self.frame.region.h) {
             // The document was resized: start the frame again.
             self.frame = Raster::new(Region::new(0, 0, size.0, size.1));
-            self.redraw(self.whole());
+            self.proxy = None;
+            self.stale.clear();
+            self.draw_full(self.whole());
             self.set_view(self.view);
             return Ok(inverse);
         }
@@ -587,6 +779,8 @@ impl Session {
         self.renderer.forget_image(id);
         self.below = None;
         self.renderer.sync(&self.doc);
+        // Complaints that an image was missing are out of date now; a later draw makes them again if they still hold.
+        self.warnings.retain(|warning| !warning.contains("is unavailable") && !warning.contains("has no data"));
         // Only the layers that show this image, or one supplied quietly before it, need drawing again.
         let mut fresh = std::mem::take(&mut self.stashed);
         fresh.insert(id.to_string());
@@ -652,6 +846,9 @@ impl Session {
     /// PostScript names it provides.
     pub fn add_font(&mut self, bytes: Vec<u8>) -> Result<Vec<String>> {
         let names = self.renderer.fonts_mut().add(bytes)?;
+        if let Some(proxy) = &mut self.proxy {
+            proxy.doc_stale = true;
+        }
         self.below = None;
         self.renderer.sync(&self.doc);
         self.redraw(self.whole());

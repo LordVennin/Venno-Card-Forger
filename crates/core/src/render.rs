@@ -978,6 +978,17 @@ impl Renderer {
         *self.versions.entry(id.to_string()).or_insert(0) += 1;
     }
 
+    /// How many times an image has changed since it was first decoded.
+    pub fn image_version(&self, id: &str) -> u64 {
+        self.versions.get(id).copied().unwrap_or(0)
+    }
+
+    /// The decoded image for an asset, decoding it first if needed. `None` if
+    /// its bytes are missing or are not a picture.
+    pub fn decoded_image(&mut self, id: &str, assets: &AssetBytes) -> Option<Rc<Image>> {
+        self.decoded(id, assets)
+    }
+
     /// Forget what an asset decoded to, because its bytes have arrived or
     /// changed. It is decoded again when next drawn. Counts as a change to the image.
     pub fn forget_image(&mut self, id: &str) {
