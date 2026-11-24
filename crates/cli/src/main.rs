@@ -377,7 +377,7 @@ fn contact_sheet(images: &[cardsmith_core::render::RenderResult], across: u32, s
 }
 
 /// What stable-diffusion.cpp's command-line program is called on this system.
-const SD_CLI_FILE: &str = if cfg!(target_os = "windows") { "sd-cli.exe" } else { "sd-cli" };
+use cardsmith_fill::tiers::{RUNTIME_FILE, SD_CLI_FILE};
 
 /// Choices for the Stable Diffusion fill tier.
 #[derive(Default)]
@@ -389,7 +389,6 @@ struct SdOptions {
 }
 
 /// What the ONNX Runtime library file is called on this system.
-const RUNTIME_FILE: &str = if cfg!(target_os = "windows") { "onnxruntime.dll" } else if cfg!(target_os = "macos") { "libonnxruntime.dylib" } else { "libonnxruntime.so" };
 
 fn scryfall_cache() -> PathBuf {
     // Like other apps' caches, under the user's cache folder.
@@ -464,25 +463,9 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
         // A quarter of the card's size is plenty for made-up background, and quick.
         let work_width = plan.canvas.0 / 4;
         let request = cardsmith_fill::FillRequest { art: placed, canvas: plan.canvas, keep: plan.keep, seed, prompt: sd.prompt.as_deref() };
-        // Best first: the model if it is there (or was asked for), then PatchMatch, which always is.
-        let models = cache.unwrap_or_else(scryfall_cache);
-        let runtime = std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from).unwrap_or_else(|| models.join("onnxruntime").join(RUNTIME_FILE));
-        let mut lama = cardsmith_fill::lama::Lama::new(runtime, models.join("models").join(cardsmith_fill::lama::MODEL_FILE), work_width);
-        let mut patchmatch = cardsmith_fill::PatchMatch { work_width };
-        // Stable Diffusion is only used when asked for: it wants a graphics card and a 4 GB model.
-        let program = sd.program.clone().or_else(|| std::env::var_os("CARDSMITH_SD_CLI").map(PathBuf::from)).unwrap_or_else(|| models.join("sdcpp").join(SD_CLI_FILE));
-        let model = sd.model.clone().unwrap_or_else(|| models.join("models").join(cardsmith_fill::sdcpp::MODEL_FILE));
-        let mut diffusion = cardsmith_fill::sdcpp::SdCpp::new(program, model, models.join("sdcpp").join("last-run"), work_width);
-        diffusion.extra_args = sd.extra.clone();
-        let mut providers: Vec<&mut dyn cardsmith_fill::FillProvider> = Vec::new();
-        if tier == "sd" {
-            providers.push(&mut diffusion);
-        }
-        if tier != "patchmatch" {
-            providers.push(&mut lama);
-        }
-        providers.push(&mut patchmatch);
-        let outcome = cardsmith_fill::fill_with_fallback(&mut providers, &request)?;
+        // Best first: the tier asked for, then each simpler one; PatchMatch always can.
+        let tiers = cardsmith_fill::tiers::Tiers { cache: cache.unwrap_or_else(scryfall_cache), sd_program: sd.program.clone(), sd_model: sd.model.clone(), sd_args: sd.extra.clone() };
+        let outcome = tiers.fill(&tier, &request, work_width)?;
         // Falling back is only worth a word when a better tier was asked for by name.
         if tier == "lama" || tier == "sd" {
             for notice in &outcome.notices {

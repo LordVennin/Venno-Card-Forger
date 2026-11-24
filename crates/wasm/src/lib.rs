@@ -21,16 +21,20 @@ use cardsmith_core::raster::Region;
 use cardsmith_core::samples;
 use cardsmith_core::serialize::{load_cardsmith, parse_doc, AssetBytes};
 use cardsmith_core::session::{Session, View};
+use cardsmith_engine::workbench::{BuildRequest, Workbench};
+use cardsmith_engine::Template;
 use std::cell::RefCell;
 
 struct State {
     session: Session,
+    /// Present while the open document is a template a card is being built on.
+    bench: Option<Workbench>,
     /// Assets supplied after `cs_open_json`, until the session is (re)built with them.
     out: Vec<u8>,
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), out: Vec::new() });
+    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), bench: None, out: Vec::new() });
 }
 
 fn with<T>(f: impl FnOnce(&mut State) -> T) -> T {
@@ -70,6 +74,7 @@ fn open(s: &mut State, doc: Doc, assets: AssetBytes) {
     // Fonts belong to the app, not to a document: they carry over.
     let fonts = s.session.fonts().clone();
     s.session = Session::with_fonts(doc, assets, fonts);
+    s.bench = None;
     s.session.set_view(View { scale: 1.0, x: 0.0, y: 0.0, ..view });
 }
 
@@ -173,6 +178,107 @@ pub unsafe extern "C" fn cs_open_json(json_ptr: *const u8, json_len: usize, asse
 pub extern "C" fn cs_save() -> u32 {
     attempt(|s| {
         s.out = s.session.save().map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
+// ---- cards -----------------------------------------------------------------------
+
+/// Open a template package to build a card on: its `doc.json` and
+/// `manifest.json`. Its images are not needed yet; see `cs_missing_assets`.
+///
+/// # Safety
+/// Both `(ptr, len)` pairs must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_open_template(doc_ptr: *const u8, doc_len: usize, manifest_ptr: *const u8, manifest_len: usize) -> u32 {
+    let doc = text(doc_ptr, doc_len);
+    let manifest = text(manifest_ptr, manifest_len);
+    attempt(|s| {
+        let bench = Workbench::new(Template::from_json(doc?, manifest?)?);
+        open(s, bench.doc(), AssetBytes::new());
+        s.bench = Some(bench);
+        Ok(())
+    })
+}
+
+/// The assets that showing layers need and that have not been supplied, as
+/// JSON in the output buffer: `[{ "id", "path" }]`.
+#[no_mangle]
+pub extern "C" fn cs_missing_assets() {
+    with(|s| {
+        let missing: Vec<_> = s.session.missing_assets().into_iter().map(|(id, path)| serde_json::json!({ "id": id, "path": path })).collect();
+        s.out = serde_json::to_vec(&missing).unwrap_or_default();
+    });
+}
+
+/// Supply an asset's bytes. With `redraw` 0 nothing is drawn, for supplying
+/// several before one redraw (the last call passes 1).
+///
+/// # Safety
+/// Both `(ptr, len)` pairs must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_add_asset(id_ptr: *const u8, id_len: usize, ptr: *const u8, len: usize, redraw: u32) -> u32 {
+    let id = text(id_ptr, id_len);
+    let data = bytes(ptr, len).to_vec();
+    attempt(|s| {
+        if redraw == 0 {
+            s.session.stash_asset(id?, data);
+            Ok(())
+        } else {
+            s.session.add_asset(id?, data).map_err(|e| e.to_string())
+        }
+    })
+}
+
+/// Use a picture (PNG, JPEG or WebP bytes) as the card's art from the next
+/// build on. Its size is in the output buffer: `{ "width", "height" }`.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_set_art(ptr: *const u8, len: usize) -> u32 {
+    let data = bytes(ptr, len).to_vec();
+    attempt(|s| {
+        let bench = s.bench.as_mut().ok_or("Open a template first")?;
+        let (width, height) = bench.set_art(&mut s.session, data)?;
+        s.out = serde_json::to_vec(&serde_json::json!({ "width": width, "height": height })).unwrap_or_default();
+        Ok(())
+    })
+}
+
+/// Build the card (a `BuildRequest` as JSON) into the document as one
+/// undoable step. The report is in the output buffer: `{ "build", "warnings", "fill" }`.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_build_card(ptr: *const u8, len: usize) -> u32 {
+    let request = text(ptr, len);
+    attempt(|s| {
+        let request: BuildRequest = serde_json::from_str(request?).map_err(|e| format!("Invalid card: {e}"))?;
+        let bench = s.bench.as_mut().ok_or("Open a template first")?;
+        let report = bench.build(&mut s.session, &request)?;
+        s.out = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
+/// Add a finished fill (PNG bytes) made for build number `build`. The output
+/// buffer says `true`, or `false` when that card is no longer showing and
+/// nothing was added.
+///
+/// # Safety
+/// All three `(ptr, len)` pairs must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_add_fill(build: u32, ptr: *const u8, len: usize, source_ptr: *const u8, source_len: usize, params_ptr: *const u8, params_len: usize) -> u32 {
+    let png = bytes(ptr, len).to_vec();
+    let source = text(source_ptr, source_len);
+    let params = text(params_ptr, params_len);
+    attempt(|s| {
+        let params = serde_json::from_str(params?).map_err(|e| format!("Invalid fill parameters: {e}"))?;
+        let bench = s.bench.as_mut().ok_or("Open a template first")?;
+        let added = bench.add_fill(&mut s.session, build as u64, png, source?, params)?;
+        s.out = added.to_string().into_bytes();
         Ok(())
     })
 }

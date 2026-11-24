@@ -19,6 +19,12 @@ type Exports = {
   cs_open_sample(index: number): number;
   cs_open_cardsmith(ptr: number, len: number): number;
   cs_open_json(jsonPtr: number, jsonLen: number, assetsPtr: number, assetsLen: number): number;
+  cs_open_template(docPtr: number, docLen: number, manifestPtr: number, manifestLen: number): number;
+  cs_missing_assets(): void;
+  cs_add_asset(idPtr: number, idLen: number, ptr: number, len: number, redraw: number): number;
+  cs_set_art(ptr: number, len: number): number;
+  cs_build_card(ptr: number, len: number): number;
+  cs_add_fill(build: number, ptr: number, len: number, sourcePtr: number, sourceLen: number, paramsPtr: number, paramsLen: number): number;
   cs_save(): number;
   cs_doc_json(): number;
   cs_state_json(): void;
@@ -39,6 +45,22 @@ type Exports = {
   cs_frame_ptr(): number;
   cs_frame_hash_hi(): number;
   cs_frame_hash_lo(): number;
+};
+
+/** Where the art sits and what of it to trust, in document pixels, for whoever makes the fill. */
+export type FillInfo = { artPosition: [number, number]; artScale: number; canvas: [number, number]; keep: [number, number, number, number] };
+/** What building a card reports. `build` names it; a fill made for it is given back with that number. */
+export type BuildReport = { build: number; warnings: string[]; fill: FillInfo | null };
+/** What to build. `card` is card data as the `card_data` lookup returns it. */
+export type BuildRequest = {
+  card: Record<string, unknown>;
+  symbolSvg?: string | null;
+  watermarkSvg?: string | null;
+  setSize?: number | null;
+  removeFlavor?: boolean;
+  removeReminder?: boolean;
+  hideFlavorDivider?: boolean;
+  verticalFullart?: boolean;
 };
 
 export type CoreState = { canUndo: boolean; canRedo: boolean; labels: string[]; warnings: string[] };
@@ -136,6 +158,45 @@ export class Core {
       at += part.length;
     }
     this.check(this.passText(doc, (jsonPtr, jsonLen) => this.pass(packed, (ptr, len) => this.x.cs_open_json(jsonPtr, jsonLen, ptr, len))));
+  }
+
+  // ---- cards --------------------------------------------------------------------
+
+  /** Open a template package (its doc.json and manifest.json) to build a card on. Its images come later, through `missingAssets`. */
+  openTemplate(doc: string, manifest: string): void {
+    this.check(this.passText(doc, (docPtr, docLen) => this.passText(manifest, (ptr, len) => this.x.cs_open_template(docPtr, docLen, ptr, len))));
+  }
+
+  /** The images that layers now showing need and that have not been supplied. */
+  missingAssets(): { id: string; path: string }[] {
+    this.x.cs_missing_assets();
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  /** Supply an image. Pass `redraw` false for all but the last of several. */
+  addAsset(id: string, data: Uint8Array, redraw = true): void {
+    this.check(this.passText(id, (idPtr, idLen) => this.pass(data, (ptr, len) => this.x.cs_add_asset(idPtr, idLen, ptr, len, redraw ? 1 : 0))));
+  }
+
+  /** Use a picture as the card's art from the next build on. Returns its size. */
+  setArt(file: Uint8Array): { width: number; height: number } {
+    this.check(this.pass(file, (ptr, len) => this.x.cs_set_art(ptr, len)));
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  /** Build the card into the document as one undoable step, replacing the card that is showing. */
+  buildCard(request: BuildRequest): BuildReport {
+    this.check(this.passText(JSON.stringify(request), (ptr, len) => this.x.cs_build_card(ptr, len)));
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  /** Add a finished fill (PNG) made for a build. False, changing nothing, if that card is no longer showing. */
+  addFill(build: number, png: Uint8Array, source: string, params: Record<string, unknown>): boolean {
+    const ok = this.pass(png, (ptr, len) =>
+      this.passText(source, (sourcePtr, sourceLen) => this.passText(JSON.stringify(params), (paramsPtr, paramsLen) => this.x.cs_add_fill(build, ptr, len, sourcePtr, sourceLen, paramsPtr, paramsLen))),
+    );
+    this.check(ok);
+    return decoder.decode(this.out()) === "true";
   }
 
   /** The document as `.cardsmith` file bytes. */

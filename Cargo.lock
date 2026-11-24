@@ -136,6 +136,7 @@ name = "cardsmith-wasm"
 version = "0.0.0"
 dependencies = [
  "cardsmith-core",
+ "cardsmith-engine",
  "serde_json",
 ]
 

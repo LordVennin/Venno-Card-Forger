@@ -11,4 +11,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 cardsmith-core = { path = "../core" }
+cardsmith-engine = { path = "../engine" }
 serde_json = "1"
