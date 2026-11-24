@@ -102,6 +102,7 @@ cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.js
 cargo run --release -p cardsmith-cli -- symbols [--cache <dir>]                      # download set symbols and set data from hexproof.io for offline use
 cargo run --release -p cardsmith-cli -- models [--cache <dir>]                       # download the LaMa fill model and ONNX Runtime (about 240 MB) for the model-based fill tier
 cargo run --release -p cardsmith-cli -- models sd [--cache <dir>]                    # download the Stable Diffusion 1.5 inpainting model (4.3 GB) for --fill sd; see docs/TIER3.md
+tools/install-tier3.sh [--backend vulkan|cuda|cpu] [--uninstall]                      # build sd-cli from source and download the model, into the cache where --fill sd looks
 cargo run --release -p cardsmith-cli -- sheet -o <png> [--across N] [--shrink N] <images...>   # many images on one sheet
 cargo run --release -p cardsmith-cli -- bench                                        # time opening, painting and undo on the card-sized sample
 pnpm test             # TypeScript unit tests (Vitest): the importer and survey

@@ -8,7 +8,20 @@ It is the equivalent of Photoshop's Generative Fill, and it is opt-in: `--fill a
 graphics card. Its plumbing is tested with a stand-in program (`crates/fill/tests/sdcpp.rs`). The
 first run on real hardware is the test. This page says how to do that run and what to report.
 
-## What you need
+## The quick way
+
+```
+tools/install-tier3.sh                 # builds sd-cli for Vulkan and downloads the model
+tools/install-tier3.sh --uninstall     # removes both, to start clean
+```
+
+It builds `sd-cli` from source for this machine (a few minutes), puts it and the model where
+Cardsmith looks, and asks for `sudo` only to install missing build packages. After it, `--fill sd`
+needs no `--sd-cli`. `--backend cuda` or `cpu` builds for those instead, `--no-model` skips the
+download, `--ref <commit>` pins the stable-diffusion.cpp version. The CPU build has been tried;
+the Vulkan and CUDA builds have not.
+
+## What you need, by hand
 
 1. **`sd-cli`** for your graphics card. Cardsmith does not download it.
    - The project's releases have a Linux Vulkan build
