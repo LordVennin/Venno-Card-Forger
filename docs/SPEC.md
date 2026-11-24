@@ -420,3 +420,4 @@ _(append: date — decision — reason)_
 - 2026-11-24 — The watermark's bevel is a chiselled one softened by 14 px, the only technique the core has; Proxyshop's is Photoshop's smooth inner bevel. — Close at card size; a smooth technique can be added if it shows.
 - 2026-11-24 — **Guild and set watermarks are not built**, on purpose for now: Proxyshop's default for them is "Disabled", and they are blended with Color Burn, a blend mode the core does not have. Carried to the layouts phase with nicknames, tokens, and transform and modal faces.
 - 2026-11-24 — The card suite gained two cases Proxyshop's list lacks: Dryad Arbor (color indicator) and Grizzly Bears with no flavor text (nothing in the textbox). 14 cards on 3 templates: 42 renders.
+- 2026-11-24 — The owner accepted the nine changed or new renders (Mountain, Dryad Arbor, Grizzly Bears on each template): 42 references, all matching. **Phase 5 is complete for the normal layout.**
