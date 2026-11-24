@@ -51,9 +51,14 @@ type Exports = {
 export type FillInfo = { artPosition: [number, number]; artScale: number; canvas: [number, number]; keep: [number, number, number, number] };
 /** What building a card reports. `build` names it; a fill made for it is given back with that number. */
 export type BuildReport = { build: number; warnings: string[]; fill: FillInfo | null };
-/** What to build. `card` is card data as the `card_data` lookup returns it. */
+/**
+ * What to build: Scryfall's JSON for the card (as looked up, or as edited in
+ * the card form) and the name of the face wanted, or card data already read from it.
+ */
 export type BuildRequest = {
-  card: Record<string, unknown>;
+  scryfall?: Record<string, unknown>;
+  name?: string;
+  card?: Record<string, unknown>;
   symbolSvg?: string | null;
   watermarkSvg?: string | null;
   setSize?: number | null;

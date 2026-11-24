@@ -12,7 +12,7 @@
 //! so undo and redo need no bookkeeping here.
 
 use crate::{build_card, svg, Art, FillPlan, Options, Template};
-use cardsmith_cards::layout::CardData;
+use cardsmith_cards::layout::{card_data, CardData, CardInput};
 use cardsmith_core::commands::{apply, Edit};
 use cardsmith_core::doc::Doc;
 use cardsmith_core::render::decode_image;
@@ -26,7 +26,20 @@ use std::collections::BTreeMap;
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildRequest {
-    pub card: CardData,
+    /// The card, ready for the engine...
+    #[serde(default)]
+    pub card: Option<CardData>,
+    /// ...or Scryfall's JSON for it (as looked up, or as edited in the card
+    /// form), from which the card is read here, so that the frame follows
+    /// whatever was changed. `name` says which face of a two-faced card.
+    #[serde(default)]
+    pub scryfall: Option<Value>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub creator: String,
     /// The set symbol as SVG text, already the one for the card's rarity.
     #[serde(default)]
     pub symbol_svg: Option<String>,
@@ -114,6 +127,14 @@ impl Workbench {
     /// Build the card into the session's document as one undoable step,
     /// replacing the build that is showing, if one is.
     pub fn build(&mut self, session: &mut Session, request: &BuildRequest) -> Result<Report, String> {
+        let card = match (&request.card, &request.scryfall) {
+            (Some(card), _) => card.clone(),
+            (None, Some(scryfall)) => {
+                let name = if request.name.is_empty() { scryfall["name"].as_str().unwrap_or_default().split(" // ").next().unwrap_or_default().to_string() } else { request.name.clone() };
+                card_data(scryfall, &CardInput { name, artist: request.artist.clone(), creator: request.creator.clone() })
+            }
+            (None, None) => return Err("There is no card to build.".into()),
+        };
         let read = |svg: &Option<String>| svg.as_deref().and_then(|text| svg::parse_svg(text).ok());
         let options = Options {
             flavor_divider: !request.hide_flavor_divider,
@@ -126,7 +147,7 @@ impl Workbench {
             set_size: request.set_size,
             ..Options::default()
         };
-        let built = build_card(&self.template, &request.card, session.fonts(), &options)?;
+        let built = build_card(&self.template, &card, session.fonts(), &options)?;
         let mut warnings = built.warnings;
         if request.symbol_svg.is_some() && options.symbol.is_none() {
             warnings.push("The set symbol could not be read, so the card has none.".into());
@@ -151,11 +172,11 @@ impl Workbench {
             return Err("This document holds a card built in an earlier session. Open its template again to change the card.".into());
         }
         edits.push(built.edit);
-        let mut card = serde_json::to_value(&request.card).map_err(|e| e.to_string())?;
-        card["_build"] = json!(build);
-        edits.push(Edit::SetDocProps { props: json!({ "card": card }).as_object().cloned().unwrap_or_default() });
+        let mut noted = serde_json::to_value(&card).map_err(|e| e.to_string())?;
+        noted["_build"] = json!(build);
+        edits.push(Edit::SetDocProps { props: json!({ "card": noted }).as_object().cloned().unwrap_or_default() });
 
-        let label = if showing.is_some() { format!("Update {}", request.card.name) } else { format!("Build {}", request.card.name) };
+        let label = if showing.is_some() { format!("Update {}", card.name) } else { format!("Build {}", card.name) };
         session.execute(Edit::Batch { edits }, &label).map_err(|e| format!("The card could not be rebuilt, because a layer it sets was changed by hand ({e}). Undo that change, or open the template again."))?;
         self.inverses.insert(build, inverse);
         let fill = built.fill.map(|plan| {

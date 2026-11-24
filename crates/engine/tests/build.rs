@@ -709,3 +709,17 @@ fn layers_added_by_hand_survive_a_rebuild_and_a_bad_picture_is_refused() {
     assert_eq!(runs(session.doc(), "name"), "bbbb");
     assert_eq!(session.doc().root.children.last().unwrap().id(), paint);
 }
+
+#[test]
+fn a_card_can_be_built_straight_from_scryfalls_json_so_edits_to_it_change_the_frame() {
+    let (mut bench, mut session) = bench();
+    let mut raw = json!({ "object": "card", "layout": "normal", "name": "ab", "mana_cost": "{W}", "colors": ["W"], "type_line": "Creature — Cat", "oracle_text": "a", "power": "2", "toughness": "3", "set": "tst", "collector_number": "7", "rarity": "rare", "artist": "bb", "lang": "en" });
+    bench.build(&mut session, &serde_json::from_value(json!({ "scryfall": raw })).unwrap()).unwrap();
+    assert_eq!(session.doc().card.as_ref().unwrap()["frame"]["background"], "W");
+    // The form changes the cost and colors: the same card is now blue.
+    raw["mana_cost"] = json!("{U}");
+    raw["colors"] = json!(["U"]);
+    bench.build(&mut session, &serde_json::from_value(json!({ "scryfall": raw })).unwrap()).unwrap();
+    assert_eq!(session.doc().card.as_ref().unwrap()["frame"]["background"], "U");
+    assert!(bench.build(&mut session, &serde_json::from_value(json!({})).unwrap()).unwrap_err().contains("no card"));
+}

@@ -305,3 +305,26 @@ fn the_fill_model_and_onnx_runtime_are_downloaded_once_and_checked() {
     *net.offline.borrow_mut() = false;
     assert!(matches!(Client::with_transport(net.clone(), temp("models-other")).onnx_runtime("libonnxruntime.so", "manylinux", "riscv64"), Err(Error::Other(_))));
 }
+
+#[test]
+fn card_names_are_completed_from_three_letters_and_printings_listed_newest_first() {
+    let dir = temp("complete");
+    let fake = Fake::default();
+    fake.page("https://api.scryfall.com/cards/autocomplete?q=Llan", json!({ "object": "catalog", "data": ["Llanowar Elves", "Llanowar Tribe"] }));
+    let mut client = Client::with_transport(fake.clone(), &dir);
+    // Scryfall answers nothing useful for one or two letters, so it is not asked.
+    assert!(client.autocomplete("ll").unwrap().is_empty());
+    assert_eq!(client.autocomplete(" Llan ").unwrap(), ["Llanowar Elves", "Llanowar Tribe"]);
+
+    fake.page(
+        "https://api.scryfall.com/cards/search?q=%21%22Llanowar%20Elves%22%20game%3Apaper&unique=prints&order=released&dir=desc",
+        json!({ "object": "list", "data": [
+            { "object": "card", "name": "Llanowar Elves", "set": "fdn", "set_name": "Foundations", "collector_number": "227", "released_at": "2024-11-15", "rarity": "common", "artist": "Kev Walker", "image_uris": { "small": "https://cards.scryfall.io/small/a.jpg" } },
+            { "object": "card", "name": "Llanowar Elves", "set": "lea", "set_name": "Limited Edition Alpha", "collector_number": "210", "released_at": "1993-08-05", "rarity": "common", "artist": "Anson Maddocks" },
+        ] }),
+    );
+    let prints = client.printings("Llanowar Elves").unwrap();
+    assert_eq!(prints.len(), 2);
+    assert_eq!((prints[0].set.as_str(), prints[0].number.as_str(), prints[0].year.as_str(), prints[0].thumbnail.as_deref()), ("fdn", "227", "2024", Some("https://cards.scryfall.io/small/a.jpg")));
+    assert_eq!((prints[1].set_name.as_str(), prints[1].artist.as_str(), prints[1].thumbnail.as_deref()), ("Limited Edition Alpha", "Anson Maddocks", None));
+}

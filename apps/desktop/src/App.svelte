@@ -2,10 +2,13 @@
   import type { Doc, Layer } from "@cardsmith/doc";
   import type { Brush, Core, CoreState, Rect } from "./lib/core";
   import { getCore } from "./lib/renderer";
+  import { hasNative } from "./lib/native";
+  import CardPanel from "./CardPanel.svelte";
 
-  // Phase 1R brush spike. The Rust core (WebAssembly) owns the document, its
-  // history and the pixels. This component sends input and edits, and copies
-  // the part of the view the core says has changed onto the canvas.
+  // The Rust core (WebAssembly) owns the document, its history and the pixels.
+  // This component sends input and edits, and copies the part of the view the
+  // core says has changed onto the canvas. The card panel builds cards into
+  // the same document.
 
   let stage = $state<HTMLElement>();
   let canvas = $state<HTMLCanvasElement>();
@@ -107,7 +110,6 @@
     }, 30);
   }
 
-  /** Run something that changes the document, then show the result. */
   /** Load the chosen font files into the core. Text that was waiting for them is drawn. */
   async function loadFonts(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -128,6 +130,21 @@
     status = `Loaded ${loaded.length} font${loaded.length === 1 ? "" : "s"}` + (refused.length ? `; not usable: ${refused.join(", ")}` : "");
   }
 
+  /** The card panel changed the document: show what was redrawn. */
+  function cardChanged() {
+    blit(core!.dirty());
+    refresh();
+  }
+
+  /** The card panel opened a template. */
+  function cardOpened() {
+    refresh();
+    active = undefined;
+    current = -1;
+    fit();
+  }
+
+  /** Run something that changes the document, then show the result. */
   function run(label: string, action: () => void) {
     const started = performance.now();
     try {
@@ -245,6 +262,7 @@
 
   function key(e: KeyboardEvent) {
     if (e.target instanceof HTMLInputElement && e.target.type !== "range" && e.target.type !== "checkbox") return;
+    if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -287,7 +305,7 @@
 
 <svelte:window onkeydown={key} />
 
-<main>
+<main class:with-card={hasNative}>
   <header>
     <strong>Cardsmith</strong>
     {#each samples as sample, i}
@@ -309,6 +327,10 @@
     <button disabled={!history.canUndo} onclick={() => run("Undo", () => core!.undo())}>Undo</button>
     <button disabled={!history.canRedo} onclick={() => run("Redo", () => core!.redo())}>Redo</button>
   </header>
+
+  {#if hasNative && core}
+    <CardPanel {core} bind:busy say={(text) => (status = text)} changed={cardChanged} opened={cardOpened} />
+  {/if}
 
   <section class="stage" bind:this={stage}>
     <canvas
@@ -364,6 +386,9 @@
     display: grid;
     grid-template: "header header" auto "stage aside" 1fr "footer footer" auto / 1fr 270px;
     height: 100vh;
+  }
+  main.with-card {
+    grid-template: "header header header" auto "card stage aside" 1fr "footer footer footer" auto / 300px 1fr 270px;
   }
   header {
     grid-area: header;

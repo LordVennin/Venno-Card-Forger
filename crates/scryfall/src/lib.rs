@@ -187,6 +187,20 @@ fn fnv(text: &str) -> u64 {
     text.bytes().fold(0xcbf29ce484222325, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3))
 }
 
+/// One printing of a card, for choosing between them.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Printing {
+    pub set: String,
+    pub set_name: String,
+    pub number: String,
+    pub year: String,
+    pub rarity: String,
+    pub artist: String,
+    /// Address of a small picture of it on Scryfall's image server.
+    pub thumbnail: Option<String>,
+}
+
 /// Card lookups with an on-disk cache.
 pub struct Client<T: Transport = Http> {
     transport: T,
@@ -290,6 +304,42 @@ impl<T: Transport> Client<T> {
         })
     }
 
+    /// Card names that start with, or contain, what has been typed. Scryfall
+    /// answers from three letters on (at most 20 names).
+    pub fn autocomplete(&mut self, typed: &str) -> Result<Vec<String>, Error> {
+        let typed = typed.trim();
+        if typed.chars().count() < 3 {
+            return Ok(Vec::new());
+        }
+        let found = self.get_json(&format!("{API}/cards/autocomplete?q={}", encode(typed)))?;
+        Ok(found["data"].as_array().map(|names| names.iter().filter_map(|n| n.as_str().map(str::to_string)).collect()).unwrap_or_default())
+    }
+
+    /// Every paper printing of a card, newest first (the first page: up to 175).
+    pub fn printings(&mut self, name: &str) -> Result<Vec<Printing>, Error> {
+        let query = format!("!\"{name}\" game:paper");
+        let found = self.get_json(&format!("{API}/cards/search?q={}&unique=prints&order=released&dir=desc", encode(&query)))?;
+        let text = |card: &Value, key: &str| card[key].as_str().unwrap_or_default().to_string();
+        Ok(found["data"]
+            .as_array()
+            .map(|cards| {
+                cards
+                    .iter()
+                    .map(|card| Printing {
+                        set: text(card, "set"),
+                        set_name: text(card, "set_name"),
+                        number: text(card, "collector_number"),
+                        year: text(card, "released_at").chars().take(4).collect(),
+                        rarity: text(card, "rarity"),
+                        artist: text(card, "artist"),
+                        // A two-faced card keeps its pictures on its faces.
+                        thumbnail: card["image_uris"]["small"].as_str().or(card["card_faces"][0]["image_uris"]["small"].as_str()).map(str::to_string),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
     /// A card as the art file name describes it: by set and number when both
     /// are given, otherwise by name (and set).
     ///
@@ -318,6 +368,15 @@ impl<T: Transport> Client<T> {
     /// needed) and its fields read. Everything fetched is cached, so the same
     /// call works offline afterwards.
     pub fn card_data(&mut self, info: &CardInfo) -> Result<CardData, Error> {
+        let (data, name) = self.card_settled(info)?;
+        Ok(card_data(&data, &CardInput { name, artist: info.artist.clone(), creator: info.creator.clone() }))
+    }
+
+    /// The same lookup, stopping before the fields are read: Scryfall's JSON
+    /// with its layout settled, and the name of the face that is wanted. An
+    /// editor keeps this, changes fields in it, and reads the card from it
+    /// again with [`cardsmith_cards::layout::card_data`].
+    pub fn card_settled(&mut self, info: &CardInfo) -> Result<(Value, String), Error> {
         let mut data = self.card(&info.name, Some(&info.set), Some(&info.number))?;
         // Looked up by number, the name may be missing: the card's own name says which face is meant.
         let name = if info.name.is_empty() { data["name"].as_str().unwrap_or("").split(" // ").next().unwrap_or("").to_string() } else { info.name.clone() };
@@ -333,7 +392,7 @@ impl<T: Transport> Client<T> {
         if let Some(e) = failure {
             return Err(e);
         }
-        Ok(card_data(&data, &CardInput { name, artist: info.artist.clone(), creator: info.creator.clone() }))
+        Ok((data, name))
     }
 
     /// Download one of Scryfall's bulk files (or reuse the copy on disk if it

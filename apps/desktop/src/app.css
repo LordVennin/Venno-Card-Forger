@@ -1,3 +1,7 @@
+:root {
+  /* Native controls (drop-downs, scroll bars) in their dark form. */
+  color-scheme: dark;
+}
 html,
 body {
   margin: 0;
