@@ -22,6 +22,7 @@
 
 mod bulk;
 mod hexproof;
+mod models;
 
 pub use bulk::{BulkCards, BulkKind};
 pub use hexproof::SetInfo;

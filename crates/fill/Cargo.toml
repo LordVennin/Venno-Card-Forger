@@ -7,3 +7,10 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# ONNX Runtime, for the model-based tier. Optional, and loaded at run time from
+# a library file, so the default build stays pure Rust and needs nothing installed.
+ort = { version = "=2.0.0-rc.15", optional = true, default-features = false, features = ["std", "load-dynamic", "api-17"] }
+
+[features]
+default = []
+onnx = ["dep:ort"]

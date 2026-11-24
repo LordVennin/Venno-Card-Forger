@@ -267,3 +267,41 @@ fn set_symbols_and_set_sizes_come_from_hexproof_and_then_from_the_cache() {
     // With nothing cached and no network there is simply no symbol.
     assert_eq!(Client::with_transport(net.clone(), temp("hexproof-empty")).symbol_svg("neo", "R"), None);
 }
+
+#[test]
+fn the_fill_model_and_onnx_runtime_are_downloaded_once_and_checked() {
+    use std::io::Write;
+    let dir = temp("models");
+    let net = Fake::default();
+    net.pages.borrow_mut().insert("https://example.test/model.onnx".into(), vec![7u8; 1000]);
+    let mut client = Client::with_transport(net.clone(), &dir);
+    // A file of the wrong size is not kept.
+    assert!(matches!(client.fetch_file("https://example.test/model.onnx", "models", "model.onnx", Some(999)), Err(Error::Other(_))));
+    assert!(!dir.join("models/model.onnx").exists());
+    let file = client.fetch_file("https://example.test/model.onnx", "models", "model.onnx", Some(1000)).unwrap();
+    assert_eq!(std::fs::read(&file).unwrap().len(), 1000);
+    // Asked again, nothing is fetched.
+    let asked = net.asked().len();
+    client.fetch_file("https://example.test/model.onnx", "models", "model.onnx", Some(1000)).unwrap();
+    assert_eq!(net.asked().len(), asked);
+
+    // The runtime: the wheel for this system is picked from PyPI's listing and the library taken out of it.
+    net.page("https://pypi.org/pypi/onnxruntime/json", json!({ "urls": [
+        { "filename": "onnxruntime-9.9.9-cp313-cp313-win_amd64.whl", "url": "https://files.test/win.whl" },
+        { "filename": "onnxruntime-9.9.9-cp313-cp313-manylinux_2_28_x86_64.whl", "url": "https://files.test/linux.whl" }
+    ] }));
+    let mut wheel = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, body) in [("onnxruntime/__init__.py", "x"), ("onnxruntime/capi/libonnxruntime_providers_shared.so", "not this"), ("onnxruntime/capi/libonnxruntime.so.9.9.9", "the library")] {
+        wheel.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        wheel.write_all(body.as_bytes()).unwrap();
+    }
+    net.pages.borrow_mut().insert("https://files.test/linux.whl".into(), wheel.finish().unwrap().into_inner());
+    let library = client.onnx_runtime("libonnxruntime.so", "manylinux", "x86_64").unwrap();
+    assert_eq!(std::fs::read_to_string(&library).unwrap(), "the library");
+    assert!(library.ends_with("onnxruntime/libonnxruntime.so") && !dir.join("onnxruntime/onnxruntime.whl").exists());
+    // Once there, it is not asked for again, even offline; a system with no build says so.
+    *net.offline.borrow_mut() = true;
+    assert_eq!(client.onnx_runtime("libonnxruntime.so", "manylinux", "x86_64").unwrap(), library);
+    *net.offline.borrow_mut() = false;
+    assert!(matches!(Client::with_transport(net.clone(), temp("models-other")).onnx_runtime("libonnxruntime.so", "manylinux", "riscv64"), Err(Error::Other(_))));
+}

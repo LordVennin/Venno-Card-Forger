@@ -8,6 +8,7 @@
 //! The fill never touches the art (rule 4): it is a separate image, made at a
 //! reduced size, that the card engine puts on its own layer underneath.
 
+pub mod lama;
 pub mod patchmatch;
 
 /// Art as it sits on a card: straight-alpha RGBA pixels and where they go.
@@ -31,14 +32,20 @@ pub struct Filled {
     pub scale: f64,
 }
 
-/// Fill everything on a `canvas` (width, height in document pixels) outside
-/// `keep` (left, top, right, bottom: the part of the art that is trusted) by
-/// PatchMatch, working at about `work_width` pixels across.
-///
-/// The result covers the whole canvas: the art, shrunk, inside `keep`, and
-/// made-up picture everywhere else. Returns None when there is nothing to
-/// fill or nothing to fill from.
-pub fn fill_edges(art: &Placed, canvas: (u32, u32), keep: [f64; 4], work_width: u32, seed: u64) -> Option<Filled> {
+/// The card area at working size: the trusted art, shrunk, and a map of what is missing.
+pub(crate) struct Working {
+    pub width: u32,
+    pub height: u32,
+    /// Three bytes a pixel.
+    pub rgb: Vec<u8>,
+    pub hole: Vec<bool>,
+    /// How many document pixels one working pixel covers.
+    pub scale: f64,
+}
+
+/// Shrink the card area to about `work_width` across. Pixels inside `keep`
+/// that the art fully covers are known; everything else is missing.
+pub(crate) fn working(art: &Placed, canvas: (u32, u32), keep: [f64; 4], work_width: u32) -> Working {
     let scale = (canvas.0 as f64 / work_width.max(16) as f64).max(1.0);
     let (w, h) = ((canvas.0 as f64 / scale).ceil() as u32, (canvas.1 as f64 / scale).ceil() as u32);
     let mut rgb = vec![0u8; (w * h * 3) as usize];
@@ -83,12 +90,34 @@ pub fn fill_edges(art: &Placed, canvas: (u32, u32), keep: [f64; 4], work_width: 
             }
         }
     }
-    if !hole.iter().any(|m| *m) || hole.iter().all(|m| *m) {
+    Working { width: w, height: h, rgb, hole, scale }
+}
+
+impl Working {
+    /// Nothing is missing, or nothing is known: there is no fill to make.
+    pub fn nothing_to_do(&self) -> bool {
+        !self.hole.iter().any(|m| *m) || self.hole.iter().all(|m| *m)
+    }
+
+    pub fn finish(self) -> Filled {
+        Filled { width: self.width, height: self.height, rgba: self.rgb.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(), scale: self.scale }
+    }
+}
+
+/// Fill everything on a `canvas` (width, height in document pixels) outside
+/// `keep` (left, top, right, bottom: the part of the art that is trusted) by
+/// PatchMatch, working at about `work_width` pixels across.
+///
+/// The result covers the whole canvas: the art, shrunk, inside `keep`, and
+/// made-up picture everywhere else. Returns None when there is nothing to
+/// fill or nothing to fill from.
+pub fn fill_edges(art: &Placed, canvas: (u32, u32), keep: [f64; 4], work_width: u32, seed: u64) -> Option<Filled> {
+    let mut work = working(art, canvas, keep, work_width);
+    if work.nothing_to_do() {
         return None;
     }
-    patchmatch::inpaint(w, h, &mut rgb, &hole, seed);
-    let rgba = rgb.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect();
-    Some(Filled { width: w, height: h, rgba, scale })
+    patchmatch::inpaint(work.width, work.height, &mut work.rgb, &work.hole, seed, None);
+    Some(work.finish())
 }
 
 // ---- providers and falling back ---------------------------------------------------

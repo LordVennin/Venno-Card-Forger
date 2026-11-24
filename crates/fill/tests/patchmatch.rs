@@ -22,7 +22,7 @@ fn a_flat_color_is_carried_across_the_hole_and_known_pixels_are_left_alone() {
     let (w, h) = (96, 96);
     let hole = middle(w, h);
     let mut rgb = picture(w, h, |x, y| if hole[(y * w + x) as usize] { [255, 0, 255] } else { [40, 90, 160] });
-    inpaint(w, h, &mut rgb, &hole, 1);
+    inpaint(w, h, &mut rgb, &hole, 1, None);
     assert!(rgb.chunks_exact(3).all(|p| p == [40, 90, 160]));
 }
 
@@ -33,7 +33,7 @@ fn stripes_carry_on_through_the_hole() {
     let stripe = |x: u32| if (x / 8) % 2 == 0 { [230, 230, 230] } else { [30, 30, 30] };
     let hole = middle(w, h);
     let mut rgb = picture(w, h, |x, y| if hole[(y * w + x) as usize] { [255, 0, 0] } else { stripe(x) });
-    inpaint(w, h, &mut rgb, &hole, 7);
+    inpaint(w, h, &mut rgb, &hole, 7, None);
     let (mut missing, mut right) = (0, 0);
     for y in 0..h {
         for x in 0..w {
@@ -57,16 +57,16 @@ fn the_same_seed_gives_the_same_fill_and_another_seed_another() {
     let base = picture(w, h, |x, y| [((x * 37 + y * 11) % 251) as u8, ((x * 5 + y * 71) % 241) as u8, ((x * y) % 233) as u8]);
     let run = |seed: u64| {
         let mut rgb = base.clone();
-        inpaint(w, h, &mut rgb, &hole, seed);
+        inpaint(w, h, &mut rgb, &hole, seed, None);
         rgb
     };
     assert_eq!(run(3), run(3));
     assert_ne!(run(3), run(4));
     // Nothing to do, or nothing to go on: left as it is.
     let mut same = base.clone();
-    inpaint(w, h, &mut same, &vec![false; (w * h) as usize], 1);
+    inpaint(w, h, &mut same, &vec![false; (w * h) as usize], 1, None);
     assert_eq!(same, base);
-    inpaint(w, h, &mut same, &vec![true; (w * h) as usize], 1);
+    inpaint(w, h, &mut same, &vec![true; (w * h) as usize], 1, None);
     assert_eq!(same, base);
 }
 
@@ -120,4 +120,50 @@ fn providers_are_tried_in_order_and_the_first_that_works_is_used() {
     // With nothing left to fall back on, the reasons are the error.
     let error = fill_with_fallback(&mut [&mut Missing, &mut Broken], &request()).err().unwrap();
     assert!(error.contains("not been downloaded") && error.contains("out of memory"), "{error}");
+}
+
+#[test]
+fn a_guide_decides_what_goes_where_and_patchmatch_supplies_the_pixels() {
+    use cardsmith_fill::patchmatch::Guide;
+    // Known: a blue band at the left and a green band at the right, both the full height. The middle is missing.
+    let (w, h) = (120u32, 96u32);
+    let (blue, green) = ([40u8, 80, 200], [50u8, 160, 60]);
+    let hole: Vec<bool> = (0..h).flat_map(|_| (0..w).map(|x| (30..90).contains(&x))).collect();
+    let base = picture(w, h, |x, _| if x < 30 { blue } else if x >= 90 { green } else { [0, 0, 0] });
+    // A small guide that says: blue on top, green underneath.
+    let guide_rgb = picture(30, 24, |_, y| if y < 12 { blue } else { green });
+    let guide = Guide { width: 30, height: 24, rgb: &guide_rgb };
+    let mut rgb = base.clone();
+    inpaint(w, h, &mut rgb, &hole, 1, Some(&guide));
+    // Well inside the hole the guide's layout holds, in the picture's own colors.
+    let near = |got: [u8; 3], want: [u8; 3]| got.iter().zip(want).all(|(g, w)| (*g as i32 - w as i32).abs() <= 40);
+    assert!(near(px(&rgb, w, 60, 15), blue), "{:?}", px(&rgb, w, 60, 15));
+    assert!(near(px(&rgb, w, 60, 80), green), "{:?}", px(&rgb, w, 60, 80));
+    // Known pixels are untouched.
+    assert_eq!((px(&rgb, w, 5, 50), px(&rgb, w, 110, 50)), (blue, green));
+}
+
+#[test]
+fn the_model_tier_says_why_it_cannot_run_and_is_passed_over() {
+    use cardsmith_fill::lama::Lama;
+    use cardsmith_fill::{fill_with_fallback, FillProvider, FillRequest, PatchMatch};
+    let dir = std::env::temp_dir().join(format!("cardsmith-fill-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut lama = Lama::new(dir.join("libonnxruntime.so"), dir.join("lama.onnx"), 100);
+    let state = lama.available();
+    assert!(!state.ok);
+    let reason = state.reason.unwrap();
+    // Built without ONNX support it says so; with it, it names the first file that is missing.
+    assert!(reason.contains("without ONNX Runtime support") || reason.contains("ONNX Runtime has not been downloaded"), "{reason}");
+    #[cfg(feature = "onnx")]
+    {
+        std::fs::write(dir.join("libonnxruntime.so"), b"").unwrap();
+        let reason = lama.available().reason.unwrap();
+        assert!(reason.contains("model has not been downloaded") && reason.contains("208 MB"), "{reason}");
+    }
+    let art: Vec<u8> = (0..40 * 40).flat_map(|_| [90u8, 120, 150, 255]).collect();
+    let request = FillRequest { art: Placed { width: 40, height: 40, rgba: &art, x: 30.0, y: 30.0, scale: 1.0 }, canvas: (100, 100), keep: [32.0, 32.0, 68.0, 68.0], seed: 1, prompt: None };
+    let outcome = fill_with_fallback(&mut [&mut lama, &mut PatchMatch { work_width: 100 }], &request).unwrap();
+    assert_eq!((outcome.provider, outcome.notices.len()), ("patchmatch", 1));
+    assert!(outcome.notices[0].starts_with("lama is not available: "));
 }

@@ -231,10 +231,23 @@ fn refine(level: &mut Level, matches: &mut [(i32, i32)], targets: &[(i32, i32)],
     }
 }
 
+/// A rough picture of what the whole image should look like, at any size:
+/// right in its large shapes, not trusted for detail.
+pub struct Guide<'a> {
+    pub width: u32,
+    pub height: u32,
+    /// Three bytes a pixel.
+    pub rgb: &'a [u8],
+}
+
 /// Fill the missing pixels of an RGB image (three bytes a pixel) in place.
 /// `hole[i]` says pixel `i` is missing. With nothing known, or nothing
 /// missing, the image is left as it is.
-pub fn inpaint(width: u32, height: u32, rgb: &mut [u8], hole: &[bool], seed: u64) {
+///
+/// With a `guide`, the fill starts from the guide's picture instead of working
+/// the large shapes out for itself: the pyramid begins at the guide's size,
+/// and PatchMatch only supplies the texture.
+pub fn inpaint(width: u32, height: u32, rgb: &mut [u8], hole: &[bool], seed: u64, guide: Option<&Guide>) {
     assert_eq!(rgb.len(), (width * height * 3) as usize);
     assert_eq!(hole.len(), (width * height) as usize);
     if !hole.iter().any(|m| *m) || hole.iter().all(|m| *m) {
@@ -256,12 +269,32 @@ pub fn inpaint(width: u32, height: u32, rgb: &mut [u8], hole: &[bool], seed: u64
         levels.push(next);
     }
 
+    // A guide replaces every size smaller than itself.
+    if let Some(guide) = guide {
+        let closest = (0..levels.len()).min_by_key(|&i| (levels[i].w - guide.width as i32).abs()).unwrap_or(0);
+        levels.truncate(closest + 1);
+        let start = levels.last_mut().expect("there is always one level");
+        for y in 0..start.h {
+            for x in 0..start.w {
+                let i = (y * start.w + x) as usize;
+                if start.hole[i] {
+                    let gx = ((x as u32 * guide.width) / start.w as u32).min(guide.width - 1);
+                    let gy = ((y as u32 * guide.height) / start.h as u32).min(guide.height - 1);
+                    let g = ((gy * guide.width + gx) * 3) as usize;
+                    start.rgb[i * 3..i * 3 + 3].copy_from_slice(&guide.rgb[g..g + 3]);
+                }
+            }
+        }
+    }
+    let guided = guide.is_some();
+
     let mut previous: Option<(i32, Vec<(i32, i32)>)> = None;
     let mut smaller: Option<Level> = None;
     for (depth, mut level) in levels.into_iter().enumerate().rev() {
         let (w, h) = (level.w, level.h);
-        // Start from the smaller size's picture, or from colors spread in from the hole's edge.
+        // Start from the smaller size's picture, or from the guide, or from colors spread in from the hole's edge.
         match &smaller {
+            None if guided => {}
             Some(small) => {
                 for y in 0..h {
                     for x in 0..w {
@@ -307,7 +340,8 @@ pub fn inpaint(width: u32, height: u32, rgb: &mut [u8], hole: &[bool], seed: u64
             matches[(y * w + x) as usize] = guess.unwrap_or_else(|| sources[rng.range(0, sources.len() as i32) as usize]);
         }
         // More passes at the small sizes, where they are cheap and settle the large shapes.
-        let passes = if depth == 0 { 2 } else if depth == 1 { 3 } else { 5 };
+        // With a guide, few: the shapes are given, and more passes would wear them away.
+        let passes = if guided || depth == 0 { 2 } else if depth == 1 { 3 } else { 5 };
         refine(&mut level, &mut matches, &targets, &sources, passes, &mut rng);
         previous = Some((w, matches));
         smaller = Some(level);

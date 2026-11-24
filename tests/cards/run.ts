@@ -1,5 +1,5 @@
 /**
- * pnpm test:cards [template...] [--update <template>/<card> | --update all]
+ * pnpm test:cards [template...] [--update <template>/<card> | --update all] [--fill lama]
  *
  * Builds every card in tests/cards/cards.json (the cards Proxyshop renders to
  * test its normal layout) from every imported template the card engine can
@@ -29,7 +29,14 @@ const fonts = join(repo, "fixtures/local/fonts");
 const golden = join(repo, "fixtures/local/card-golden");
 /** Scryfall and hexproof.io data for the suite. `cardsmith symbols --cache <this>` fills it. */
 const cache = join(repo, "fixtures/local/cache");
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { update: { type: "string" } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { update: { type: "string" }, fill: { type: "string" } } });
+/**
+ * The fill tier. References are made with PatchMatch, which gives the same
+ * pixels on every machine. `--fill lama` builds the suite with the model
+ * instead, into out/cards-lama/, to be looked at: it is not compared.
+ */
+const tier = values.fill ?? "patchmatch";
+const compared = tier === "patchmatch";
 
 /** Compared like the template goldens: see tests/golden/thresholds.json. */
 const limits = { minPsnr: 40, maxBlockError: 7 };
@@ -59,7 +66,7 @@ const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
 let failed = 0;
 let unreferenced = 0;
 for (const template of templates) {
-  const out = join(repo, "out/cards", template);
+  const out = join(repo, compared ? "out/cards" : `out/cards-${tier}`, template);
   mkdirSync(out, { recursive: true });
   const renders: string[] = [];
   for (const { case: what, card } of suite.cards) {
@@ -67,23 +74,25 @@ for (const template of templates) {
     const data = join(out, `${key}.json`);
     const render = join(out, `${key}.png`);
     writeFileSync(data, JSON.stringify(card));
-    const built = spawnSync(cardsmith, ["build", join(imported, template), data, "-o", render, "--fonts", fonts, "--art", join(repo, "tests/cards/art.png"), ...(haveSymbols ? ["--cache", cache] : ["--no-symbol"])], { encoding: "utf8" });
+    const built = spawnSync(cardsmith, ["build", join(imported, template), data, "-o", render, "--fonts", fonts, "--art", join(repo, "tests/cards/art.png"), "--fill", tier, ...(haveSymbols ? ["--cache", cache] : ["--no-symbol"])], { encoding: "utf8" });
     const problems = built.stderr.split("\n").filter((line) => line.startsWith("warning:") || line.startsWith("error:")).map((line) => line.replace(/^\w+: /, ""));
     if (built.status !== 0 && problems.length === 0) problems.push(built.stderr.trim() || "the build failed");
 
-    let compared = "no reference";
+    let compared_note = "no reference";
     const reference = join(golden, template, `${key}.png`);
     if (built.status === 0) {
       renders.push(render);
-      if (values.update === `${template}/${key}` || values.update === "all") {
+      if (!compared) {
+        compared_note = "not compared";
+      } else if (values.update === `${template}/${key}` || values.update === "all") {
         mkdirSync(join(golden, template), { recursive: true });
         copyFileSync(render, reference);
-        compared = "reference replaced with the current render";
+        compared_note = "reference replaced with the current render";
       } else if (existsSync(reference)) {
         try {
           const r = JSON.parse(execFileSync(cardsmith, ["compare", render, reference, "--heatmap", join(out, `${key}.diff.png`)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) as { psnr: number | null; worstBlock: { meanError: number } };
           const psnr = r.psnr ?? Infinity;
-          compared = `PSNR ${Number.isFinite(psnr) ? psnr.toFixed(1) + " dB" : "∞"}, worst block ${r.worstBlock.meanError.toFixed(1)}`;
+          compared_note = `PSNR ${Number.isFinite(psnr) ? psnr.toFixed(1) + " dB" : "∞"}, worst block ${r.worstBlock.meanError.toFixed(1)}`;
           if (psnr < limits.minPsnr || r.worstBlock.meanError > limits.maxBlockError) problems.push(`differs from its reference (limits ${limits.minPsnr} dB, ${limits.maxBlockError})`);
         } catch (err) {
           problems.push(String((err as { stderr?: string }).stderr ?? err).trim());
@@ -93,10 +102,10 @@ for (const template of templates) {
       }
     }
     if (problems.length) failed++;
-    console.log(`${problems.length ? "✗" : "✓"} ${template} / ${card.name} (${what}): ${compared}${problems.length ? " — " + problems.join("; ") : ""}`);
+    console.log(`${problems.length ? "✗" : "✓"} ${template} / ${card.name} (${what}): ${compared_note}${problems.length ? " — " + problems.join("; ") : ""}`);
   }
   if (renders.length) execFileSync(cardsmith, ["sheet", "-o", join(out, "sheet.png"), "--across", "4", "--shrink", "4", ...renders]);
 }
-console.log(`\nRenders and a sheet per template are in ${join(repo, "out/cards")}.`);
-if (unreferenced) console.log(`${unreferenced} had no reference in ${golden}; they were only checked for engine warnings.`);
+console.log(`\nRenders and a sheet per template are in ${join(repo, compared ? "out/cards" : `out/cards-${tier}`)}.`);
+if (unreferenced && compared) console.log(`${unreferenced} had no reference in ${golden}; they were only checked for engine warnings.`);
 process.exit(failed ? 1 : 0);
