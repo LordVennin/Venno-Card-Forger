@@ -102,6 +102,9 @@ pub struct TextLayout {
     /// Bounds of each paragraph's ink, in order (None for an empty paragraph).
     /// The card engine places the flavor divider between two of these.
     pub paragraph_ink: Vec<Option<[f64; 4]>>,
+    /// Bounds of each line's ink, top to bottom (None for an empty line). The
+    /// card engine uses these to keep rules text clear of the P/T box.
+    pub line_ink: Vec<Option<[f64; 4]>>,
 }
 
 /// A shaped glyph, measured at the layer's own sizes (before any fitting).
@@ -256,6 +259,7 @@ struct Placed {
     origins: Vec<(f64, f64)>,
     ink: Option<[f64; 4]>,
     paragraph_ink: Vec<Option<[f64; 4]>>,
+    line_ink: Vec<Option<[f64; 4]>>,
 }
 
 fn union(a: Option<[f64; 4]>, b: [f64; 4]) -> Option<[f64; 4]> {
@@ -302,7 +306,8 @@ fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Place
 
     let mut ink: Option<[f64; 4]> = None;
     let mut paragraph_ink = vec![None; shaped.paragraphs.len()];
-    for (line, &(x0, y0)) in lines.iter().zip(&origins) {
+    let mut line_ink = vec![None; lines.len()];
+    for (n, (line, &(x0, y0))) in lines.iter().zip(&origins).enumerate() {
         let mut pen = x0;
         for glyph in &shaped.glyphs[line.start..line.end] {
             if let Some(bb) = glyph.bbox {
@@ -312,11 +317,12 @@ fn place(layer: &TextLayer, shaped: &Shaped, first_ascent: f64, s: f64) -> Place
                 let rect = [gx + bb[0] * k * glyph.sx, gy - bb[3] * k, gx + bb[2] * k * glyph.sx, gy - bb[1] * k];
                 ink = union(ink, rect);
                 paragraph_ink[line.paragraph] = union(paragraph_ink[line.paragraph], rect);
+                line_ink[n] = union(line_ink[n], rect);
             }
             pen += glyph.advance * s;
         }
     }
-    Placed { lines, origins, ink, paragraph_ink }
+    Placed { lines, origins, ink, paragraph_ink, line_ink }
 }
 
 /// Feeds a glyph outline into a path, scaled and moved into document pixels.
@@ -352,7 +358,7 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
     let faces: Vec<rustybuzz::Face> = fonts.faces.iter().filter_map(|f| rustybuzz::Face::from_slice(&f.bytes, f.index)).collect();
     if faces.len() != fonts.faces.len() {
         // Cannot happen: every stored face parsed when it was added.
-        return TextLayout { parts: Vec::new(), ink: None, missing: Vec::new(), scale: 1.0, lines: 0, paragraph_ink: Vec::new() };
+        return TextLayout { parts: Vec::new(), ink: None, missing: Vec::new(), scale: 1.0, lines: 0, paragraph_ink: Vec::new(), line_ink: Vec::new() };
     }
     let shaped = shape(layer, fonts, &faces);
     let b = &layer.bounds;
@@ -453,5 +459,6 @@ pub fn layout_text(layer: &TextLayer, fonts: &Fonts) -> TextLayout {
         scale,
         lines: placed.lines.len(),
         paragraph_ink: placed.paragraph_ink.iter().map(|ink| ink.map(|i| [i[0], i[1] + shift, i[2], i[3] + shift])).collect(),
+        line_ink: placed.line_ink.iter().map(|ink| ink.map(|i| [i[0], i[1] + shift, i[2], i[3] + shift])).collect(),
     }
 }

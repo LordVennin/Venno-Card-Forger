@@ -81,6 +81,7 @@ version = "0.0.0"
 dependencies = [
  "cardsmith-cards",
  "cardsmith-core",
+ "cardsmith-engine",
  "cardsmith-scryfall",
  "serde_json",
 ]
@@ -96,6 +97,16 @@ dependencies = [
  "serde_json",
  "tiny-skia",
  "zip",
+]
+
+[[package]]
+name = "cardsmith-engine"
+version = "0.0.0"
+dependencies = [
+ "cardsmith-cards",
+ "cardsmith-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

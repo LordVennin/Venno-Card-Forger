@@ -6,6 +6,8 @@
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
+//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>]
+//!                                                         build a card from an imported template
 //!
 //! For a bare doc.json, assets are read from the paths its asset table names,
 //! relative to the JSON file.
@@ -18,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]";
+const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out.png> [--fonts <dir>]\n       cardsmith samples <dir>\n       cardsmith hashes\n       cardsmith bench\n       cardsmith compare <actual.png> <reference.png> [--ignore x,y,w,h]... [--heatmap <out.png>]\n       cardsmith text <suite.json> -o <dir> --fonts <dir>\n       cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]\n       cardsmith bulk <oracle | default> [--cache <dir>]\n       cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>]";
 
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -217,6 +219,22 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
             Ok(())
         }
+        Some("build") => {
+            let mut plain = Vec::new();
+            let (mut out, mut fonts, mut art, mut cache) = (None, None, None, None);
+            let mut rest = args[1..].iter();
+            while let Some(arg) = rest.next() {
+                match arg.as_str() {
+                    "-o" | "--out" => out = rest.next(),
+                    "--fonts" => fonts = rest.next(),
+                    "--art" => art = rest.next(),
+                    "--cache" => cache = rest.next(),
+                    _ => plain.push(arg),
+                }
+            }
+            let (Some(dir), Some(what), Some(out)) = (plain.first(), plain.get(1), out) else { return Err(USAGE.into()) };
+            build_card(Path::new(dir), what, Path::new(out), fonts.map(String::as_str), art.map(String::as_str), cache.map(PathBuf::from))
+        }
         Some("text") => {
             let mut input = None;
             let mut out = None;
@@ -234,6 +252,61 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         _ => Err(USAGE.into()),
     }
+}
+
+fn scryfall_cache() -> PathBuf {
+    // Like other apps' caches, under the user's cache folder.
+    std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache"))).unwrap_or_else(|| PathBuf::from(".cache")).join("cardsmith/scryfall")
+}
+
+/// Build a card from a template package and write it as an image or a document.
+///
+/// `what` is a card name (with Proxyshop's art file tags if wanted), looked up
+/// on Scryfall through the cache, or a JSON file holding card data as
+/// `cardsmith card` prints it, for custom cards and for tests.
+fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Option<&str>, cache: Option<PathBuf>) -> Result<(), String> {
+    use cardsmith_engine::{Art, Options, Template};
+    let read = |name: &str| std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{}: {e}", dir.join(name).display()));
+    let template = Template::from_json(&read("doc.json")?, &read("manifest.json")?)?;
+    let (_, mut assets) = load(&dir.join("doc.json"))?;
+
+    let card: cardsmith_cards::layout::CardData = if what.ends_with(".json") {
+        serde_json::from_str(&std::fs::read_to_string(what).map_err(|e| format!("{what}: {e}"))?).map_err(|e| format!("{what}: {e}"))?
+    } else {
+        let info = cardsmith_cards::file_name::parse_card_info(what);
+        cardsmith_scryfall::Client::new(cache.unwrap_or_else(scryfall_cache)).card_data(&info).map_err(|e| e.to_string())?
+    };
+
+    let mut options = Options::default();
+    if let Some(file) = art {
+        let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+        let image = cardsmith_core::render::decode_image(&bytes).ok_or(format!("{file}: not a readable image"))?;
+        options.art = Some(Art { asset: "card-art".into(), path: "assets/card-art.png".into(), width: image.w as u32, height: image.h as u32 });
+        assets.insert("card-art".into(), bytes);
+    }
+
+    let mut renderer = cardsmith_core::render::Renderer::new();
+    if let Some(dir) = fonts {
+        load_fonts(&mut renderer, dir)?;
+    }
+    let built = cardsmith_engine::build_card(&template, &card, renderer.fonts(), &options)?;
+    for warning in &built.warnings {
+        eprintln!("warning: {warning}");
+    }
+    let mut doc = template.doc.clone();
+    cardsmith_core::commands::apply(&mut doc, &built.edit).map_err(|e| e.to_string())?;
+
+    if out.extension().is_some_and(|e| e == "cardsmith") {
+        write(out, &save_cardsmith(&doc, &assets).map_err(|e| e.to_string())?)?;
+    } else {
+        let r = renderer.render(&doc, &assets);
+        for warning in &r.warnings {
+            eprintln!("warning: {warning}");
+        }
+        write(out, &encode_png(r.width, r.height, &r.pixels).map_err(|e| e.to_string())?)?;
+    }
+    eprintln!("{} ({}) -> {}", card.name, template.id, out.display());
+    Ok(())
 }
 
 /// Render every card of a rules-text suite into its own image, plus one sheet
