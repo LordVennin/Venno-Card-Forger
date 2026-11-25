@@ -29,12 +29,15 @@ for (const name of readdirSync(fontsDir!)) {
     core.addFont(readFileSync(join(fontsDir!, name)));
   } catch {}
 }
+// As the app runs it: the host scales the frame, the core is only told what is on screen.
+core.setDirect(true);
 core.openTemplate(readFileSync(join(templateDir!, "doc.json"), "utf8"), readFileSync(join(templateDir!, "manifest.json"), "utf8"));
 core.setView({ scale: Number(zoom ?? 0.2), x: 0, y: 0, width: 1200, height: 900 });
 images();
 core.setArt(readFileSync(art!));
 core.buildCard({ scryfall: JSON.parse(readFileSync(cardFile!, "utf8")) });
 images();
+if (!core.display().dirty) throw new Error("after a build the core reported nothing changed on display: the screen would not update");
 const find = (layers: any[], test: (l: any) => boolean): any => layers.flatMap((l) => (test(l) ? [l] : l.children ? [find(l.children, test)].filter(Boolean) : []))[0];
 const doc = core.doc();
 const artLayer = find(doc.root.children, (l) => l.role === "card.art");
@@ -49,10 +52,46 @@ core.execute({ type: "batch", edits: [
   { type: "addLayer", parent: doc.root.id, layer: { id: "top-picture", name: "Picture", kind: "pixel", visible: true, opacity: 1, blend: "normal", clip: false, asset: "top-picture", transform: [1.5, 0, 300, 0, 1.5, 600] } },
 ] }, "New image layer");
 
+// Moving the view: what the core does for each pointer move of a pan, and for each wheel notch.
+const z = Number(zoom ?? 0.2);
+steps("pan, per pointer move", 30, (i) => core.setView({ scale: z, x: i * 20, y: i * 10, width: 1200, height: 900 }));
+steps("zoom within the same copy, per wheel notch", 10, (i) => core.setView({ scale: z * (1 + i * 0.005), x: 0, y: 0, width: 1200, height: 900 }));
+core.setView({ scale: z, x: 0, y: 0, width: 1200, height: 900 });
+core.display();
+const once0 = (what: string, f: () => void) => {
+  const started = performance.now();
+  f();
+  console.log(`${what}: ${(performance.now() - started).toFixed(0)} ms`);
+};
+/** After a drag ends the app asks for the real pixels a slice a frame; this is each of those frames. */
+const sharpen = () => {
+  const times: number[] = [];
+  for (let done = false; !done; ) {
+    const started = performance.now();
+    done = core.refine(160_000);
+    times.push(performance.now() - started);
+  }
+  return times.length > 1 ? `, then ${times.length} frames of sharpening, worst ${Math.max(...times).toFixed(0)} ms` : "";
+};
+once0("making the drag copy ready (done when idle)", () => core.warm());
+once0("the first step of a first drag", () => core.drag("top-picture", 1, 3, 2));
+{
+  const started = performance.now();
+  core.dragEnd(false);
+  console.log(`ending that drag: ${(performance.now() - started).toFixed(0)} ms${sharpen()}`);
+}
+once0("the first step of a second drag", () => core.drag("top-picture", 1, 3, 2));
+{
+  const started = performance.now();
+  core.dragEnd(false);
+  console.log(`ending it: ${(performance.now() - started).toFixed(0)} ms${sharpen()}`);
+}
 steps("drag the picture on top", 25, (i) => core.drag("top-picture", 1, (i + 1) * 9, (i + 1) * 6));
 core.dragEnd(true);
+sharpen();
 steps("drag the art (behind the frame)", 25, (i) => core.drag(artLayer.id, 1, (i + 1) * 9, (i + 1) * 6));
 core.dragEnd(true);
+sharpen();
 core.strokeBegin("top-picture", eraser);
 steps("erase on the picture on top, per pointer move", 40, (i) => core.strokeTo(700 + i * 40, 1200 + i * 25, 1));
 core.strokeEnd("Eraser");

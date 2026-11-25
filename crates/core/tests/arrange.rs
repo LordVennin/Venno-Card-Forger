@@ -264,3 +264,46 @@ fn a_click_passes_through_layers_that_show_nothing_at_that_point() {
     // Beside the picture, only the background.
     assert_eq!(s.hit(20.0, 60.0).as_deref(), Some("bg"));
 }
+
+#[test]
+fn after_a_drag_zoomed_in_the_real_pixels_come_a_slice_at_a_time_and_end_up_exact() {
+    let mut doc = Doc::empty(1600, 1200, 72.0);
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 1600.0, 1200.0, WHITE), rect("block", 100.0, 100.0, 900.0, 700.0, GRAY)];
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.set_direct(true);
+    s.set_view(View { scale: 1.0, x: 0.0, y: 0.0, w: 800, h: 600 });
+    assert_eq!(s.display().3, 1);
+    s.take_display_dirty();
+    // Made ready ahead of time, the copy a drag uses costs the first drag nothing, and the host hears nothing of it.
+    s.warm();
+    assert_eq!((s.display().3, s.take_display_dirty()), (1, None));
+
+    let before = s.doc().clone();
+    s.preview(place_edit(&before, "block", &Placement::shift(300.0, 0.0)).unwrap()).unwrap();
+    let per = s.display().3;
+    assert!(per > 1, "a drag zoomed in is drawn from a smaller copy");
+    assert!(s.commit_preview("Move"));
+    // Still the copy on display; the real picture arrives over several calls.
+    assert_eq!(s.display().3, per);
+    let mut calls = 0;
+    while !s.refine(40_000) {
+        calls += 1;
+        assert!(calls < 100, "sharpening never finished");
+    }
+    assert!(calls > 2, "the real picture came all at once");
+    let (pixels, w, _, per) = s.display();
+    assert_eq!(per, 1);
+    let at = |x: usize, y: usize| -> [u8; 4] { pixels[(y * w as usize + x) * 4..(y * w as usize + x) * 4 + 4].try_into().unwrap() };
+    assert_eq!((at(200, 300), at(600, 300)), ([255, 255, 255, 255], [128, 128, 128, 255]));
+    // The host is told what changed in the real frame while it was off display, not all of it.
+    let dirty = s.take_display_dirty().unwrap();
+    assert!(dirty.area() < 1600 * 1200 && dirty.x <= 100 && dirty.x + dirty.w >= 800, "{dirty:?}");
+    assert!(s.refine(40_000));
+    // A drag by a few pixels leaves thin slivers to sharpen; they are handled like any other.
+    let before = s.doc().clone();
+    s.preview(place_edit(&before, "block", &Placement::shift(3.0, 5.0)).unwrap()).unwrap();
+    assert!(s.commit_preview("Move"));
+    while !s.refine(1) {}
+    let full = cardsmith_core::render::render(s.doc(), &AssetBytes::new()).pixels;
+    assert!(s.frame() == full);
+}

@@ -408,3 +408,48 @@ fn a_document_saves_with_only_the_images_it_has_and_opens_again_without_the_rest
     reopened.execute(Edit::SetLayerProps { id: "hidden".into(), props: json!({ "visible": true }).as_object().unwrap().clone() }, "Show").unwrap();
     assert_eq!(reopened.missing_assets(), vec![("blue".to_string(), "assets/blue.png".to_string())]);
 }
+
+#[test]
+fn a_host_that_scales_the_frame_itself_is_told_only_what_changed_and_moving_the_view_costs_nothing() {
+    let mut doc = Doc::empty(480, 320, 72.0);
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 480.0, 320.0, WHITE), rect("card", 80.0, 60.0, 240.0, 180.0, GRAY), rect("far", 400.0, 240.0, 40.0, 40.0, GRAY)];
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.set_direct(true);
+    s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 120, h: 80 });
+    // A quarter-size frame, all of it new.
+    let (pixels, w, h, per) = s.display();
+    assert_eq!((w, h, per, pixels.len()), (120, 80, 4, 120 * 80 * 4));
+    let at = |s: &Session, x: usize, y: usize| -> [u8; 4] { let (p, w, _, _) = s.display(); p[(y * w as usize + x) * 4..(y * w as usize + x) * 4 + 4].try_into().unwrap() };
+    assert_eq!((at(&s, 50, 40), at(&s, 5, 5)), ([128, 128, 128, 255], [255, 255, 255, 255]));
+    assert_eq!(s.take_display_dirty(), Some(Region::new(0, 0, 120, 80)));
+    assert_eq!(s.take_display_dirty(), None);
+
+    // Panning and zooming within the same copy: nothing to draw, nothing to send.
+    s.set_view(View { scale: 0.25, x: 100.0, y: 50.0, w: 120, h: 80 });
+    s.set_view(View { scale: 0.2, x: -40.0, y: 0.0, w: 120, h: 80 });
+    assert_eq!(s.take_display_dirty(), None);
+
+    // An edit: only its part of the frame, in the frame's own pixels.
+    let props = |v: serde_json::Value| v.as_object().unwrap().clone();
+    s.execute(Edit::SetLayerProps { id: "far".into(), props: props(json!({ "visible": false })) }, "Hide").unwrap();
+    let dirty = s.take_display_dirty().unwrap();
+    assert!(dirty.x >= 98 && dirty.y >= 58 && dirty.x + dirty.w <= 112 && dirty.y + dirty.h <= 72, "{dirty:?}");
+    assert_eq!(at(&s, 105, 65), [255, 255, 255, 255]);
+
+    // Zoomed in to full size: the real frame is on display, new to the host, and right where it is on screen.
+    s.set_view(View { scale: 1.0, x: 0.0, y: 0.0, w: 120, h: 80 });
+    let (_, w, h, per) = s.display();
+    assert_eq!((w, h, per), (480, 320, 1));
+    assert_eq!(s.take_display_dirty(), Some(Region::new(0, 0, 480, 320)));
+    assert_eq!(at(&s, 100, 70), [128, 128, 128, 255]);
+    // An edit off screen draws nothing now; scrolling there draws it and says so.
+    assert!(s.undo());
+    assert_eq!(s.take_display_dirty(), None);
+    s.set_view(View { scale: 1.0, x: 360.0, y: 240.0, w: 120, h: 80 });
+    assert!(s.take_display_dirty().is_some());
+    assert_eq!(at(&s, 420, 260), [128, 128, 128, 255]);
+    // Back out: the smaller copy was kept and only caught up, and it shows the square again.
+    s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 120, h: 80 });
+    assert_eq!(at(&s, 105, 65), [128, 128, 128, 255]);
+    assert_frame_is_exact(&mut s);
+}

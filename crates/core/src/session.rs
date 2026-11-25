@@ -149,11 +149,25 @@ struct Proxy {
     doc_stale: bool,
     renderer: Renderer,
     frame: Raster,
-    /// Only the part on screen has been kept up to date (during a drag); the rest is out of date.
-    partial: bool,
+    /// The host has been handed this copy's frame before, so it only needs what changed since.
+    shown: bool,
+    /// Areas of the document that changed and have not been drawn in this copy: what was
+    /// off screen during a drag, and everything that changed while the copy was put by.
+    stale: Vec<Region>,
     /// The version of each image the copy's smaller one was made from.
     made: HashMap<String, u64>,
     texts: TextOutlines,
+}
+
+/// Add an area to a list of areas that never overlap. A list grown long is replaced by its bounds.
+fn add_area(list: &mut Vec<Region>, area: Region) {
+    let mut kept: Vec<Region> = std::mem::take(list).into_iter().flat_map(|old| subtract(old, &area)).collect();
+    kept.push(area);
+    if kept.len() > 48 {
+        let bounds = kept.iter().fold(None, |acc, r| union(acc, Some(*r)));
+        kept = bounds.into_iter().collect();
+    }
+    *list = kept;
 }
 
 /// The parts of `a` that are not in `b`.
@@ -195,6 +209,20 @@ pub struct Session {
     preview: Option<(Edit, Edit)>,
     /// A drag is in progress, from its first step until it is kept or given up.
     dragging: bool,
+    /// A view has been set. Until then everything counts as on screen.
+    viewing: bool,
+    /// The host draws the screen from the frame itself ([`Session::display`]) and scales it;
+    /// the session then keeps no screen-sized picture and does no work when the view moves.
+    direct: bool,
+    /// With `direct`: the part of the displayed frame, in its own pixels, changed since it was last asked for.
+    display_dirty: Option<Region>,
+    /// With `direct`: the host has been handed the full-size frame before, and what of it has
+    /// been drawn since while a smaller copy was on display.
+    full_shown: bool,
+    full_unshown: Option<Region>,
+    /// After a drag that ended zoomed in: the smaller copy stays on display while the real
+    /// pixels are drawn a slice at a time ([`Session::refine`]), instead of all at once.
+    holding: bool,
     /// Copies of other sizes, kept for when the view or a drag wants them again.
     spare: Vec<Proxy>,
     /// Present while the view is zoomed out far enough to be drawn from a smaller copy.
@@ -232,6 +260,12 @@ impl Session {
             stashed: BTreeSet::new(),
             preview: None,
             dragging: false,
+            viewing: false,
+            direct: false,
+            display_dirty: None,
+            full_shown: false,
+            full_unshown: None,
+            holding: false,
             spare: Vec::new(),
             proxy: None,
             stale: Vec::new(),
@@ -259,7 +293,7 @@ impl Session {
 
     /// The part of the document on screen, with a little around it. The whole document until a view is set.
     fn visible(&self) -> Region {
-        if self.view_pixels.is_empty() {
+        if !self.viewing {
             return self.whole();
         }
         let v = self.view;
@@ -278,6 +312,10 @@ impl Session {
     /// at full size: its areas are small, and it works on the real pixels.
     fn redraw(&mut self, region: Region) {
         let Some(region) = region.intersect(&self.whole()) else { return };
+        // Copies of other sizes that are put by are not drawn now; they note what to draw when wanted again.
+        for spare in &mut self.spare {
+            add_area(&mut spare.stale, region);
+        }
         if self.stroke.is_some() && self.proxy.is_some() {
             // Zoomed out, a stroke is drawn through the smaller copy like any other change: the
             // painted part of the image is shrunk into the copy's image, and that part of the
@@ -299,8 +337,17 @@ impl Session {
         } else {
             let visible = self.visible();
             self.note_stale(subtract(region, &visible));
-            if let Some(shown) = region.intersect(&visible) {
+            let shown = region.intersect(&visible);
+            if let Some(shown) = shown {
                 self.draw_full(shown);
+            }
+            if self.direct {
+                // Only what was drawn is new to the host; the rest is drawn, and told, when it comes on screen.
+                if let Some(shown) = shown {
+                    self.note_display(shown);
+                }
+                self.dirty_view = Region::new(0, 0, 0, 0);
+                return;
             }
         }
         self.update_view(region);
@@ -316,6 +363,10 @@ impl Session {
 
     /// Draw one region of the document into the full-size frame.
     fn draw_full(&mut self, region: Region) {
+        if self.proxy.is_some() {
+            // Not on display now: remembered for when it is.
+            self.full_unshown = union(self.full_unshown, Some(region));
+        }
         let (part, warnings) = match (&mut self.below, &self.stroke) {
             // Mid-stroke: start from the cached layers beneath, then draw the painted layer and what is above it.
             (Some(below), Some(_)) => {
@@ -358,15 +409,20 @@ impl Session {
     /// only the part of it on screen is drawn, and the copy is marked as
     /// partial; the rest is caught up when the drag ends.
     fn draw_small(&mut self, region: Region) {
+        let visible = self.visible();
         let dragging = self.dragging;
+        let Some(proxy) = self.proxy.as_mut() else { return };
         let region = if dragging {
-            let Some(shown) = region.intersect(&self.visible()) else { return };
+            // Off screen for now: noted, and drawn when the drag ends.
+            for hidden in subtract(region, &visible) {
+                add_area(&mut proxy.stale, hidden);
+            }
+            let Some(shown) = region.intersect(&visible) else { return };
             shown
         } else {
             region
         };
-        let Some(proxy) = self.proxy.as_mut() else { return };
-        proxy.partial |= dragging;
+        proxy.stale = std::mem::take(&mut proxy.stale).into_iter().flat_map(|old| subtract(old, &region)).collect();
         if proxy.doc_stale {
             proxy.doc = scale_doc(&self.doc, proxy.level, self.renderer.fonts(), &mut proxy.texts);
             proxy.doc_stale = false;
@@ -500,10 +556,17 @@ impl Session {
 
     pub fn set_view(&mut self, view: View) {
         self.view = View { scale: view.scale.max(1e-3), ..view };
-        self.view_pixels = vec![0; view.w as usize * view.h as usize * 4];
-        if self.stroke.is_none() && !self.use_level(self.wanted_level()) && self.dragging {
+        self.viewing = true;
+        if !self.direct {
+            let size = view.w as usize * view.h as usize * 4;
+            if self.view_pixels.len() != size {
+                self.view_pixels = vec![0; size];
+            }
+        }
+        let switched = self.stroke.is_none() && self.use_level(self.wanted_level());
+        if self.stroke.is_none() && !switched && self.dragging {
             // Scrolled or zoomed in the middle of a drag: what has come on screen is drawn.
-            self.draw_small(self.whole());
+            self.catch_up();
         }
         if self.proxy.is_none() && self.stroke.is_none() {
             // What was left undrawn off screen and has come into view.
@@ -511,10 +574,15 @@ impl Session {
             let due: Vec<Region> = self.stale.iter().filter_map(|area| area.intersect(&visible)).collect();
             for area in due {
                 self.draw_full(area);
+                if self.direct {
+                    self.note_display(area);
+                }
             }
         }
-        self.update_view(self.whole());
-        self.dirty_view = Region::new(0, 0, view.w as i32, view.h as i32);
+        if !self.direct {
+            self.update_view(self.whole());
+            self.dirty_view = Region::new(0, 0, view.w as i32, view.h as i32);
+        }
     }
 
     /// The size of copy the screen should be drawn from now: the smallest that
@@ -523,12 +591,17 @@ impl Session {
     /// large part of the card and speed matters more than sharpness.
     fn wanted_level(&self) -> u32 {
         let level = ((1.0 / self.view.scale).log2().floor() as i32).clamp(0, 3) as u32;
-        if !self.dragging || self.view_pixels.is_empty() {
+        if self.holding && level == 0 && !self.dragging {
+            // The copy the drag used stays up until the real pixels are ready.
+            return self.proxy.as_ref().map_or(0, |p| p.level);
+        }
+        if !self.dragging || !self.viewing {
             return level;
         }
         // Dragging: every step redraws what moved with everything over and under it, so the
         // copy is the largest that keeps the part on screen under about a third of a million
-        // pixels, however far in the view is zoomed. It is sharp again when the drag ends.
+        // pixels, however far in the view is zoomed. Changing copies costs only what the other
+        // one missed while it was put by, and the picture is sharp again when the drag ends.
         let visible = self.visible();
         let mut drag = level;
         while drag < 3 && (visible.area() >> (2 * drag)) > 350_000 {
@@ -542,22 +615,28 @@ impl Session {
         if self.proxy.as_ref().map_or(0, |p| p.level) == level {
             return false;
         }
-        // The copy in use is put by: going back to it later costs one redraw, not making it again.
+        // The copy in use is put by with a note of what changes meanwhile: going back to it
+        // later costs drawing those areas, not the whole of it.
         self.spare.extend(self.proxy.take());
+        // What the host needs of the frame now coming on display: all of it the first time,
+        // and afterwards only what is drawn into it from here on.
+        self.display_dirty = None;
         if level > 0 {
-            let mut proxy = match self.spare.iter().position(|p| p.level == level) {
+            let proxy = match self.spare.iter().position(|p| p.level == level) {
                 Some(at) => self.spare.swap_remove(at),
                 None => {
                     let k = 1 << level;
                     let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
-                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, partial: false, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
+                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, shown: false, stale: vec![self.whole()], renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
                 }
             };
-            proxy.doc_stale = true;
-            proxy.partial = false;
+            let seen = proxy.shown;
+            let frame = proxy.frame.region;
             self.proxy = Some(proxy);
-            // During a drag only what is on screen is drawn (see `draw_small`).
-            self.draw_small(self.whole());
+            self.catch_up();
+            if self.direct && !seen {
+                self.display_dirty = Some(frame);
+            }
         } else {
             // The real pixels on screen again: draw what changed while they were not shown.
             let visible = self.visible();
@@ -565,9 +644,128 @@ impl Session {
             for area in due {
                 self.draw_full(area);
             }
+            if self.direct {
+                self.display_dirty = if self.full_shown { self.full_unshown.take() } else { Some(self.whole()) };
+                self.full_unshown = None;
+            }
         }
-        self.update_view(self.whole());
+        if !self.direct {
+            self.update_view(self.whole());
+        }
         true
+    }
+
+    /// Draw what the copy in use has noted as changed and not drawn (during a drag, the part of it on screen).
+    fn catch_up(&mut self) {
+        let Some(proxy) = self.proxy.as_mut() else { return };
+        for area in std::mem::take(&mut proxy.stale) {
+            // Drawing takes each area off the list again, or puts back the part that is off screen during a drag.
+            self.draw_small(area);
+            if self.direct {
+                self.note_display(area);
+            }
+        }
+    }
+
+    /// With `direct`: note that this area of the document changed in the frame on display.
+    fn note_display(&mut self, region: Region) {
+        let (frame, k) = match &self.proxy {
+            Some(proxy) => (proxy.frame.region, 1 << proxy.level),
+            None => (self.whole(), 1),
+        };
+        let (x0, y0) = (region.x.div_euclid(k) - 1, region.y.div_euclid(k) - 1);
+        let (x1, y1) = ((region.x + region.w + k - 1).div_euclid(k) + 1, (region.y + region.h + k - 1).div_euclid(k) + 1);
+        if let Some(area) = Region::new(x0, y0, x1 - x0, y1 - y0).intersect(&frame) {
+            self.display_dirty = union(self.display_dirty, Some(area));
+        }
+    }
+
+    /// Have the host draw the screen from the frame itself, scaled by the host
+    /// (a canvas does this almost for free), instead of from a screen-sized
+    /// picture resampled here on every change of view. See [`Session::display`].
+    pub fn set_direct(&mut self, direct: bool) {
+        self.direct = direct;
+        if direct {
+            self.view_pixels = Vec::new();
+            self.display_dirty = Some(self.proxy.as_ref().map_or(self.whole(), |p| p.frame.region));
+        }
+    }
+
+    /// The frame the screen is drawn from, for a host that scales it itself:
+    /// its pixels (straight RGBA), width, height, and how many document pixels
+    /// one of its pixels covers along a side (1 for the real frame; 2, 4 or 8
+    /// for a smaller copy). At full size only the part on screen is kept up to
+    /// date; the rest is whatever it last was.
+    pub fn display(&self) -> (&[u8], u32, u32, u32) {
+        match &self.proxy {
+            Some(proxy) => (&proxy.frame.data, proxy.frame.region.w as u32, proxy.frame.region.h as u32, 1 << proxy.level),
+            None => (&self.frame.data, self.frame.region.w as u32, self.frame.region.h as u32, 1),
+        }
+    }
+
+    /// The part of [`Session::display`]'s frame, in its own pixels, that has
+    /// changed since this was last called. `None` if nothing has.
+    pub fn take_display_dirty(&mut self) -> Option<Region> {
+        match &mut self.proxy {
+            Some(proxy) => proxy.shown = true,
+            None => self.full_shown = true,
+        }
+        self.display_dirty.take()
+    }
+
+    /// After a drag that ended zoomed in, the smaller copy is still on display.
+    /// Draw up to about `budget` pixels of the real picture where it is on
+    /// screen and out of date, and when none is left, put the real picture on
+    /// display. Call once a frame until it returns true. Returns true at once
+    /// when there is nothing to do.
+    pub fn refine(&mut self, budget: usize) -> bool {
+        if !self.holding {
+            return true;
+        }
+        if self.stroke.is_some() || self.dragging {
+            return false;
+        }
+        let visible = self.visible();
+        let mut left = budget.max(1) as i64;
+        while left > 0 {
+            let Some(area) = self.stale.iter().find_map(|area| area.intersect(&visible)) else { break };
+            // A strip of it, as tall as the budget allows.
+            let rows = ((left / area.w.max(1) as i64).min(i32::MAX as i64) as i32).max(16).min(area.h);
+            let strip = Region::new(area.x, area.y, area.w, rows);
+            self.draw_full(strip);
+            left -= strip.area() as i64;
+        }
+        if self.stale.iter().any(|area| area.intersect(&visible).is_some()) {
+            return false;
+        }
+        self.holding = false;
+        self.level_changed();
+        true
+    }
+
+    /// Make ready, ahead of time, the smaller copy a drag at this zoom would
+    /// use, so the first drag does not wait for it. Costs what drawing that
+    /// copy once costs; call when nothing else is going on.
+    pub fn warm(&mut self) {
+        if !self.viewing || self.stroke.is_some() || self.dragging || self.holding {
+            return;
+        }
+        self.dragging = true;
+        let level = self.wanted_level();
+        self.dragging = false;
+        let have = self.proxy.as_ref().is_some_and(|p| p.level == level) || self.spare.iter().any(|p| p.level == level);
+        if level == 0 || have {
+            return;
+        }
+        // Brought up as if for a drag, drawn, and put by again. The host is told nothing: it
+        // has not seen this copy, and will be handed all of it when a drag does bring it up.
+        // As in a drag, only the part on screen is drawn; the rest waits until it is needed.
+        let (dirty, back) = (self.display_dirty, self.proxy.as_ref().map_or(0, |p| p.level));
+        self.dragging = true;
+        self.use_level(level);
+        self.dragging = false;
+        self.use_level(back);
+        self.display_dirty = dirty;
     }
 
     /// The view's pixels: straight RGBA, `view.w × view.h`.
@@ -587,6 +785,12 @@ impl Session {
     /// Refresh the view pixels that show `region` of the document.
     fn update_view(&mut self, region: Region) {
         let v = self.view;
+        if self.direct {
+            // The host scales the frame itself: it only needs to know which part of it changed.
+            self.note_display(region);
+            self.dirty_view = Region::new(0, 0, 0, 0);
+            return;
+        }
         if self.view_pixels.is_empty() {
             self.dirty_view = Region::new(0, 0, 0, 0);
             return;
@@ -702,7 +906,7 @@ impl Session {
         let mut areas = self.areas(&reach);
         let inverse = apply(&mut self.doc, edit)?;
         self.renderer.sync(&self.doc);
-        if let Some(proxy) = &mut self.proxy {
+        for proxy in self.proxy.iter_mut().chain(self.spare.iter_mut()) {
             proxy.doc_stale = true;
         }
         let size = (self.doc.width as i32, self.doc.height as i32);
@@ -734,7 +938,7 @@ impl Session {
         let Some((_, back)) = self.preview.take() else {
             // The smaller copy takes over first, so even the first step is drawn small.
             self.dragging = true;
-            let switched = !self.view_pixels.is_empty() && self.use_level(self.wanted_level());
+            let switched = self.viewing && self.use_level(self.wanted_level());
             let back = match self.apply_and_redraw(&edit) {
                 Ok(back) => back,
                 Err(e) => {
@@ -771,20 +975,18 @@ impl Session {
     /// A drag began or ended: change to the size of copy that suits, and if that
     /// is a change, the whole screen has been redrawn.
     fn level_changed(&mut self) {
-        if self.view_pixels.is_empty() {
+        if !self.viewing {
             return;
         }
         let switched = self.use_level(self.wanted_level());
         // The same copy carries on after a drag: bring the part that was off screen up to date.
-        let catch_up = !switched && !self.dragging && self.proxy.as_ref().is_some_and(|p| p.partial);
-        if catch_up {
-            if let Some(proxy) = &mut self.proxy {
-                proxy.partial = false;
-            }
-            self.draw_small(self.whole());
-            self.update_view(self.whole());
+        // (Not while the copy is only being held until the real pixels are ready: it is about to go.)
+        let behind = !switched && !self.dragging && !self.holding && self.proxy.as_ref().is_some_and(|p| !p.stale.is_empty());
+        if behind {
+            self.catch_up();
         }
-        if switched || catch_up {
+        if (switched || behind) && !self.direct {
+            self.update_view(self.whole());
             self.dirty_view = Region::new(0, 0, self.view.w as i32, self.view.h as i32);
         }
     }
@@ -795,6 +997,7 @@ impl Session {
         self.push(Step::Edit { label: label.to_string(), edit, inverse });
         self.dirty_view = Region::new(0, 0, 0, 0);
         self.dragging = false;
+        self.holding = self.direct && self.proxy.is_some() && self.view.scale > 0.5;
         self.level_changed();
         true
     }
@@ -804,6 +1007,7 @@ impl Session {
         if let Some((_, back)) = self.preview.take() {
             self.apply_and_redraw(&back).expect("a recorded inverse always applies");
             self.dragging = false;
+            self.holding = self.direct && self.proxy.is_some() && self.view.scale > 0.5;
             self.level_changed();
         }
     }
@@ -1155,6 +1359,8 @@ impl Session {
     /// Start a brush stroke on a pixel layer.
     pub fn stroke_begin(&mut self, layer_id: &str, brush: Brush) -> Result<()> {
         self.cancel_preview();
+        // Painting is done on the sharpest picture the zoom calls for, not on one a drag left up.
+        while !self.refine(usize::MAX) {}
         if self.stroke.is_some() {
             return Err(err!("A brush stroke is already in progress"));
         }
@@ -1357,7 +1563,7 @@ impl Session {
     /// PostScript names it provides.
     pub fn add_font(&mut self, bytes: Vec<u8>) -> Result<Vec<String>> {
         let names = self.renderer.fonts_mut().add(bytes)?;
-        if let Some(proxy) = &mut self.proxy {
+        for proxy in self.proxy.iter_mut().chain(self.spare.iter_mut()) {
             proxy.doc_stale = true;
         }
         self.below = None;

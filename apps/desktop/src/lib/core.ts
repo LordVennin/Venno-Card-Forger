@@ -50,6 +50,10 @@ type Exports = {
   cs_stroke_to(x: number, y: number, pressure: number): void;
   cs_stroke_end(labelPtr: number, labelLen: number): void;
   cs_set_view(scale: number, x: number, y: number, w: number, h: number): void;
+  cs_set_direct(on: number): void;
+  cs_display(): void;
+  cs_refine(budget: number): number;
+  cs_warm(): void;
   cs_view_ptr(): number;
   cs_dirty_x(): number;
   cs_dirty_y(): number;
@@ -395,6 +399,44 @@ export class Core {
   setView(view: View): void {
     this.view = view;
     this.x.cs_set_view(view.scale, view.x, view.y, view.width, view.height);
+  }
+
+  /**
+   * Have the host draw the screen from the core's frame itself, scaled by the host (a canvas
+   * transform), instead of from a screen-sized picture the core resamples on every change of
+   * view. With this on, `setView` does no per-pixel work; use `display` in place of
+   * `viewPixels` and `dirty`.
+   */
+  setDirect(on: boolean): void {
+    this.x.cs_set_direct(on ? 1 : 0);
+  }
+
+  /**
+   * The frame the screen is drawn from: its size, how many document pixels one of its pixels
+   * covers along a side (1 for the real frame; 2, 4 or 8 for a smaller copy), the part of it
+   * changed since the last call, and its pixels as a window onto the module's memory (use
+   * them before calling the core again). At full size only the part on screen is up to date.
+   */
+  display(): { width: number; height: number; per: number; dirty: Rect | null; pixels: Uint8ClampedArray<ArrayBuffer> } {
+    this.x.cs_display();
+    const info = JSON.parse(decoder.decode(this.out())) as { ptr: number; width: number; height: number; per: number; dirty: [number, number, number, number] | null };
+    const pixels = new Uint8ClampedArray(this.x.memory.buffer as ArrayBuffer, info.ptr, info.width * info.height * 4);
+    const dirty = info.dirty && { x: info.dirty[0], y: info.dirty[1], width: info.dirty[2], height: info.dirty[3] };
+    return { width: info.width, height: info.height, per: info.per, dirty, pixels };
+  }
+
+  /**
+   * After a drag that ended zoomed in, a softer copy is still on display. Draw up to about
+   * `budget` pixels of the real picture; true when it is all there and on display, or there
+   * was nothing to do. Call once a frame until then.
+   */
+  refine(budget: number): boolean {
+    return this.x.cs_refine(budget) === 1;
+  }
+
+  /** Make ready the smaller copy a drag at this zoom would use, so the first drag does not wait for it. Call when idle. */
+  warm(): void {
+    this.x.cs_warm();
   }
 
   /**

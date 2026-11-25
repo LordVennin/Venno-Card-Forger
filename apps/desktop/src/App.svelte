@@ -71,6 +71,7 @@
   getCore()
     .then((loaded) => {
       core = loaded;
+      loaded.setDirect(true);
       samples = loaded.sampleNames();
       open(0);
     })
@@ -78,17 +79,55 @@
 
   // ---- drawing ------------------------------------------------------------------
 
-  /** Copy part of the core's view (all of it by default) onto the canvas. */
-  function blit(rect?: Rect | null) {
-    if (!core || !canvas || !canvas.width || !canvas.height) return;
-    // A window onto the core's memory: the only copy is the one onto the canvas.
-    const image = new ImageData(core.viewPixels(), canvas.width, canvas.height);
-    const ctx = canvas.getContext("2d")!;
-    if (rect) ctx.putImageData(image, 0, 0, rect.x, rect.y, rect.width, rect.height);
-    else ctx.putImageData(image, 0, 0);
+  // The core hands over its frame (the real one, or a smaller copy when zoomed out) and says
+  // which part changed. That part is copied into a canvas of the frame's own size, kept off
+  // screen, and the canvas on screen draws that one scaled and moved. Panning and zooming
+  // are then a redraw of the canvas: the core does nothing.
+  // One canvas for each size of frame the core has handed over (the real one and its smaller
+  // copies): going back to one, the core sends only what changed in it since.
+  const backings = new Map<number, HTMLCanvasElement>();
+  let backing: HTMLCanvasElement | undefined;
+  let per = 1;
+  let painting_due = 0;
+
+  /** Take in what the core changed and show it. The argument is ignored; it is there for callers that pass the old dirty rectangle. */
+  function blit(_?: Rect | null) {
+    if (!core || !canvas) return;
+    const shown = core.display();
+    per = shown.per;
+    backing = backings.get(per);
+    if (!backing) backings.set(per, (backing = document.createElement("canvas")));
+    const resized = backing.width !== shown.width || backing.height !== shown.height;
+    if (resized) {
+      backing.width = shown.width;
+      backing.height = shown.height;
+    }
+    // A canvas that was resized is blank: it needs the whole frame, not only what changed.
+    const dirty = resized ? { x: 0, y: 0, width: shown.width, height: shown.height } : shown.dirty;
+    if (dirty) {
+      // A window onto the core's memory: the only copy is the one into the canvas.
+      backing.getContext("2d")!.putImageData(new ImageData(shown.pixels, shown.width, shown.height), 0, 0, dirty.x, dirty.y, dirty.width, dirty.height);
+    }
+    painting_due ||= requestAnimationFrame(paint);
   }
 
-  /** Tell the core what is on screen and redraw everything. */
+  /** Draw the frame onto the screen at the view's zoom and place. */
+  function paint() {
+    painting_due = 0;
+    if (!canvas || !backing || !backing.width) return;
+    const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // One pixel of the frame is `per` document pixels, and a document pixel is `view.scale` screen pixels.
+    const zoom = view.scale * per;
+    // Smoothed when the frame is shrunk or only a little enlarged; crisp pixels when zoomed well in.
+    ctx.imageSmoothingEnabled = zoom < 3;
+    ctx.imageSmoothingQuality = "high";
+    ctx.setTransform(zoom, 0, 0, zoom, -view.x * view.scale, -view.y * view.scale);
+    ctx.drawImage(backing, 0, 0);
+  }
+
+  /** Tell the core what is on screen (so it knows what to draw, and at what size) and show it. */
   function applyView() {
     if (!core || !canvas || !stage) return;
     const width = Math.max(1, Math.round(stage.clientWidth * dpr()));
@@ -99,6 +138,31 @@
     }
     core.setView({ ...view, width, height });
     blit();
+    warmSoon();
+  }
+
+  /** After a drag that ended zoomed in: bring the real pixels in a slice a frame, so letting go does not stall. */
+  function refine() {
+    if (!core) return;
+    const done = core.refine(160_000);
+    blit();
+    if (!done) requestAnimationFrame(refine);
+  }
+
+  // When nothing has happened for a moment, the smaller copy a drag would use is made ready.
+  let warming: ReturnType<typeof setTimeout> | undefined;
+  function warmSoon() {
+    clearTimeout(warming);
+    warming = setTimeout(() => !busy && !drag && !painting && core?.warm(), 700);
+  }
+
+  // Panning and zooming arrive faster than the screen redraws: the view is set once a frame.
+  let view_due = 0;
+  function viewChanged() {
+    view_due ||= requestAnimationFrame(() => {
+      view_due = 0;
+      applyView();
+    });
   }
 
   function fit() {
@@ -387,6 +451,7 @@
       status = err instanceof Error ? err.message : String(err);
       core.dragEnd(false);
       drag = null;
+      refine();
       return;
     }
     blit(core.dirty());
@@ -399,8 +464,8 @@
     drag = null;
     if (done.moved) {
       core.dragEnd(true, `${done.pivot ? "Turn" : done.anchor ? "Scale" : "Move"} ${done.name}`);
-      blit(core.dirty());
       refresh();
+      refine();
     } else if (e && !done.anchor && !done.pivot) {
       // A click without a drag picks what is under the pointer.
       select(core.hit(toDoc(e).x, toDoc(e).y) ?? undefined);
@@ -413,6 +478,7 @@
       core!.drag(active!, 1, dx, dy);
       core!.dragEnd(true, "Nudge");
     });
+    refine();
   }
 
   // ---- text on the canvas ---------------------------------------------------------------
@@ -650,10 +716,9 @@
     if (!core || !canvas) return;
     const [x, y] = [Math.floor(e.offsetX * dpr()), Math.floor(e.offsetY * dpr())];
     if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
-    const at = (y * canvas.width + x) * 4;
-    const pixels = core.viewPixels();
-    if (pixels[at + 3] === 0) return;
-    color = "#" + [pixels[at], pixels[at + 1], pixels[at + 2]].map((v) => v!.toString(16).padStart(2, "0")).join("");
+    const pixel = canvas.getContext("2d")!.getImageData(x, y, 1, 1).data;
+    if (pixel[3] === 0) return;
+    color = "#" + [pixel[0], pixel[1], pixel[2]].map((v) => v!.toString(16).padStart(2, "0")).join("");
     status = `Brush color ${color}`;
   }
 
@@ -752,7 +817,7 @@
     if (panning) {
       view = { ...view, x: view.x - ((e.clientX - panning.x) * dpr()) / view.scale, y: view.y - ((e.clientY - panning.y) * dpr()) / view.scale };
       panning = { x: e.clientX, y: e.clientY };
-      applyView();
+      viewChanged();
     } else if (selecting && outline) {
       // A lasso: the pointer's path, a point every few screen pixels.
       const p = toDoc(e);
@@ -798,7 +863,7 @@
     const before = toDoc(e);
     const scale = Math.min(16, Math.max(0.02, view.scale * Math.exp(-e.deltaY * 0.0015)));
     view = { scale, x: before.x - (e.offsetX * dpr()) / scale, y: before.y - (e.offsetY * dpr()) / scale };
-    applyView();
+    viewChanged();
   }
 
   function key(e: KeyboardEvent) {
@@ -821,8 +886,8 @@
     } else if (e.key === "Escape" && drag) {
       core!.dragEnd(false);
       drag = null;
-      blit(core!.dirty());
       refresh();
+      refine();
     } else if ((e.key === "Delete" || e.key === "Backspace") && active && tool === "select" && selection) {
       e.preventDefault();
       eraseSelection(false);

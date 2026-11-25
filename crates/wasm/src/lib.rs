@@ -28,6 +28,9 @@ use std::cell::RefCell;
 
 struct State {
     session: Session,
+    /// The host draws the screen from the frame itself (`cs_set_direct`). Kept here because it
+    /// is the host's way of working, not a document's: it carries over when another is opened.
+    direct: bool,
     /// The document as it was when the drag in progress began: each position of the drag is worked out from it.
     drag_from: Option<Doc>,
     /// Present while the open document is a template a card is being built on.
@@ -37,7 +40,7 @@ struct State {
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), drag_from: None, bench: None, out: Vec::new() });
+    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), direct: false, drag_from: None, bench: None, out: Vec::new() });
 }
 
 fn with<T>(f: impl FnOnce(&mut State) -> T) -> T {
@@ -77,6 +80,7 @@ fn open(s: &mut State, doc: Doc, assets: AssetBytes) {
     // Fonts belong to the app, not to a document: they carry over.
     let fonts = s.session.fonts().clone();
     s.session = Session::with_fonts(doc, assets, fonts);
+    s.session.set_direct(s.direct);
     s.bench = None;
     s.drag_from = None;
     s.session.set_view(View { scale: 1.0, x: 0.0, y: 0.0, ..view });
@@ -581,6 +585,48 @@ pub extern "C" fn cs_set_view(scale: f32, x: f32, y: f32, w: u32, h: u32) {
 
 /// The view: straight-alpha RGBA, `w × h × 4` bytes as given to `cs_set_view`.
 /// Valid until the next call that changes the document or the view.
+/// Have the host draw the screen from the frame itself, scaling it (a canvas
+/// transform), instead of from a screen-sized picture resampled here. With
+/// this on, `cs_set_view` does no per-pixel work and `cs_display` replaces
+/// `cs_view_ptr` and the `cs_dirty_*` calls.
+#[no_mangle]
+pub extern "C" fn cs_set_direct(on: u32) {
+    with(|s| {
+        s.direct = on == 1;
+        s.session.set_direct(s.direct);
+    });
+}
+
+/// The frame the screen is drawn from, as JSON in the output buffer:
+/// `{ "ptr", "width", "height", "per", "dirty" }`. `ptr` is where its pixels
+/// are in linear memory (straight RGBA); `per` is how many document pixels one
+/// of its pixels covers along a side; `dirty` is the part of it,
+/// `[x, y, width, height]` in its own pixels, changed since the last call, or
+/// `null`. At full size only the part on screen is kept up to date.
+#[no_mangle]
+pub extern "C" fn cs_display() {
+    with(|s| {
+        let dirty = s.session.take_display_dirty().map(|d| [d.x, d.y, d.w, d.h]);
+        let (pixels, width, height, per) = s.session.display();
+        let info = serde_json::json!({ "ptr": pixels.as_ptr() as usize, "width": width, "height": height, "per": per, "dirty": dirty });
+        s.out = serde_json::to_vec(&info).unwrap_or_default();
+    });
+}
+
+/// After a drag that ended zoomed in, a smaller copy is still on display. Draw
+/// up to about `budget` pixels of the real picture and return 1 when it is all
+/// there and on display (or there was nothing to do), 0 to be called again next frame.
+#[no_mangle]
+pub extern "C" fn cs_refine(budget: u32) -> u32 {
+    with(|s| s.session.refine(budget as usize) as u32)
+}
+
+/// Make ready the smaller copy a drag at this zoom would use. Call when idle.
+#[no_mangle]
+pub extern "C" fn cs_warm() {
+    with(|s| s.session.warm());
+}
+
 #[no_mangle]
 pub extern "C" fn cs_view_ptr() -> *const u8 {
     with(|s| s.session.view_pixels().as_ptr())
