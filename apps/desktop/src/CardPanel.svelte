@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { BuildReport, Core } from "./lib/core";
+  import type { BuildReport } from "./lib/core";
+  import type { RemoteCore } from "./lib/remote";
   import { native, type Extras, type Printing, type SetEntry, type Settings, type TemplateEntry, type TierState } from "./lib/native";
   import { SYMBOL_GROUPS, symbolColor } from "./lib/symbols";
 
@@ -17,16 +18,16 @@
     demoFill,
     demoReorder,
   }: {
-    core: Core;
+    core: RemoteCore;
     busy?: boolean;
     /** A field of the card form to put the cursor in: set from outside, cleared here. */
     focusField?: string | null;
     /** Show a line in the status bar. */
     say: (text: string) => void;
     /** The document changed: copy what was redrawn to the screen and re-read the layers. */
-    changed: () => void;
+    changed: () => void | Promise<void>;
     /** A different document is open: fit it to the window. */
-    opened: () => void;
+    opened: () => void | Promise<void>;
     /** For the app's own check (see `demo`): select the art, mark out this rectangle and fill it. */
     demoFill?: (rect: [number, number, number, number]) => Promise<void>;
     /** For the app's own check: drag rows of the layers list with made-up pointer events and say what happened. */
@@ -102,14 +103,14 @@
         edit("name", want.rename);
         await build();
       }
-      if (want.export) await native.writeFile(want.export, core.exportPng());
+      if (want.export) await native.writeFile(want.export, await core.exportPng());
       say(`Reopened ${want.open}: form ${raw ? "restored" : "not restored"}`);
       return;
     }
     folder = want.template;
     await openTemplate();
     if (want.art) {
-      core.setArt(await native.artFile(want.art));
+      await core.setArt(await native.artFile(want.art));
       artPath = want.art;
     }
     search = want.card;
@@ -117,9 +118,9 @@
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
     if (want.reorder) say(await demoReorder?.() ?? "no reorder check");
     if (want.fillSelection) await demoFill?.(want.fillSelection);
-    if (want.save) await native.writeFile(want.save, core.saveAvailable());
+    if (want.save) await native.writeFile(want.save, await core.saveAvailable());
     if (want.export) {
-      await native.writeFile(want.export, core.exportPng());
+      await native.writeFile(want.export, await core.exportPng());
       say(`Exported to ${want.export}`);
     }
   }
@@ -148,7 +149,7 @@
     let loaded = 0;
     for (const name of files) {
       try {
-        core.addFont(await native.font(name));
+        await core.addFont(await native.font(name));
         loaded++;
       } catch {
         // Not a font this app can read; the status line says how many were.
@@ -175,10 +176,10 @@
     say(`Opening ${folder}…`);
     try {
       const pack = await native.template(folder);
-      core.openTemplate(pack.doc, pack.manifest);
+      await core.openTemplate(pack.doc, pack.manifest);
       assetFolder = folder;
       filePath = "";
-      opened();
+      await opened();
       await loadImages();
       if (raw) await build();
       else say("Template open. Find a card, or write your own, to build it.");
@@ -195,12 +196,13 @@
    */
   export async function loadImages() {
     if (!assetFolder) return;
-    const missing = core.missingAssets();
+    const missing = await core.missingAssets();
     if (!missing.length) return;
     const files = await Promise.all(missing.map((m) => native.templateAsset(assetFolder, m.path).catch(() => null)));
     const got = missing.map((m, i) => ({ id: m.id, data: files[i] })).filter((f): f is { id: string; data: Uint8Array<ArrayBuffer> } => f.data !== null);
-    got.forEach((f, i) => core.addAsset(f.id, f.data, i === got.length - 1));
-    if (got.length) changed();
+    if (!got.length) return;
+    await core.addAssets(got);
+    await changed();
   }
 
   // ---- files -----------------------------------------------------------------------
@@ -222,23 +224,23 @@
       const file = path ? { path, data: await native.documentFile(path) } : await native.openDocument();
       if (!file) return;
       busy = true;
-      core.openCardsmith(file.data);
+      await core.openCardsmith(file.data);
       filePath = file.path;
       // Its other images are in the template it was built on, if that is still in the templates folder.
-      const template = core.doc().templateId;
+      const template = (await core.doc()).templateId;
       assetFolder = templates.find((t) => t.id === template)?.folder ?? "";
       folder = "";
       raw = null;
       prints = [];
       warnings = [];
       artPath = "";
-      opened();
+      await opened();
       await loadImages();
       // With its template at hand, the card's form works again.
       if (assetFolder) {
         try {
           const pack = await native.template(assetFolder);
-          const request = core.resumeCard(pack.doc, pack.manifest);
+          const request = await core.resumeCard(pack.doc, pack.manifest);
           if (request.scryfall) {
             raw = request.scryfall;
             face = request.name ?? "";
@@ -420,7 +422,7 @@
     const picked = await native.chooseArt();
     if (!picked) return;
     try {
-      const size = core.setArt(await native.artFile(picked));
+      const size = await core.setArt(await native.artFile(picked));
       artPath = picked;
       say(`Art: ${fileName(picked)}, ${size.width}×${size.height}`);
       if (raw && folder) await build();
@@ -439,9 +441,9 @@
     let report: BuildReport;
     try {
       const started = performance.now();
-      report = core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, artPath: artPath || null, textShadows: shadows === "template" ? null : shadows === "on" });
+      report = await core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, artPath: artPath || null, textShadows: shadows === "template" ? null : shadows === "on" });
       warnings = report.warnings;
-      changed();
+      await changed();
       await loadImages();
       say(`Built ${side?.name ?? raw.name} in ${Math.round(performance.now() - started)} ms`);
     } catch (err) {
@@ -469,9 +471,9 @@
       const made = await native.fill(artPath, report.fill, tier, seed, prompt);
       if (made.ticket !== null) {
         // Still right if the card was rebuilt meanwhile with its art in the same place; turned away otherwise.
-        const added = core.addFill(report.build, await native.fillImage(made.ticket), made.provider, { seed, workWidth: made.workWidth, ...(prompt ? { prompt } : {}) });
+        const added = await core.addFill(report.build, await native.fillImage(made.ticket), made.provider, { seed, workWidth: made.workWidth, ...(prompt ? { prompt } : {}) });
         if (added) {
-          changed();
+          await changed();
           await loadImages();
           const fell = (tier === "sd" || tier === "lama") && made.notices.length ? ` (${made.notices.join("; ")})` : "";
           say(`Filled around the art with ${TIER_NAMES[made.provider === "sdcpp" ? "sd" : made.provider] ?? made.provider} in ${(made.ms / 1000).toFixed(1)} s${fell}`);
@@ -489,11 +491,11 @@
   }
 
   /** A different way of filling was chosen: make the fill again that way, or take it away. */
-  function tierChanged() {
+  async function tierChanged() {
     if (tier !== "none") return build(true);
     try {
-      core.execute({ type: "removeLayer", id: "card-fill" }, "Remove the fill");
-      changed();
+      await core.execute({ type: "removeLayer", id: "card-fill" }, "Remove the fill");
+      await changed();
     } catch {
       // There was no fill to remove.
     }

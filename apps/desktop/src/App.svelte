@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Doc, Layer } from "@cardsmith/doc";
-  import type { Brush, Core, CoreState, Edit, Rect } from "./lib/core";
-  import { getCore } from "./lib/renderer";
+  import type { Brush, CoreState, Edit, Rect } from "./lib/core";
+  import { startCore, type FramePart, type RemoteCore } from "./lib/remote";
   import { hasNative, native } from "./lib/native";
   import CardPanel from "./CardPanel.svelte";
 
@@ -12,7 +12,9 @@
 
   let stage = $state<HTMLElement>();
   let canvas = $state<HTMLCanvasElement>();
-  let core = $state.raw<Core>();
+  // The core runs in a worker of its own, so nothing it does can freeze this window. Every call
+  // to it answers with a promise, and the part of the picture a call changed arrives with the answer.
+  let core = $state.raw<RemoteCore>();
   let samples = $state<string[]>([]);
   let current = $state(0);
   let doc = $state.raw<Doc>();
@@ -70,14 +72,17 @@
     return `median ${at(0.5)} · 95th ${at(0.95)} · worst ${sorted[sorted.length - 1]!.toFixed(1)} ms`;
   };
 
-  getCore()
-    .then((loaded) => {
-      core = loaded;
-      loaded.setDirect(true);
-      samples = loaded.sampleNames();
-      open(0);
-    })
-    .catch((err) => (status = `The core failed to load: ${err.message ?? err}`));
+  {
+    const started = startCore((part) => takeFrame(part));
+    started
+      .sampleNames()
+      .then((names) => {
+        core = started;
+        samples = names;
+        return open(0);
+      })
+      .catch((err) => (status = `The core failed to load: ${err.message ?? err}`));
+  }
 
   // ---- drawing ------------------------------------------------------------------
 
@@ -92,24 +97,18 @@
   let per = 1;
   let painting_due = 0;
 
-  /** Take in what the core changed and show it. The argument is ignored; it is there for callers that pass the old dirty rectangle. */
-  function blit(_?: Rect | null) {
-    if (!core || !canvas) return;
-    const shown = core.display();
-    per = shown.per;
-    backing = backings.get(per);
-    if (!backing) backings.set(per, (backing = document.createElement("canvas")));
-    const resized = backing.width !== shown.width || backing.height !== shown.height;
-    if (resized) {
-      backing.width = shown.width;
-      backing.height = shown.height;
+  /** Take in a part of the picture the core changed, and show it. */
+  function takeFrame(part: FramePart) {
+    let canvasFor = backings.get(part.per);
+    if (!canvasFor) backings.set(part.per, (canvasFor = document.createElement("canvas")));
+    if (canvasFor.width !== part.width || canvasFor.height !== part.height) {
+      canvasFor.width = part.width;
+      canvasFor.height = part.height;
     }
-    // A canvas that was resized is blank: it needs the whole frame, not only what changed.
-    const dirty = resized ? { x: 0, y: 0, width: shown.width, height: shown.height } : shown.dirty;
-    if (dirty) {
-      // A window onto the core's memory: the only copy is the one into the canvas.
-      backing.getContext("2d")!.putImageData(new ImageData(shown.pixels, shown.width, shown.height), 0, 0, dirty.x, dirty.y, dirty.width, dirty.height);
-    }
+    canvasFor.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(part.pixels), part.at.width, part.at.height), part.at.x, part.at.y);
+    // The latest part says which frame is on display now.
+    backing = canvasFor;
+    per = part.per;
     painting_due ||= requestAnimationFrame(paint);
   }
 
@@ -138,16 +137,16 @@
       canvas.width = width;
       canvas.height = height;
     }
-    core.setView({ ...view, width, height });
-    blit();
+    // Not waited for: what it changes arrives as a frame, and the picture already here is redrawn at once.
+    void core.setView({ ...view, width, height });
+    painting_due ||= requestAnimationFrame(paint);
     warmSoon();
   }
 
   /** After a drag that ended zoomed in: bring the real pixels in a slice a frame, so letting go does not stall. */
-  function refine() {
+  async function refine() {
     if (!core) return;
-    const done = core.refine(160_000);
-    blit();
+    const done = await core.refine(160_000);
     if (!done) requestAnimationFrame(refine);
   }
 
@@ -155,7 +154,7 @@
   let warming: ReturnType<typeof setTimeout> | undefined;
   function warmSoon() {
     clearTimeout(warming);
-    warming = setTimeout(() => !busy && !drag && !painting && core?.warm(), 700);
+    warming = setTimeout(() => !busy && !drag && !painting && void core?.warm(), 700);
   }
 
   // Panning and zooming arrive faster than the screen redraws: the view is set once a frame.
@@ -176,13 +175,14 @@
   }
 
   /** Re-read the document and history from the core. */
-  function refresh() {
+  async function refresh() {
     if (!core) return;
-    doc = core.doc();
-    history = core.state();
+    const now = await core.snapshot(active ?? null);
+    doc = now.doc;
+    history = now.state;
+    fonts = now.fonts;
     if (active && !find(active)) active = undefined;
-    box = active ? core.layerBox(active) : null;
-    fonts = core.fontNames();
+    box = active ? now.box : null;
   }
 
   /** A layer by id, with the group it is in and its place there. */
@@ -199,26 +199,35 @@
 
   function select(id: string | undefined) {
     active = id;
-    box = id && core ? core.layerBox(id) : null;
+    box = null;
+    if (id && core) {
+      void core.layerBox(id).then((found) => {
+        if (active !== id) return;
+        box = found;
+        if (drag && drag.id === id && !drag.box) drag.box = found;
+      }, () => {});
+    }
   }
 
-  function open(index: number) {
+  async function open(index: number) {
     if (!core) return;
     current = index;
     busy = true;
     status = `Opening ${samples[index]}…`;
-    // Let the status paint before a large document blocks the thread.
-    setTimeout(() => {
+    try {
       const started = performance.now();
-      core!.openSample(index);
-      refresh();
+      await core.openSample(index);
       active = undefined;
+      await refresh();
       timings = { core: [], blit: [] };
       lastStroke = "";
       fit();
+      status = `${doc!.width}×${doc!.height} · opened in ${Math.round(performance.now() - started)} ms`;
+    } catch (err) {
+      status = `That could not be opened: ${err instanceof Error ? err.message : err}`;
+    } finally {
       busy = false;
-      status = `${doc!.width}×${doc!.height} · opened and rendered in ${Math.round(performance.now() - started)} ms`;
-    }, 30);
+    }
   }
 
   /** Load the chosen font files into the core. Text that was waiting for them is drawn. */
@@ -231,13 +240,12 @@
     for (const file of files) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       try {
-        loaded.push(...core!.addFont(bytes));
+        loaded.push(...(await core!.addFont(bytes)));
       } catch {
         refused.push(file.name);
       }
     }
-    blit(core!.dirty());
-    refresh();
+    await refresh();
     status = `Loaded ${loaded.length} font${loaded.length === 1 ? "" : "s"}` + (refused.length ? `; not usable: ${refused.join(", ")}` : "");
   }
 
@@ -262,40 +270,37 @@
 
   /** The card panel changed the document: show what was redrawn. */
   function cardChanged() {
-    blit(core!.dirty());
-    refresh();
+    return refresh();
   }
 
   /** The card panel opened a template. */
-  function cardOpened() {
-    refresh();
+  async function cardOpened() {
     active = undefined;
     current = -1;
+    await refresh();
     fit();
   }
 
   /** Run something that changes the document, then show the result. */
-  function run(label: string, action: () => void) {
+  async function run(label: string, action: () => unknown) {
     const started = performance.now();
     try {
-      action();
+      await action();
     } catch (err) {
       status = `${label} refused: ${err instanceof Error ? err.message : err}`;
       return;
     }
-    const inCore = performance.now() - started;
-    blit(core!.dirty());
-    refresh();
+    status = `${label}: ${(performance.now() - started).toFixed(0)} ms`;
+    await refresh();
     // A layer just shown may need a picture that has not been loaded yet.
-    panel?.loadImages();
-    status = `${label}: ${inCore.toFixed(1)} ms in the core, ${(performance.now() - started - inCore).toFixed(1)} ms to screen`;
+    void panel?.loadImages();
   }
 
   const toggle = (layer: Layer) =>
     run(layer.visible ? "Hide" : "Show", () => core!.execute({ type: "setLayerProps", id: layer.id, props: { visible: !layer.visible } }, `${layer.visible ? "Hide" : "Show"} ${layer.name}`));
 
   function newPaintLayer() {
-    run("New paint layer", () => (active = core!.addPaintLayer("Paint")));
+    run("New paint layer", async () => (active = await core!.addPaintLayer("Paint")));
   }
 
   // ---- pointer input --------------------------------------------------------------
@@ -324,30 +329,40 @@
   let frame = 0;
   let dragPoint: PointerEvent | null = null;
 
-  function onFrame() {
+  // One batch of stroke points or one drag step is with the core at a time. What arrives
+  // meanwhile waits here: every stroke point is kept, and only the latest drag position.
+  let withCore = false;
+
+  async function onFrame() {
     frame = 0;
-    if (!core) return;
-    if (waiting.length) {
-      const points = waiting;
-      waiting = [];
-      const started = performance.now();
-      core.strokeThrough(points);
-      const inCore = performance.now() - started;
-      blit(core.dirty());
-      strokeCore.push(inCore);
-      strokeBlit.push(performance.now() - started - inCore);
+    if (!core || withCore) return;
+    withCore = true;
+    try {
+      if (waiting.length && strokeReady) {
+        const points = waiting;
+        waiting = [];
+        const started = performance.now();
+        await core.strokeThrough(points);
+        strokeCore.push(performance.now() - started);
+        strokeBlit.push(0);
+      }
+      if (dragPoint) {
+        const e = dragPoint;
+        dragPoint = null;
+        await dragTo(e);
+      }
+    } finally {
+      withCore = false;
     }
-    if (dragPoint) {
-      const e = dragPoint;
-      dragPoint = null;
-      dragTo(e);
-    }
+    if ((waiting.length && strokeReady) || dragPoint) frame ||= requestAnimationFrame(onFrame);
   }
 
-  /** Do what is waiting now, without waiting for the next frame: before a stroke or a drag ends. */
-  function flush() {
+  /** See everything that is waiting through to the core: before a stroke or a drag ends. */
+  async function flush() {
     if (frame) cancelAnimationFrame(frame);
-    onFrame();
+    frame = 0;
+    while (withCore) await new Promise((r) => setTimeout(r, 1));
+    while ((waiting.length && strokeReady) || dragPoint) await onFrame();
   }
 
   function strokePoints(events: PointerEvent[]) {
@@ -378,17 +393,16 @@
   };
   let drag: Drag | null = null;
 
-  function snapLines(skip: string): { x: number[]; y: number[] } {
-    const x = [0, doc!.width / 2, doc!.width];
-    const y = [0, doc!.height / 2, doc!.height];
+  /** Add the template's reference boxes to a drag's snap lines, as the core answers for each. */
+  function snapLines(to: Drag) {
     for (const { layer } of layers) {
-      if (layer.id === skip || !/reference/i.test(layer.name)) continue;
-      const b = core!.layerBox(layer.id);
-      if (!b) continue;
-      x.push(b.x, b.x + b.width / 2, b.x + b.width);
-      y.push(b.y, b.y + b.height / 2, b.y + b.height);
+      if (layer.id === to.id || !/reference/i.test(layer.name)) continue;
+      void core!.layerBox(layer.id).then((b) => {
+        if (!b) return;
+        to.snapX.push(b.x, b.x + b.width / 2, b.x + b.width);
+        to.snapY.push(b.y, b.y + b.height / 2, b.y + b.height);
+      }, () => {});
     }
-    return { x, y };
   }
 
   /** How far to nudge a box so one of its edges or its middle lands on a nearby line. */
@@ -414,19 +428,23 @@
       status = `"${found.layer.name}" is locked in place.`;
       return;
     }
-    const b = core.layerBox(id);
-    const lines = snapLines(id);
-    drag = { id, name: found.layer.name, from: toDoc(e), box: b, moved: false, snapX: lines.x, snapY: lines.y };
+    // The selected layer's box is already known; the card's edges and middle snap at once,
+    // and the template's reference boxes as soon as the core has said where they are.
+    const b = id === active ? box : null;
+    drag = { id, name: found.layer.name, from: toDoc(e), box: b, moved: false, snapX: [0, doc!.width / 2, doc!.width], snapY: [0, doc!.height / 2, doc!.height] };
+    snapLines(drag);
     if (turning && b) drag.pivot = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
     else if (corner && b) drag.anchor = { x: b.x + b.width - (corner.x - b.x), y: b.y + b.height - (corner.y - b.y) };
   }
 
-  function dragTo(e: PointerEvent) {
+  async function dragTo(e: PointerEvent) {
     if (!drag || !core) return;
+    const dragging = drag;
     const p = toDoc(e);
     let [dx, dy] = [p.x - drag.from.x, p.y - drag.from.y];
     if (!drag.moved && Math.hypot(dx, dy) * view.scale < 3 * dpr()) return;
     drag.moved = true;
+    let step: [number, number, number, number];
     try {
       if (drag.pivot) {
         // Turning about the middle; Shift keeps to steps of fifteen degrees.
@@ -435,12 +453,12 @@
         if (e.shiftKey) turn = Math.round(turn / (Math.PI / 12)) * (Math.PI / 12);
         const [sin, cos] = [Math.sin(turn), Math.cos(turn)];
         const { x, y } = drag.pivot;
-        core.drag(drag.id, 1, x - (cos * x - sin * y), y - (sin * x + cos * y), turn);
+        step = [1, x - (cos * x - sin * y), y - (sin * x + cos * y), turn];
       } else if (drag.anchor && drag.box) {
         // Scaling keeps the opposite corner where it is and the layer's proportions as they are.
         const was = Math.hypot(drag.from.x - drag.anchor.x, drag.from.y - drag.anchor.y);
         const scale = Math.max(0.01, Math.hypot(p.x - drag.anchor.x, p.y - drag.anchor.y) / Math.max(was, 1));
-        core.drag(drag.id, scale, drag.anchor.x * (1 - scale), drag.anchor.y * (1 - scale));
+        step = [scale, drag.anchor.x * (1 - scale), drag.anchor.y * (1 - scale), 0];
       } else {
         // Shift keeps the move to one direction; Ctrl turns snapping off.
         if (e.shiftKey) Math.abs(dx) > Math.abs(dy) ? (dy = 0) : (dx = 0);
@@ -448,40 +466,41 @@
           dx += snap(drag.box.x + dx, drag.box.width, drag.snapX);
           dy += snap(drag.box.y + dy, drag.box.height, drag.snapY);
         }
-        core.drag(drag.id, 1, Math.round(dx), Math.round(dy));
+        step = [1, Math.round(dx), Math.round(dy), 0];
       }
+      const moved = await core.dragStep(dragging.id, ...step);
+      if (drag === dragging) box = moved;
     } catch (err) {
       status = err instanceof Error ? err.message : String(err);
-      core.dragEnd(false);
-      drag = null;
-      refine();
-      return;
+      await core.dragEnd(false);
+      if (drag === dragging) drag = null;
+      void refine();
     }
-    blit(core.dirty());
-    box = core.layerBox(drag.id);
   }
 
-  function endDrag(e?: PointerEvent) {
+  async function endDrag(e?: PointerEvent) {
     if (!drag || !core) return;
     const done = drag;
     drag = null;
     if (done.moved) {
-      core.dragEnd(true, `${done.pivot ? "Turn" : done.anchor ? "Scale" : "Move"} ${done.name}`);
-      refresh();
-      refine();
+      await core.dragEnd(true, `${done.pivot ? "Turn" : done.anchor ? "Scale" : "Move"} ${done.name}`);
+      await refresh();
+      void refine();
     } else if (e && !done.anchor && !done.pivot) {
       // A click without a drag picks what is under the pointer.
-      select(core.hit(toDoc(e).x, toDoc(e).y) ?? undefined);
+      const p = toDoc(e);
+      select((await core.hit(p.x, p.y)) ?? undefined);
     }
   }
 
-  function nudge(dx: number, dy: number) {
+  async function nudge(dx: number, dy: number) {
     if (!active || !core) return;
-    run("Nudge", () => {
-      core!.drag(active!, 1, dx, dy);
-      core!.dragEnd(true, "Nudge");
+    const id = active;
+    await run("Nudge", async () => {
+      await core!.drag(id, 1, dx, dy);
+      await core!.dragEnd(true, "Nudge");
     });
-    refine();
+    void refine();
   }
 
   // ---- text on the canvas ---------------------------------------------------------------
@@ -489,7 +508,7 @@
   const CARD_FIELDS: Record<string, string> = { "card.name": "name", "card.mana": "mana_cost", "card.type": "type_line", "card.rules": "oracle_text", "card.pt": "power", "card.collector": "collector_number" };
 
   /** Start typing into a text layer: a card's own text in the card panel, any other where it sits. */
-  function editText(id: string) {
+  async function editText(id: string) {
     const layer = find(id)?.layer;
     if (!layer || layer.kind !== "text" || !core) return;
     select(id);
@@ -498,7 +517,7 @@
       focusField = field;
       return;
     }
-    const b = core.layerBox(id) ?? { x: layer.box.x, y: layer.box.y, width: layer.box.w, height: layer.box.h };
+    const b = (await core.layerBox(id)) ?? { x: layer.box.x, y: layer.box.y, width: layer.box.w, height: layer.box.h };
     typing = { id, text: layer.content.runs.map((r) => r.text).join(""), box: { x: Math.min(b.x, layer.box.x), y: Math.min(b.y, layer.box.y), width: Math.max(b.width, layer.box.w), height: Math.max(b.height, layer.box.h) }, size: layer.style.size };
   }
 
@@ -521,8 +540,7 @@
 
   function doubleClick(e: MouseEvent) {
     if (!core || tool !== "move") return;
-    const hit = core.hit(view.x + (e.offsetX * dpr()) / view.scale, view.y + (e.offsetY * dpr()) / view.scale);
-    if (hit) editText(hit);
+    void core.hit(view.x + (e.offsetX * dpr()) / view.scale, view.y + (e.offsetY * dpr()) / view.scale).then((hit) => void (hit && editText(hit)));
   }
 
   // ---- new layers ---------------------------------------------------------------------
@@ -534,13 +552,12 @@
   function addLayer(layer: Record<string, unknown>, label: string, extra: Edit[] = []) {
     const above = active ? find(active) : null;
     const edit: Edit = { type: "addLayer", parent: above?.parent ?? doc!.root.id, layer, ...(above ? { index: above.index + 1 } : {}) };
-    run(label, () => core!.execute(extra.length ? { type: "batch", edits: [...extra, edit] } : edit, label));
-    select(layer.id as string);
+    // Selected once it exists and the list has been read again.
+    return run(label, () => core!.execute(extra.length ? { type: "batch", edits: [...extra, edit] } : edit, label)).then(() => select(layer.id as string));
   }
 
   function newText() {
     if (!core || !doc) return;
-    const fonts = core.fontNames();
     if (!fonts.length) {
       status = "Load fonts first (Fonts… in the card panel or the toolbar): a text layer needs one.";
       return;
@@ -550,9 +567,8 @@
     addLayer(
       { ...base(id, "Text"), kind: "text", box: { x: doc.width * 0.15, y: doc.height * 0.45, w: doc.width * 0.7, h: size * 1.6 }, content: { runs: [{ text: "Text" }] }, style: { font: fonts.find((f) => /beleren|plantin/i.test(f)) ?? fonts[0], size, color: [0, 0, 0, 1], align: "center" }, fit: "none" },
       "New text layer",
-    );
+    ).then(() => editText(id));
     tool = "move";
-    editText(id);
   }
 
   function newShape() {
@@ -574,8 +590,8 @@
       const id = newId("image");
       // At its own size unless it is bigger than the card, in the middle.
       const scale = Math.min(1, doc.width / picture.width, doc.height / picture.height);
-      core.addAsset(id, bytes, false);
-      addLayer(
+      await core.addAsset(id, bytes, false);
+      await addLayer(
         { ...base(id, file.name.replace(/\.[^.]+$/, "")), kind: "pixel", asset: id, transform: [scale, 0, Math.round((doc.width - picture.width * scale) / 2), 0, scale, Math.round((doc.height - picture.height * scale) / 2)] },
         "New image layer",
         [{ type: "setAsset", id, asset: { kind: "image", path: `assets/${id}.png`, width: picture.width, height: picture.height } }],
@@ -590,8 +606,8 @@
 
   /** Go back or forward through history to a step: `steps` undos if negative, redos if positive. */
   function travel(steps: number) {
-    run(steps < 0 ? "Undo" : "Redo", () => {
-      for (let i = 0; i < Math.abs(steps); i++) steps < 0 ? core!.undo() : core!.redo();
+    run(steps < 0 ? "Undo" : "Redo", async () => {
+      for (let i = 0; i < Math.abs(steps); i++) await (steps < 0 ? core!.undo() : core!.redo());
     });
   }
 
@@ -735,15 +751,14 @@
     busy = true;
     status = "Filling the selection…";
     try {
-      const made = await native.fillSelection(core.assetBytes(layer.asset), hole, fillTier, fillSeed++);
+      const made = await native.fillSelection(await core.assetBytes(layer.asset), hole, fillTier, fillSeed++);
       const id = newId("fill");
-      core.addAsset(id, await native.fillImage(made.ticket), false);
+      await core.addAsset(id, await native.fillImage(made.ticket), false);
       const s = a * made.scale;
       const fill = { ...base(id, "Fill"), kind: "fill", source: made.provider, params: { seed: fillSeed - 1, selection: hole }, asset: id, transform: [s, 0, tx + made.x * a, 0, s, ty + made.y * a] };
       const edits: Edit[] = [{ type: "setAsset", id, asset: { kind: "image", path: `assets/${id}.png`, width: made.width, height: made.height } }, { type: "addLayer", parent: found.parent, layer: fill, index: found.index + 1 }];
-      core.execute({ type: "batch", edits }, "Fill the selection");
-      blit(core.dirty());
-      refresh();
+      await core.execute({ type: "batch", edits }, "Fill the selection");
+      await refresh();
       status = `Filled the selection with ${made.provider} in ${(made.ms / 1000).toFixed(1)} s` + (made.notices.length && fillTier !== "auto" ? ` (${made.notices.join("; ")})` : "");
     } catch (err) {
       status = `The selection could not be filled: ${err instanceof Error ? err.message : err}`;
@@ -783,7 +798,11 @@
 
   function duplicateSelected() {
     if (!active) return;
-    run("Duplicate", () => select(core!.duplicate(active!)));
+    const id = active;
+    run("Duplicate", async () => {
+      const copy = await core!.duplicate(id);
+      active = copy;
+    });
   }
 
   function removeSelected() {
@@ -826,9 +845,16 @@
       if (typing) commitText(true);
       // Drag moves the selected layer wherever the pointer is; with none selected, or with Ctrl, what is under it.
       const p = toDoc(e);
-      const under = e.ctrlKey || !active ? core.hit(p.x, p.y) : null;
-      if (under) select(under);
-      if (active) beginDrag(e, active);
+      down = true;
+      if (e.ctrlKey || !active) {
+        // What is under the pointer has to be asked for; the drag starts when the answer is in, if the button is still down.
+        void core.hit(p.x, p.y).then((under) => {
+          if (under) select(under);
+          if (active && down) beginDrag(e, active);
+        });
+      } else {
+        beginDrag(e, active);
+      }
       return;
     }
     if (tool === "magic") {
@@ -837,8 +863,9 @@
         return;
       }
       const p = toDoc(e);
-      run("Magic eraser", () => {
-        const gone = core!.magicErase(active!, p.x, p.y, tolerance, contiguous);
+      const id = active;
+      void run("Magic eraser", async () => {
+        const gone = await core!.magicErase(id, p.x, p.y, tolerance, contiguous);
         if (!gone) throw new Error("nothing was that color there");
       });
       return;
@@ -847,28 +874,38 @@
       status = "Select a layer first: the eraser works on any layer, the brush on a paint layer.";
       return;
     }
-    // Color goes on a paint layer. With any other layer selected, the brush gets a new one of its own on top.
-    if (!erase && !active.startsWith("paint-")) {
-      try {
-        active = core.addPaintLayer("Paint");
-        refresh();
-      } catch (err) {
-        status = err instanceof Error ? err.message : String(err);
-        return;
-      }
-    }
-    const started = performance.now();
-    try {
-      core.strokeBegin(active, brush());
-    } catch (err) {
-      status = err instanceof Error ? err.message : String(err);
-      return;
-    }
+    // The stroke is begun with the core, which takes a moment; the points that arrive meanwhile
+    // are kept and painted as soon as it has.
     painting = true;
+    strokeReady = false;
     strokeCore = [];
     strokeBlit = [];
-    lastStroke = `stroke start ${(performance.now() - started).toFixed(1)} ms`;
     strokePoints([e]);
+    starting = beginStroke(active);
+  }
+
+  let down = false;
+  let strokeReady = false;
+  let starting: Promise<void> | null = null;
+
+  async function beginStroke(layer: string) {
+    const started = performance.now();
+    try {
+      // Color goes on a paint layer. With any other layer selected, the brush gets a new one of its own on top.
+      if (!erase && !layer.startsWith("paint-")) {
+        layer = await core!.addPaintLayer("Paint");
+        active = layer;
+        await refresh();
+      }
+      await core!.strokeBegin(layer, brush());
+      strokeReady = true;
+      lastStroke = `stroke start ${(performance.now() - started).toFixed(1)} ms`;
+      frame ||= requestAnimationFrame(onFrame);
+    } catch (err) {
+      status = err instanceof Error ? err.message : String(err);
+      painting = false;
+      waiting = [];
+    }
   }
 
   function pointerMove(e: PointerEvent) {
@@ -903,16 +940,21 @@
     }
   }
 
-  function pointerUp(e?: PointerEvent) {
-    flush();
+  async function pointerUp(e?: PointerEvent) {
     panning = null;
     selecting = null;
-    endDrag(e);
+    down = false;
+    // A stroke that is still being begun is let finish beginning, so its points have somewhere to go.
+    await starting;
+    starting = null;
+    await flush();
+    await endDrag(e);
     if (!painting || !core) return;
     painting = false;
-    core.strokeEnd(erase ? (restore ? "Restore" : "Eraser") : "Brush");
+    strokeReady = false;
+    await core.strokeEnd(erase ? (restore ? "Restore" : "Eraser") : "Brush");
     timings = { core: strokeCore, blit: strokeBlit };
-    refresh();
+    await refresh();
   }
 
   function wheel(e: WheelEvent) {
@@ -943,10 +985,9 @@
       e.preventDefault();
       duplicateSelected();
     } else if (e.key === "Escape" && drag) {
-      core!.dragEnd(false);
       drag = null;
-      refresh();
-      refine();
+      dragPoint = null;
+      void core!.dragEnd(false).then(() => refresh()).then(() => refine());
     } else if ((e.key === "Delete" || e.key === "Backspace") && active && tool === "select" && selection) {
       e.preventDefault();
       eraseSelection(false);
@@ -1080,7 +1121,7 @@
       onpointerdown={pointerDown}
       onpointermove={pointerMove}
       onpointerup={pointerUp}
-      onpointercancel={() => pointerUp()}
+      onpointercancel={() => void pointerUp()}
       ondblclick={doubleClick}
       class:moving={tool === "move"}
       class:picking={tool === "pick"}
@@ -1104,7 +1145,7 @@
               beginDrag(stagePoint(e), active!, { x: box!.x + hx * box!.width, y: box!.y + hy * box!.height });
             }}
             onpointermove={(e) => drag && ((dragPoint = stagePoint(e)), (frame ||= requestAnimationFrame(onFrame)))}
-            onpointerup={() => (flush(), endDrag())}
+            onpointerup={() => void flush().then(() => endDrag())}
           ></div>
         {/each}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1117,7 +1158,7 @@
             beginDrag(stagePoint(e), active!, undefined, true);
           }}
           onpointermove={(e) => drag && ((dragPoint = stagePoint(e)), (frame ||= requestAnimationFrame(onFrame)))}
-          onpointerup={() => (flush(), endDrag())}
+          onpointerup={() => void flush().then(() => endDrag())}
         ></div>
       </div>
     {/if}

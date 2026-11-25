@@ -15,7 +15,7 @@ The full plan lives in `docs/SPEC.md`. Read it before starting any phase. Work o
 | Concern | Choice |
 |---|---|
 | Core | **Rust** (`crates/core`): document model, commands, compositor, effects, renderer, brush engine, text. Builds natively and for `wasm32-unknown-unknown` |
-| App shell | Tauri 2. The core runs as **WebAssembly inside the webview** and draws to the canvas itself |
+| App shell | Tauri 2. The core runs as **WebAssembly inside the webview**, in a worker, and hands its frame to the window's canvas |
 | Frontend | TypeScript, Vite, Svelte 5. UI only: panels, pickers, editors |
 | Headless | The same core as a native binary: `cardsmith render`, batch export, tests |
 | Text | Pure-Rust layout engine, chosen in Phase 3. Mana symbols are inline placeholders |
@@ -146,7 +146,8 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 - `apps/desktop/scripts/erase-check.ts` runs the magic eraser and the eraser on a built card in the WebAssembly core, with timings, and writes the result.
 - `apps/desktop/scripts/view-dump.ts` builds a card in the WebAssembly core as the app does and writes what the screen shows, and what Export PNG writes, to files.
 - `apps/desktop/scripts/card-timing.ts` times opening a template, building, rebuilding, hiding and dragging in the WebAssembly core outside the app; run it before and after any change to how the session redraws.
-- The app draws the screen by scaling the core's frame with a canvas transform (`blit` and `paint` in `App.svelte`); the core does no work when the view moves. The setting for this (`cs_set_direct`) lives in `crates/wasm`'s state, not in a session, so it survives opening another document.
+- The core runs in a worker (`apps/desktop/src/lib/core.worker.ts`); the window reaches it through `remote.ts`, where every `Core` method answers with a promise and each answer brings the part of the picture it changed. Nothing in the two components calls the core synchronously. `core.ts` (`Core`) is still used directly by the parity check and the Node scripts.
+- The app draws the screen by scaling the core's frame with a canvas transform (`takeFrame` and `paint` in `App.svelte`); the core does no work when the view moves. The setting for this (`cs_set_direct`) lives in `crates/wasm`'s state, not in a session, so it survives opening another document.
 - The desktop window is not a browser: it took the browser's drag and drop for itself until `dragDropEnabled` was turned off, so list reordering uses plain pointer events. Check anything that depends on browser behaviour in the app (`xvfb-run -a pnpm dev`), not only in a browser.
 - `apps/desktop`: `src/App.svelte` (canvas, the move tool with its handles and snapping, on-canvas text editing, brush, new layers, the layers list and the selected layer's properties), `src/CardPanel.svelte` (folders, template, card search and form, art, fill), `src/lib/native.ts` (the bridge to `src-tauri/src/lib.rs`, whose commands read the chosen folders, ask Scryfall and hexproof.io, and make fills). `VITE_CARDSMITH_DEMO='{"template":"…","card":"…","art":"…","tier":"…"}'` with `CARDSMITH_TEMPLATES`, `CARDSMITH_FONTS` and `CARDSMITH_CACHE` starts the app straight on a built card, for checks on a virtual screen (`xvfb-run -a pnpm dev`).
 - `crates/cli`: `cardsmith render | samples | hashes | bench | compare | text | card | bulk | symbols | models | build | sheet`.

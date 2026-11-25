@@ -46,18 +46,18 @@ export const native = {
     invoke<PatchResult>("fill_selection", picture, { headers: { "x-args": encodeURIComponent(JSON.stringify({ hole, tier, seed, prompt })) } }),
 
   /** Ask where to save a picture, then write it there. Returns the path, or null if the user backed out. */
-  async savePng(suggested: string, data: () => Uint8Array): Promise<string | null> {
+  async savePng(suggested: string, data: () => Uint8Array | Promise<Uint8Array>): Promise<string | null> {
     const path = await save({ title: "Export the card as a picture", defaultPath: suggested, filters: [{ name: "PNG picture", extensions: ["png"] }] });
     if (!path) return null;
-    await native.writeFile(path, data());
+    await native.writeFile(path, await data());
     return path;
   },
 
   /** Ask where to save the document, then write it there. Returns the path, or null if the user backed out. */
-  async saveDocument(suggested: string, data: () => Uint8Array): Promise<string | null> {
+  async saveDocument(suggested: string, data: () => Uint8Array | Promise<Uint8Array>): Promise<string | null> {
     const path = await save({ title: "Save the card", defaultPath: suggested, filters: [{ name: "Cardsmith document", extensions: ["cardsmith"] }] });
     if (!path) return null;
-    await native.writeFile(path, data());
+    await native.writeFile(path, await data());
     return path;
   },
 
