@@ -422,6 +422,18 @@ pub unsafe extern "C" fn cs_stroke_through(ptr: *const u8, count: usize) {
     with(|s| s.session.stroke_through(&points));
 }
 
+/// Make ready what a stroke on this layer will need, for the part of the card
+/// on screen: up to `budget` tiles a call. Returns 1 when there is nothing
+/// left to make, 0 to be called again.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_prepare_stroke(ptr: *const u8, len: usize, budget: u32) -> u32 {
+    let id = text(ptr, len);
+    with(|s| id.map_or(1, |id| s.session.prepare_stroke(id, budget as usize) as u32))
+}
+
 /// The PostScript names of the loaded fonts, as a JSON list in the output buffer.
 #[no_mangle]
 pub extern "C" fn cs_font_names() {

@@ -141,6 +141,7 @@
     void core.setView({ ...view, width, height });
     painting_due ||= requestAnimationFrame(paint);
     warmSoon();
+    prepareSoon();
   }
 
   /** After a drag that ended zoomed in: bring the real pixels in a slice a frame, so letting go does not stall. */
@@ -149,6 +150,24 @@
     const done = await core.refine(160_000);
     if (!done) requestAnimationFrame(refine);
   }
+
+  // With the brush or eraser in hand and a layer selected, what a stroke on it will need is made
+  // ready a little at a time while nothing else is going on, so the first touch of each area does not pause.
+  let preparing = 0;
+  function prepareSoon() {
+    const turn = ++preparing;
+    if (tool !== "paint" || !active || !core) return;
+    const id = active;
+    setTimeout(async () => {
+      while (turn === preparing && !painting && !drag && !busy && core && tool === "paint" && active === id) {
+        if (await core.prepareStroke(id, 2).catch(() => true)) break;
+      }
+    }, 250);
+  }
+  $effect(() => {
+    void [tool, active];
+    prepareSoon();
+  });
 
   // When nothing has happened for a moment, the smaller copy a drag would use is made ready.
   let warming: ReturnType<typeof setTimeout> | undefined;
@@ -183,6 +202,7 @@
     fonts = now.fonts;
     if (active && !find(active)) active = undefined;
     box = active ? now.box : null;
+    prepareSoon();
   }
 
   /** A layer by id, with the group it is in and its place there. */

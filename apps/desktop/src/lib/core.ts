@@ -34,6 +34,7 @@ type Exports = {
   cs_erase_area(ptr: number, len: number, pathPtr: number, pathLen: number, outside: number): number;
   cs_duplicate(ptr: number, len: number): number;
   cs_stroke_through(ptr: number, count: number): void;
+  cs_prepare_stroke(ptr: number, len: number, budget: number): number;
   cs_font_names(): void;
   cs_export_png(): number;
   cs_asset_bytes(ptr: number, len: number): number;
@@ -369,6 +370,15 @@ export class Core {
   addPaintLayer(name: string): string {
     this.check(this.passText(name, (ptr, len) => this.x.cs_add_paint_layer(ptr, len)));
     return decoder.decode(this.out());
+  }
+
+  /**
+   * Make ready what a stroke on this layer will need for the part of the card on screen, a few
+   * tiles a call, so the brush does not pause the first time it enters an area. True when there
+   * is nothing left to make. Call when idle, until then.
+   */
+  prepareStroke(layerId: string, budget: number): boolean {
+    return this.passText(layerId, (ptr, len) => this.x.cs_prepare_stroke(ptr, len, budget)) === 1;
   }
 
   strokeBegin(layerId: string, brush: Brush): void {

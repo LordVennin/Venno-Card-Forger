@@ -1410,6 +1410,41 @@ impl Session {
         Ok(count)
     }
 
+    /// Make ready what a stroke on this layer will need: the layers beneath it,
+    /// flattened, for the part of the card on screen. A stroke makes these as
+    /// it reaches each part, which is a pause the first time the brush enters
+    /// a new area; made ahead of time, there is none. Draws up to `budget`
+    /// tiles a call and returns true when there is nothing left to make.
+    /// Only matters when the real pixels are on display (zoomed in): zoomed
+    /// out, strokes are drawn through the smaller copy.
+    pub fn prepare_stroke(&mut self, layer_id: &str, budget: usize) -> bool {
+        if self.stroke.is_some() || self.dragging || self.holding || self.proxy.is_some() || !self.viewing {
+            return true;
+        }
+        if self.below.as_ref().is_none_or(|b| b.layer != layer_id) {
+            self.below = can_split_at(&self.doc, layer_id).map(|ancestors| Below { layer: layer_id.to_string(), ancestors, tiles: Default::default() });
+        }
+        let visible = self.visible();
+        let (doc, assets, renderer) = (&self.doc, &self.assets, &mut self.renderer);
+        let Some(below) = self.below.as_mut() else { return true };
+        let mut made = 0;
+        for ty in visible.y.div_euclid(BELOW_TILE)..=(visible.y + visible.h - 1).div_euclid(BELOW_TILE) {
+            for tx in visible.x.div_euclid(BELOW_TILE)..=(visible.x + visible.w - 1).div_euclid(BELOW_TILE) {
+                if below.tiles.contains_key(&(tx, ty)) {
+                    continue;
+                }
+                if made == budget {
+                    return false;
+                }
+                let mut tile = Raster::new(Region::new(tx * BELOW_TILE, ty * BELOW_TILE, BELOW_TILE, BELOW_TILE));
+                renderer.draw_onto(doc, assets, &mut tile, Some(Split { layer: &below.layer, ancestors: &below.ancestors, below: true }));
+                below.tiles.insert((tx, ty), tile);
+                made += 1;
+            }
+        }
+        true
+    }
+
     /// Start a brush stroke on a pixel layer.
     pub fn stroke_begin(&mut self, layer_id: &str, brush: Brush) -> Result<()> {
         self.cancel_preview();

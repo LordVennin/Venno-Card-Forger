@@ -110,7 +110,15 @@ const once = (what: string, f: () => void) => {
 once("begin a stroke on the picture on top", () => core.strokeBegin("top-picture", eraser));
 core.strokeTo(1500, 1500, 1);
 once("end it", () => core.strokeEnd("Eraser"));
+{
+  // As the app does while the eraser is in hand and nothing else is going on.
+  const started = performance.now();
+  let calls = 0;
+  while (!core.prepareStroke("top-picture", 2)) calls++;
+  console.log(`making a stroke on the picture ready ahead of time: ${(performance.now() - started).toFixed(0)} ms over ${calls + 1} calls`);
+}
 core.strokeBegin("top-picture", { ...eraser, size: 500 });
-steps("erase with a 500 px eraser, per pointer move", 30, (i) => core.strokeTo(600 + i * 50, 1400 + i * 30, 1));
+// Across what is on screen at any of the zooms this is run at.
+steps("erase with a 500 px eraser, per pointer move", 30, (i) => core.strokeTo(300 + i * 22, 300 + i * 12, 1));
 once("end it", () => core.strokeEnd("Eraser"));
 once("undo it", () => core.undo());
