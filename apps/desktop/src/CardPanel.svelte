@@ -15,6 +15,7 @@
     changed,
     opened,
     demoFill,
+    demoReorder,
   }: {
     core: Core;
     busy?: boolean;
@@ -28,6 +29,8 @@
     opened: () => void;
     /** For the app's own check (see `demo`): select the art, mark out this rectangle and fill it. */
     demoFill?: (rect: [number, number, number, number]) => Promise<void>;
+    /** For the app's own check: drag rows of the layers list with made-up pointer events and say what happened. */
+    demoReorder?: () => Promise<string>;
   } = $props();
 
   let settings = $state<Settings>({ templatesDir: "", fontsDir: "" });
@@ -90,7 +93,7 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { open?: string; rename?: string; template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string; fillSelection?: [number, number, number, number] };
+    const want = JSON.parse(text) as { open?: string; rename?: string; template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string; fillSelection?: [number, number, number, number]; reorder?: boolean };
     tier = want.tier ?? tier;
     if (want.open) {
       // A saved card, reopened and changed through its form.
@@ -112,6 +115,7 @@
     search = want.card;
     await find();
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
+    if (want.reorder) say(await demoReorder?.() ?? "no reorder check");
     if (want.fillSelection) await demoFill?.(want.fillSelection);
     if (want.save) await native.writeFile(want.save, core.saveAvailable());
     if (want.export) {

@@ -600,6 +600,62 @@
   let dragged = $state<string | null>(null);
   let dropAt = $state<{ id: string; where: "above" | "below" | "inside" } | null>(null);
 
+  // A press on a row becomes a drag once the pointer has moved a little; until then it is a
+  // click, which selects. The moves and the release are listened for on the window, so the
+  // drag carries on wherever the pointer goes, and the list scrolls when it nears an edge.
+  let pressed: { id: string; x: number; y: number } | null = null;
+  let listPanel = $state<HTMLElement>();
+  let scrolling = 0;
+
+  function rowDown(e: PointerEvent, id: string) {
+    // Not from the tick box, and not with a button other than the main one.
+    if (e.button !== 0 || (e.target as HTMLElement).closest("input")) return;
+    pressed = { id, x: e.clientX, y: e.clientY };
+    window.addEventListener("pointermove", rowMove);
+    window.addEventListener("pointerup", rowUp, { once: true });
+    window.addEventListener("pointercancel", rowUp, { once: true });
+  }
+
+  function rowMove(e: PointerEvent) {
+    if (!pressed) return;
+    if (!dragged) {
+      if (Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 5) return;
+      dragged = pressed.id;
+      document.getSelection()?.removeAllRanges();
+    }
+    e.preventDefault();
+    dropAt = rowUnder(e);
+    // Near the top or bottom of the panel: scroll, faster the nearer the edge.
+    cancelAnimationFrame(scrolling);
+    const panel = listPanel?.getBoundingClientRect();
+    if (!panel || !listPanel) return;
+    const speed = e.clientY < panel.top + 40 ? -(panel.top + 40 - e.clientY) / 3 : e.clientY > panel.bottom - 40 ? (e.clientY - (panel.bottom - 40)) / 3 : 0;
+    if (!speed) return;
+    const [x, y] = [e.clientX, e.clientY];
+    const scroll = () => {
+      if (!dragged || !listPanel) return;
+      listPanel.scrollTop += Math.max(-24, Math.min(24, speed));
+      dropAt = rowUnder({ clientX: x, clientY: y } as PointerEvent);
+      scrolling = requestAnimationFrame(scroll);
+    };
+    scrolling = requestAnimationFrame(scroll);
+  }
+
+  function rowUp() {
+    window.removeEventListener("pointermove", rowMove);
+    window.removeEventListener("pointerup", rowUp);
+    window.removeEventListener("pointercancel", rowUp);
+    cancelAnimationFrame(scrolling);
+    pressed = null;
+    if (dragged) {
+      // The click that ends a drag is not a click on the row.
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 0);
+      dropLayer();
+    }
+  }
+  let suppressClick = false;
+
   function rowUnder(e: PointerEvent): { id: string; where: "above" | "below" | "inside" } | null {
     const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("li[data-layer]");
     if (!row || row.dataset.layer === dragged) return null;
@@ -998,6 +1054,23 @@
       selection = { x, y, width, height };
       fillTier = "patchmatch";
       await fillSelected();
+    }} demoReorder={async () => {
+      // Drag the fourth row up onto the top half of the first, then the first row down below the third.
+      const rows = () => [...document.querySelectorAll<HTMLElement>("aside ul li[data-layer]")];
+      const names = () => rows().slice(0, 5).map((r) => r.querySelector(".name")!.textContent!.trim().split(/\s+/)[0]).join(", ");
+      const dragRow = async (from: number, to: number, fraction: number) => {
+        const [a, b] = [rows()[from]!.getBoundingClientRect(), rows()[to]!.getBoundingClientRect()];
+        const at = (x: number, y: number) => ({ clientX: x, clientY: y, button: 0, bubbles: true, pointerId: 1 });
+        rows()[from]!.dispatchEvent(new PointerEvent("pointerdown", at(a.left + 60, a.top + a.height / 2)));
+        for (let i = 1; i <= 5; i++) window.dispatchEvent(new PointerEvent("pointermove", at(a.left + 60, a.top + ((b.top + b.height * fraction - a.top) * i) / 5)));
+        window.dispatchEvent(new PointerEvent("pointerup", at(b.left + 60, b.top + b.height * fraction)));
+        await new Promise((r) => setTimeout(r, 50));
+      };
+      const before = names();
+      await dragRow(3, 0, 0.25);
+      const up = names();
+      await dragRow(0, 2, 0.75);
+      return `rows: ${before} | 4th dragged up to the top: ${up} | then the top one dragged down: ${names()}`;
     }} />
   {/if}
 
@@ -1078,7 +1151,7 @@
     {/if}
   </section>
 
-  <aside>
+  <aside bind:this={listPanel} class:reordering={dragged !== null}>
     <h2>Layers</h2>
     <div class="new">
       <button class="small" onclick={newText} disabled={busy} title="New text layer (T)">+ Text</button>
@@ -1168,22 +1241,11 @@
           class:drop-above={dropAt?.id === layer.id && dropAt.where === "above"}
           class:drop-below={dropAt?.id === layer.id && dropAt.where === "below"}
           class:drop-inside={dropAt?.id === layer.id && dropAt.where === "inside"}
+          onpointerdown={(e) => rowDown(e, layer.id)}
         >
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span
-            class="grip"
-            title="Drag to another place in the list: onto the top half of a row to go above it, the bottom half to go below (or into a group)"
-            onpointerdown={(e) => {
-              e.preventDefault();
-              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              // Not selected yet: that would open its properties above the list and move every row.
-              dragged = layer.id;
-            }}
-            onpointermove={(e) => dragged && (dropAt = rowUnder(e))}
-            onpointerup={dropLayer}
-            onpointercancel={() => ((dragged = null), (dropAt = null))}>⠿</span>
+          <span class="grip" title="Drag a row to another place in the list: onto the top half of a row to go above it, the bottom half to go below (or into a group)">⠿</span>
           <input type="checkbox" checked={layer.visible} onchange={() => toggle(layer)} title="Visible" />
-          <button class="name" onclick={() => select(layer.id)} ondblclick={() => editText(layer.id)} title={layer.kind === "text" ? "Double-click to edit the text" : "Select this layer"}>
+          <button class="name" onclick={() => !suppressClick && select(layer.id)} ondblclick={() => editText(layer.id)} title={layer.kind === "text" ? "Double-click to edit the text" : "Select this layer"}>
             {layer.name}
             <small>{layer.kind}{layer.clip ? " · clipped" : ""}</small>
           </button>
@@ -1270,7 +1332,9 @@
   header select { background: #3a3d43; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 3px 6px; font: inherit; }
   .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
-  .grip { cursor: grab; color: #6d7078; padding: 0 2px; touch-action: none; user-select: none; }
+  .grip { cursor: grab; color: #6d7078; padding: 0 2px; user-select: none; }
+  aside ul li { touch-action: none; user-select: none; -webkit-user-select: none; }
+  aside.reordering, aside.reordering * { cursor: grabbing !important; }
   li.lifted { opacity: 0.45; }
   li.drop-above { box-shadow: 0 -2px 0 #5b9dff; }
   li.drop-below { box-shadow: 0 2px 0 #5b9dff; }
