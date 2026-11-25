@@ -4,7 +4,7 @@
  * frames stay in the WebAssembly core.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { FillInfo } from "./core";
 
 /** False in a plain browser (the parity tests, `vite` on its own), where there is no native side. */
@@ -39,6 +39,17 @@ export const native = {
   fillTiers: () => invoke<TierState[]>("fill_tiers"),
   fill: (artPath: string, info: FillInfo, tier: string, seed: number, prompt: string) => invoke<FillResult>("fill", { artPath, info, tier, seed, prompt }),
   fillImage: (ticket: number) => bytes("fill_image", { ticket }),
+
+  /** Ask where to save a picture, then write it there. Returns the path, or null if the user backed out. */
+  async savePng(suggested: string, data: () => Uint8Array): Promise<string | null> {
+    const path = await save({ title: "Export the card as a picture", defaultPath: suggested, filters: [{ name: "PNG picture", extensions: ["png"] }] });
+    if (!path) return null;
+    await native.writeFile(path, data());
+    return path;
+  },
+
+  /** Write bytes to a file. The bytes go as the request's body, not as JSON. */
+  writeFile: (path: string, data: Uint8Array) => invoke<void>("write_file", data, { headers: { "x-path": encodeURIComponent(path) } }),
 
   async chooseFolder(title: string): Promise<string | null> {
     const picked = await open({ directory: true, title });

@@ -2,7 +2,7 @@
   import type { Doc, Layer } from "@cardsmith/doc";
   import type { Brush, Core, CoreState, Edit, Rect } from "./lib/core";
   import { getCore } from "./lib/renderer";
-  import { hasNative } from "./lib/native";
+  import { hasNative, native } from "./lib/native";
   import CardPanel from "./CardPanel.svelte";
 
   // The Rust core (WebAssembly) owns the document, its history and the pixels.
@@ -157,6 +157,25 @@
     blit(core!.dirty());
     refresh();
     status = `Loaded ${loaded.length} font${loaded.length === 1 ? "" : "s"}` + (refused.length ? `; not usable: ${refused.join(", ")}` : "");
+  }
+
+  /** Write the card, drawn at full size, to a PNG file of the user's choosing. */
+  async function exportPng() {
+    if (!core || !doc || busy) return;
+    const name = String((doc.card as { name?: string } | undefined)?.name ?? "card").replace(/[\\/:*?"<>|]/g, "") || "card";
+    busy = true;
+    try {
+      const started = performance.now();
+      const path = await native.savePng(`${name}.png`, () => {
+        status = "Drawing the card at full size…";
+        return core!.exportPng();
+      });
+      status = path ? `Exported ${doc.width}×${doc.height} to ${path} in ${((performance.now() - started) / 1000).toFixed(1)} s` : "Export cancelled";
+    } catch (err) {
+      status = `The card could not be exported: ${err instanceof Error ? err.message : err}`;
+    } finally {
+      busy = false;
+    }
   }
 
   /** The card panel changed the document: show what was redrawn. */
@@ -616,6 +635,7 @@
     <label>Opacity <input type="range" min="0.05" max="1" step="0.05" bind:value={opacity} /> <output>{Math.round(opacity * 100)}%</output></label>
     <input type="color" bind:value={color} title="Brush color" disabled={erase} />
     <span class="spacer"></span>
+    {#if hasNative}<button onclick={exportPng} disabled={busy || !doc} title="Save the card as a PNG picture at its full size">Export PNG…</button>{/if}
     <button onclick={fit} title="Fit to window (0)">Fit</button>
     <output class="zoom">{Math.round(view.scale * 100)}%</output>
     <button disabled={!history.canUndo} onclick={() => run("Undo", () => core!.undo())}>Undo</button>

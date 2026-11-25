@@ -350,6 +350,17 @@ pub extern "C" fn cs_font_names() {
     with(|s| s.out = serde_json::to_vec(&s.session.fonts().names()).unwrap_or_default());
 }
 
+/// The document drawn at full size as a PNG file, in the output buffer. This
+/// is the real picture, not the smaller copy the screen may be showing.
+#[no_mangle]
+pub extern "C" fn cs_export_png() -> u32 {
+    attempt(|s| {
+        let (width, height) = (s.session.doc().width, s.session.doc().height);
+        s.out = cardsmith_core::render::encode_png(width, height, s.session.frame()).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
 // ---- state -----------------------------------------------------------------------
 
 /// The document as JSON, in the output buffer.

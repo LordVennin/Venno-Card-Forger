@@ -103,6 +103,10 @@ pub struct Options {
     pub basic_watermark: Option<svg::SvgArt>,
     /// How many cards the set has, for a collector line like "012/280 R".
     pub set_size: Option<u32>,
+    /// Whether the name, type line, rules text and P/T cast a drop shadow.
+    /// `None` leaves it to the template, as Proxyshop does: off on the normal
+    /// frames, on for the borderless one.
+    pub text_shadows: Option<bool>,
     /// PostScript names of the fonts for italic text, bold rules text and symbols.
     pub font_italic: String,
     pub font_bold: String,
@@ -112,7 +116,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Options {
         let fonts = RulesFormat::for_dpi(72.0);
-        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, basic_watermark: None, set_size: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
+        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, basic_watermark: None, set_size: None, text_shadows: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
     }
 }
 
@@ -290,6 +294,20 @@ impl Builder<'_> {
     }
 
     /// Move a layer, and everything in it, by a number of pixels.
+    /// Switch on a text layer's drop shadow. A layer the template gave none gets
+    /// the one the normal template's text has, sized for this document.
+    fn shadow(&mut self, id: &str) {
+        let has_one = tree::find(&self.doc, id).is_some_and(|l| l.base().effects.iter().flatten().any(|e| matches!(e, cardsmith_core::doc::Effect::DropShadow { .. })));
+        if has_one {
+            self.set(id, json!({ "effectsEnabled": true }));
+        } else {
+            let size = (6.0 * self.doc.width as f64 / 3264.0 * 100.0).round() / 100.0;
+            let mut effects = tree::find(&self.doc, id).and_then(|l| serde_json::to_value(&l.base().effects).ok()).filter(|v| v.is_array()).unwrap_or_else(|| json!([]));
+            effects.as_array_mut().expect("just made an array").push(json!({ "type": "dropShadow", "enabled": true, "blend": "multiply", "opacity": 1, "color": [0, 0, 0, 1], "angle": 135, "distance": size, "spread": 0.12, "size": size }));
+            self.set(id, json!({ "effects": effects, "effectsEnabled": true }));
+        }
+    }
+
     fn translate(&mut self, id: &str, dx: f64, dy: f64) {
         if dx == 0.0 && dy == 0.0 {
             return;
@@ -495,7 +513,12 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
 
     // ---- frame layers ----------------------------------------------------------------
 
-    let plan = if b.kind == "vector" { vector::frame(&mut build, card, options) } else { frame_raster(&mut build, card) };
+    let mut plan = if b.kind == "vector" { vector::frame(&mut build, card, options) } else { frame_raster(&mut build, card) };
+    // The template decides whether text casts a shadow, unless the user has said.
+    if let Some(wanted) = options.text_shadows {
+        plan.shadows = wanted;
+        plan.shadow_rules = wanted;
+    }
 
     // ---- collector line --------------------------------------------------------------
 
@@ -582,7 +605,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         };
         fitted_line(&mut build, &id, &card.name, "card.name", right);
         if plan.shadows {
-            build.set(&id, json!({ "effectsEnabled": true }));
+            build.shadow(&id);
         }
     }
     let shifted = (!card.color_indicator.is_empty()).then(|| build.bound(&b.text, "typeShift")).flatten();
@@ -622,7 +645,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         let line = if plan.pt_in_type && card.is_creature { format!("{} — {}/{}", card.type_line, card.power, card.toughness) } else { card.type_line.clone() };
         fitted_line(&mut build, &id, &line, "card.type", right);
         if plan.shadows {
-            build.set(&id, json!({ "effectsEnabled": true }));
+            build.shadow(&id);
         }
     }
 
@@ -684,7 +707,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         props["box"] = area.clone();
         build.write(id, &formatted.content, "card.rules", props);
         if plan.shadow_rules {
-            build.set(id, json!({ "effectsEnabled": true }));
+            build.shadow(id);
         }
 
         // Lift the text clear of the P/T box if its last lines run into it.
@@ -741,7 +764,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             let more = if plan.pt_white { json!({ "style": build.text(&id).map(|t| { let mut s = t.style; s.color = [1.0, 1.0, 1.0, 1.0]; s }) }) } else { json!({}) };
             build.write(&id, &plain(&format!("{}/{}", card.power, card.toughness)), "card.pt", more);
             if plan.shadows {
-                build.set(&id, json!({ "effectsEnabled": true }));
+                build.shadow(&id);
             }
         }
     }

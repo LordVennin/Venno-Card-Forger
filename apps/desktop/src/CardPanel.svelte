@@ -48,6 +48,8 @@
   let prompt = $state("");
   let filling = $state("");
   let warnings = $state<string[]>([]);
+  // Whether the card's text casts a shadow: the template's own choice, or the user's.
+  let shadows = $state<"template" | "on" | "off">("template");
 
   // Sets to choose from by name, and a symbol of the user's own in place of the set's.
   let sets = $state.raw<SetEntry[]>([]);
@@ -81,7 +83,7 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean };
+    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string };
     tier = want.tier ?? tier;
     folder = want.template;
     await openTemplate();
@@ -92,6 +94,10 @@
     search = want.card;
     await find();
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
+    if (want.export) {
+      await native.writeFile(want.export, core.exportPng());
+      say(`Exported to ${want.export}`);
+    }
   }
 
   let panel = $state<HTMLElement>();
@@ -345,7 +351,7 @@
     let report: BuildReport;
     try {
       const started = performance.now();
-      report = core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras });
+      report = core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, textShadows: shadows === "template" ? null : shadows === "on" });
       warnings = report.warnings;
       changed();
       await loadImages();
@@ -502,6 +508,17 @@
       <label class="file quiet">Use an SVG… <input type="file" accept=".svg,image/svg+xml" onchange={ownSymbolChosen} /></label>
       {#if ownSymbol}<button class="quiet" onclick={setsSymbolAgain}>Use the set's</button>{/if}
     </div>
+  {/if}
+
+  {#if raw}
+    <label title="The normal frames leave text shadows off and the borderless one turns them on, as Proxyshop does. Choose here to have them your way.">
+      Text shadows
+      <select bind:value={shadows} onchange={() => build()}>
+        <option value="template">As the template has them</option>
+        <option value="on">On</option>
+        <option value="off">Off</option>
+      </select>
+    </label>
   {/if}
 
   <h2>Art</h2>

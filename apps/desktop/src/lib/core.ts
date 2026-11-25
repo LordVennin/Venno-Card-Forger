@@ -30,6 +30,7 @@ type Exports = {
   cs_drag(ptr: number, len: number, scale: number, tx: number, ty: number): number;
   cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
   cs_font_names(): void;
+  cs_export_png(): number;
   cs_save(): number;
   cs_doc_json(): number;
   cs_state_json(): void;
@@ -67,6 +68,8 @@ export type BuildRequest = {
   symbolSvg?: string | null;
   watermarkSvg?: string | null;
   setSize?: number | null;
+  /** Whether the card's text casts a shadow. Left out or null, the template decides. */
+  textShadows?: boolean | null;
   removeFlavor?: boolean;
   removeReminder?: boolean;
   hideFlavorDivider?: boolean;
@@ -207,6 +210,12 @@ export class Core {
     );
     this.check(ok);
     return decoder.decode(this.out()) === "true";
+  }
+
+  /** The document drawn at full size, as PNG file bytes. Takes a few seconds for a card. */
+  exportPng(): Uint8Array<ArrayBuffer> {
+    this.check(this.x.cs_export_png());
+    return this.out().slice() as Uint8Array<ArrayBuffer>;
   }
 
   /** The document as `.cardsmith` file bytes. */

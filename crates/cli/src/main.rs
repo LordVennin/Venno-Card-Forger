@@ -6,7 +6,7 @@
 //! cardsmith text <suite.json> -o <dir> --fonts <dir>    render a suite of rules text boxes
 //! cardsmith card <name> [--set <code>] [--number <n>] [--cache <dir>] [--raw]    look a card up on Scryfall (cached)
 //! cardsmith bulk <oracle | default> [--cache <dir>]      download Scryfall's bulk data for offline lookups
-//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--sd-model <path>] [--sd-arg <arg>]...
+//! cardsmith build <template-dir> <name | card.json> -o <out.png | out.cardsmith> [--fonts <dir>] [--art <image>] [--cache <dir>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--sd-model <path>] [--sd-arg <arg>]... [--text-shadows on|off]
 //!                                                         build a card from an imported template
 //! cardsmith symbols [--cache <dir>]                      download set symbols and set data (hexproof.io) for offline use
 //! cardsmith models [--cache <dir>]                       download the LaMa fill model and ONNX Runtime (about 240 MB)
@@ -324,6 +324,7 @@ fn run(args: &[String]) -> Result<(), String> {
                     "--sd-cli" => sd.program = Some(PathBuf::from(rest.next().ok_or(USAGE)?)),
                     "--sd-model" => sd.model = Some(PathBuf::from(rest.next().ok_or(USAGE)?)),
                     "--prompt" => sd.prompt = Some(rest.next().ok_or(USAGE)?.clone()),
+                    "--text-shadows" => sd.text_shadows = Some(rest.next().is_some_and(|v| v != "off")),
                     "--sd-arg" => sd.extra.push(rest.next().ok_or(USAGE)?.clone()),
                     _ => plain.push(arg),
                 }
@@ -390,6 +391,8 @@ use cardsmith_fill::tiers::{RUNTIME_FILE, SD_CLI_FILE};
 /// Choices for the Stable Diffusion fill tier.
 #[derive(Default)]
 struct SdOptions {
+    /// Not about Stable Diffusion, but it rides along with the other build choices: whether text casts a shadow.
+    text_shadows: Option<bool>,
     program: Option<PathBuf>,
     model: Option<PathBuf>,
     prompt: Option<String>,
@@ -422,6 +425,7 @@ fn build_card(dir: &Path, what: &str, out: &Path, fonts: Option<&str>, art: Opti
     };
 
     let mut options = Options::default();
+    options.text_shadows = sd.text_shadows;
     let mut art_pixels = None;
     if symbol {
         // The set's symbol in this card's rarity, and the set's size for the collector line, from hexproof.io through the cache.

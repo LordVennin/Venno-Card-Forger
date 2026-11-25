@@ -161,6 +161,26 @@ fn art_file(path: String) -> Answer<Response> {
     Ok(Response::new(read(&path)?))
 }
 
+/// Write a file the user chose a place for (an exported picture). The bytes
+/// are the request's body; the path comes in a header, percent-encoded.
+#[tauri::command(async)]
+fn write_file(request: tauri::ipc::Request) -> Answer<()> {
+    let path = request.headers().get("x-path").and_then(|v| v.to_str().ok()).ok_or("No place to save to was given.")?;
+    let mut decoded = Vec::new();
+    let mut bytes = path.bytes();
+    while let Some(b) = bytes.next() {
+        if b == b'%' {
+            let hex = [bytes.next().unwrap_or(b'0'), bytes.next().unwrap_or(b'0')];
+            decoded.push(u8::from_str_radix(std::str::from_utf8(&hex).unwrap_or("00"), 16).unwrap_or(b'?'));
+        } else {
+            decoded.push(b);
+        }
+    }
+    let path = PathBuf::from(String::from_utf8(decoded).map_err(|_| "The file name is not readable text.")?);
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("There was nothing to save.".into()) };
+    std::fs::write(&path, data).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 // ---- cards -------------------------------------------------------------------------
 
 #[tauri::command(async)]
@@ -305,7 +325,7 @@ pub fn run() {
             app.manage(Shared { settings_file, settings: Mutex::new(settings), client: Mutex::new(Client::new(&cache)), cache, fills: Mutex::new((0, HashMap::new())) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
+        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, write_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
         .run(tauri::generate_context!())
         .expect("error while running Cardsmith");
 }

@@ -48,6 +48,9 @@ pub struct BuildRequest {
     pub watermark_svg: Option<String>,
     #[serde(default)]
     pub set_size: Option<u32>,
+    /// Whether the card's text casts a shadow; left out, the template decides.
+    #[serde(default)]
+    pub text_shadows: Option<bool>,
     #[serde(default)]
     pub remove_flavor: bool,
     #[serde(default)]
@@ -150,6 +153,7 @@ impl Workbench {
             symbol: read(&request.symbol_svg),
             basic_watermark: read(&request.watermark_svg),
             set_size: request.set_size,
+            text_shadows: request.text_shadows,
             ..Options::default()
         };
         let built = build_card(&self.template, &card, session.fonts(), &options)?;

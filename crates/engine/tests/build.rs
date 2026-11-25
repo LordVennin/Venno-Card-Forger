@@ -807,3 +807,23 @@ fn what_was_changed_by_hand_on_the_cards_layers_survives_a_rebuild_unless_the_en
     assert!(session.undo());
     assert!(layer(session.doc(), "col-top").base().visible);
 }
+
+#[test]
+fn text_shadows_follow_the_template_unless_asked_for_and_are_added_where_the_template_has_none() {
+    use cardsmith_core::doc::Effect;
+    let shadowed = |doc: &Doc, id: &str| {
+        let base = layer(doc, id).base();
+        base.effects_enabled == Some(true) && base.effects.iter().flatten().any(|e| matches!(e, Effect::DropShadow { enabled: true, .. }))
+    };
+    // A raster template leaves them off, as Proxyshop's normal template does.
+    let (doc, _) = build(&card(json!({})), &Options::default());
+    assert!(!shadowed(&doc, "name") && !shadowed(&doc, "type") && !shadowed(&doc, "rules-c"));
+    // Asked for, every line of the card's text casts one; the template's text has none of its own, so one is added.
+    let (doc, _) = build(&card(json!({})), &Options { text_shadows: Some(true), ..Options::default() });
+    for id in ["name", "type", "rules-c", "pt-text"] {
+        assert!(shadowed(&doc, id), "{id}");
+    }
+    let Some(Effect::DropShadow { distance, size, .. }) = layer(&doc, "name").base().effects.as_ref().and_then(|e| e.last()) else { panic!() };
+    // The normal template's 6 px at 3264 wide, for a document 2000 wide.
+    assert_eq!((*distance, *size), (3.68, 3.68));
+}
