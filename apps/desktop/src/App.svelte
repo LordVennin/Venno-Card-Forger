@@ -22,10 +22,18 @@
   let busy = $state(false);
 
   // The tool in hand: moving layers about, or painting.
-  let tool = $state<"move" | "paint" | "pick" | "select">("move");
+  let tool = $state<"move" | "paint" | "pick" | "select" | "magic">("move");
+  // The eraser can also bring back what it took (on layers erased through a mask).
+  let restore = $state(false);
+  // The magic eraser: how alike a color must be to go, and whether only the part touching the click goes.
+  let tolerance = $state(32);
+  let contiguous = $state(true);
   // A rectangle marked out with the selection tool, in document pixels.
   let selection = $state.raw<Rect | null>(null);
   let selecting: { x: number; y: number } | null = null;
+  // Drawn freehand instead: the points of the outline, in document pixels. The rectangle is then its bounds.
+  let lasso = $state(false);
+  let outline = $state.raw<{ x: number; y: number }[] | null>(null);
   let fillTier = $state("auto");
   let fillSeed = 1;
   // The selected layer's box, in document pixels, for the outline and handles.
@@ -240,7 +248,7 @@
 
   function brush(): Brush {
     const n = parseInt(color.slice(1), 16);
-    return { size, hardness, opacity, erase, color: [(n >> 16) & 255, (n >> 8) & 255, n & 255] };
+    return { size, hardness, opacity, erase, restore: erase && restore, color: [(n >> 16) & 255, (n >> 8) & 255, n & 255] };
   }
 
   function strokePoints(events: PointerEvent[]) {
@@ -563,6 +571,24 @@
     }
   }
 
+  /** The selection as a closed path in document pixels: the lasso's outline, or the rectangle. */
+  function selectionPath(): string | null {
+    if (!selection) return null;
+    if (outline && outline.length > 2) return "M" + outline.map((p) => `${p.x} ${p.y}`).join("L") + "Z";
+    const { x, y, width, height } = selection;
+    return `M${x} ${y}L${x + width} ${y}L${x + width} ${y + height}L${x} ${y + height}Z`;
+  }
+
+  /** Erase the selected layer inside the selection, or everything of it outside: how a figure is cut out. */
+  function eraseSelection(outside: boolean) {
+    const path = selectionPath();
+    if (!path || !active) {
+      status = "Select a layer and mark out an area first.";
+      return;
+    }
+    run(outside ? "Erase outside" : "Erase inside", () => core!.eraseArea(active!, path, outside));
+  }
+
   /** Take the brush color from what is on screen under the pointer. */
   function pickColor(e: PointerEvent) {
     if (!core || !canvas) return;
@@ -608,6 +634,7 @@
     if (tool === "select") {
       selecting = toDoc(e);
       selection = null;
+      outline = lasso ? [selecting] : null;
       return;
     }
     if (tool === "move") {
@@ -619,9 +646,31 @@
       if (active) beginDrag(e, active);
       return;
     }
-    if (!active) {
-      status = "Select a pixel layer to paint on, or add a paint layer.";
+    if (tool === "magic") {
+      if (!active) {
+        status = "Select the layer to cut from first.";
+        return;
+      }
+      const p = toDoc(e);
+      run("Magic eraser", () => {
+        const gone = core!.magicErase(active!, p.x, p.y, tolerance, contiguous);
+        if (!gone) throw new Error("nothing was that color there");
+      });
       return;
+    }
+    if (!active) {
+      status = "Select a layer first: the eraser works on any layer, the brush on a paint layer.";
+      return;
+    }
+    // Color goes on a paint layer. With any other layer selected, the brush gets a new one of its own on top.
+    if (!erase && !active.startsWith("paint-")) {
+      try {
+        active = core.addPaintLayer("Paint");
+        refresh();
+      } catch (err) {
+        status = err instanceof Error ? err.message : String(err);
+        return;
+      }
     }
     const started = performance.now();
     try {
@@ -643,6 +692,16 @@
       view = { ...view, x: view.x - ((e.clientX - panning.x) * dpr()) / view.scale, y: view.y - ((e.clientY - panning.y) * dpr()) / view.scale };
       panning = { x: e.clientX, y: e.clientY };
       applyView();
+    } else if (selecting && outline) {
+      // A lasso: the pointer's path, a point every few screen pixels.
+      const p = toDoc(e);
+      const last = outline[outline.length - 1]!;
+      if (Math.hypot(p.x - last.x, p.y - last.y) * view.scale > 3 * dpr()) outline = [...outline, { x: Math.round(p.x), y: Math.round(p.y) }];
+      const xs = outline.map((q) => q.x);
+      const ys = outline.map((q) => q.y);
+      const [x, y] = [Math.max(0, Math.min(...xs)), Math.max(0, Math.min(...ys))];
+      const [x1, y1] = [Math.min(doc!.width, Math.max(...xs)), Math.min(doc!.height, Math.max(...ys))];
+      selection = outline.length > 2 && x1 - x > 1 && y1 - y > 1 ? { x, y, width: x1 - x, height: y1 - y } : null;
     } else if (selecting) {
       const p = toDoc(e);
       const [x, y] = [Math.max(0, Math.min(selecting.x, p.x)), Math.max(0, Math.min(selecting.y, p.y))];
@@ -663,7 +722,7 @@
     endDrag(e);
     if (!painting || !core) return;
     painting = false;
-    core.strokeEnd(erase ? "Eraser" : "Brush");
+    core.strokeEnd(erase ? (restore ? "Restore" : "Eraser") : "Brush");
     timings = { core: strokeCore, blit: strokeBlit };
     refresh();
   }
@@ -694,6 +753,9 @@
       drag = null;
       blit(core!.dirty());
       refresh();
+    } else if ((e.key === "Delete" || e.key === "Backspace") && active && tool === "select" && selection) {
+      e.preventDefault();
+      eraseSelection(false);
     } else if ((e.key === "Delete" || e.key === "Backspace") && active && tool === "move") {
       e.preventDefault();
       removeSelected();
@@ -704,7 +766,8 @@
     } else if (e.key.toLowerCase() === "v") tool = "move";
     else if (e.key.toLowerCase() === "i") tool = "pick";
     else if (e.key.toLowerCase() === "m") tool = "select";
-    else if (e.key === "Escape" && selection) selection = null;
+    else if (e.key.toLowerCase() === "w") tool = "magic";
+    else if (e.key === "Escape" && selection) (selection = null), (outline = null);
     else if (e.key.toLowerCase() === "t" && !mod) newText();
     else if (e.key === "[") size = Math.max(1, Math.round(size / 1.25));
     else if (e.key === "]") size = Math.min(1000, Math.round(size * 1.25) + 1);
@@ -753,8 +816,23 @@
     <button class:active={tool === "move"} onclick={() => (tool = "move")} title="Move and scale layers (V)">Move</button>
     <button class:active={tool === "paint" && !erase} onclick={() => ((tool = "paint"), (erase = false))} title="Brush (B)">Brush</button>
     <button class:active={tool === "paint" && erase} onclick={() => ((tool = "paint"), (erase = true))} title="Eraser (E)">Eraser</button>
+    {#if tool === "paint" && erase}
+      <label title="Bring back what was erased, instead of erasing. Works on any layer that is not a paint layer: those are erased through a mask, so nothing is lost."><input type="checkbox" bind:checked={restore} /> Restore</label>
+    {/if}
+    <button class:active={tool === "magic"} onclick={() => (tool = "magic")} title="Magic eraser (W): click a color on the selected layer to erase that color where it touches the click. For cutting a character out of its background.">Magic eraser</button>
+    {#if tool === "magic"}
+      <label title="How alike a color must be to be erased: low takes only the color clicked, high takes more">Tolerance <input type="range" min="0" max="128" bind:value={tolerance} /> <output>{tolerance}</output></label>
+      <label title="Off: erase that color everywhere on the layer, not only where it touches the click"><input type="checkbox" bind:checked={contiguous} /> Touching only</label>
+    {/if}
     <button class:active={tool === "pick"} onclick={() => (tool = "pick")} title="Take the brush color from the picture (I)">Eyedropper</button>
     <button class:active={tool === "select"} onclick={() => (tool = "select")} title="Mark out a rectangle (M)">Select</button>
+    {#if tool === "select"}
+      <label title="Draw the selection freehand instead of as a rectangle"><input type="checkbox" bind:checked={lasso} /> Lasso</label>
+    {/if}
+    {#if selection}
+      <button onclick={() => eraseSelection(false)} disabled={busy || !active} title="Erase the selected layer inside the selection (Delete). Nothing is lost: the eraser's Restore brings it back.">Erase inside</button>
+      <button onclick={() => eraseSelection(true)} disabled={busy || !active} title="Erase everything of the selected layer outside the selection: draw around a figure, then this cuts it out.">Erase outside</button>
+    {/if}
     {#if hasNative && selection}
       <button onclick={fillSelected} disabled={busy || !active} title="Paint over the selection on the selected image layer, made up from what is around it. The result is its own layer.">Fill selection</button>
       <select bind:value={fillTier} title="How to make the fill">
@@ -832,7 +910,9 @@
         ></div>
       </div>
     {/if}
-    {#if selection}
+    {#if selection && outline && outline.length > 2}
+      <svg class="lasso"><polygon points={outline.map((p) => `${((p.x - view.x) * view.scale) / dpr()},${((p.y - view.y) * view.scale) / dpr()}`).join(" ")} /></svg>
+    {:else if selection}
       {@const at = onScreen(selection)}
       <div class="marquee" style:left="{at.left}px" style:top="{at.top}px" style:width="{at.width}px" style:height="{at.height}px"></div>
     {/if}
@@ -855,7 +935,7 @@
         }}
       ></textarea>
     {/if}
-    {#if cursor && active && tool === "paint"}
+    {#if cursor && tool === "paint"}
       <div class="brush" style:left="{cursor.x}px" style:top="{cursor.y}px" style:width="{cursorSize}px" style:height="{cursorSize}px"></div>
     {/if}
   </section>
@@ -1027,6 +1107,8 @@
   canvas.moving { cursor: default; }
   .outline { position: absolute; border: 1px solid #5b9dff; outline: 1px solid rgba(0, 0, 0, 0.5); pointer-events: none; box-sizing: border-box; }
   .handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #fff; border: 1px solid #1f5fd0; pointer-events: auto; touch-action: none; }
+  .lasso { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .lasso polygon { fill: rgba(91, 157, 255, 0.12); stroke: #fff; stroke-width: 1; stroke-dasharray: 4 3; paint-order: stroke; filter: drop-shadow(0 0 1px #000); }
   .marquee { position: absolute; border: 1px dashed #fff; outline: 1px dashed #000; pointer-events: none; box-sizing: border-box; }
   header select { background: #3a3d43; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 3px 6px; font: inherit; }
   .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }

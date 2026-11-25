@@ -723,7 +723,25 @@ impl<'a> RenderPass<'a> {
         let wide = grow(*region, margin);
         let mut gray = vec![outside; wide.area()];
         let (ox, oy) = (mask.offset.x.round() as i32, mask.offset.y.round() as i32);
-        if let Some(area) = wide.intersect(&Region::new(ox, oy, image.w, image.h)) {
+        let scale = mask.scale.filter(|s| *s > 0.0 && (*s - 1.0).abs() > 1e-9);
+        if let Some(scale) = scale {
+            // A scaled mask: each document pixel takes the mask pixel under its middle.
+            for y in wide.y..wide.y + wide.h {
+                let v = ((y as f64 + 0.5 - mask.offset.y) / scale).floor();
+                if v < 0.0 || v >= image.h as f64 {
+                    continue;
+                }
+                for x in wide.x..wide.x + wide.w {
+                    let u = ((x as f64 + 0.5 - mask.offset.x) / scale).floor();
+                    if u < 0.0 || u >= image.w as f64 {
+                        continue;
+                    }
+                    let si = (v as usize * image.w as usize + u as usize) * 4;
+                    let px = &image.data[si..si + 3];
+                    gray[wide.index(x, y)] = ((54 * px[0] as u32 + 183 * px[1] as u32 + 19 * px[2] as u32) >> 8) as f32;
+                }
+            }
+        } else if let Some(area) = wide.intersect(&Region::new(ox, oy, image.w, image.h)) {
             for y in area.y..area.y + area.h {
                 let mut si = ((y - oy) as usize * image.w as usize + (area.x - ox) as usize) * 4;
                 let mut di = wide.index(area.x, y);
@@ -1005,6 +1023,48 @@ impl Renderer {
             None
         }
         find(&mut pass, &doc.root, &at)
+    }
+
+    /// How much of each pixel of `region` a closed path covers (0..255). `None` if the path cannot be read or is empty.
+    pub fn path_cover(&mut self, doc: &Doc, assets: &AssetBytes, d: &str, region: Region) -> Option<Vec<u8>> {
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        pass.fill_coverage(&Path { d: d.to_string(), fill_rule: None }, &region)
+    }
+
+    /// How much of a layer its pixel mask lets through over `region` (0..255
+    /// each pixel), whatever its offset, scale, feather and density: the mask
+    /// as it acts, ready to be made into a plain one. All 255 if it has none.
+    pub fn pixel_mask(&mut self, doc: &Doc, assets: &AssetBytes, id: &str, region: Region) -> Vec<u8> {
+        let Some(layer) = crate::tree::find(doc, id) else { return vec![255; region.area()] };
+        // Only the pixel mask is wanted, so the layer is looked at without its vector mask.
+        let mut alone = match layer {
+            Layer::Group(g) => Layer::Group(GroupLayer { base: g.base.clone(), children: Vec::new(), pass_through: g.pass_through }),
+            other => other.clone(),
+        };
+        alone.base_mut().vector_mask = None;
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        pass.mask_coverage(&alone, &region, MaskPart::All).unwrap_or_else(|| vec![255; region.area()])
+    }
+
+    /// A layer's own pixels over `region`, with its masks applied and without
+    /// its effects, opacity or blending: what there is of it to pick or cut.
+    pub fn layer_pixels(&mut self, doc: &Doc, assets: &AssetBytes, id: &str, region: Region) -> Raster {
+        let mut out = Raster::new(region);
+        let Some(layer) = crate::tree::find(doc, id) else { return out };
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        let Some(mut content) = pass.content(layer, &region) else { return out };
+        if let Some(mask) = pass.mask_coverage(layer, &content.region, MaskPart::All) {
+            multiply_alpha(&mut content, &mask);
+        }
+        let width = content.region.w as usize * 4;
+        for y in content.region.y..content.region.y + content.region.h {
+            let (to, from) = (out.region.index(content.region.x, y) * 4, content.region.index(content.region.x, y) * 4);
+            out.data[to..to + width].copy_from_slice(&content.data[from..from + width]);
+        }
+        out
     }
 
     /// A layer's bounds from its geometry, without the reach of its effects. `None` if it has none.

@@ -817,13 +817,235 @@ impl Session {
         Ok(id)
     }
 
+    /// How far beyond a layer's own pixels the document can change when they do: the largest effect on it or on a group around it.
+    fn effect_margin(&self, layer_id: &str) -> i32 {
+        let extent = |layer: &Layer| layer.base().active_effects().iter().map(|e| effect_extent(e)).max().unwrap_or(0);
+        let Some(path) = crate::tree::locate(&self.doc, layer_id) else { return 0 };
+        let mut layer = &self.doc.root.children[path[0]];
+        let mut margin = extent(layer);
+        for &i in &path[1..] {
+            layer = &layer.children()[i];
+            margin = margin.max(extent(layer));
+        }
+        margin
+    }
+
+    /// Make sure a layer has a mask that can be painted on, and say where it is:
+    /// its image, that image's place in the document, and the effect margin.
+    ///
+    /// A paintable mask is one made here: the size of the document, unscaled,
+    /// revealing everything outside itself. A layer with no mask gets a white
+    /// one. A layer with another kind of mask (a template's, or one that was
+    /// scaled along with its layer) gets that mask as it acts now, redrawn as
+    /// a plain one, so nothing changes on screen. Adding the mask is a step of
+    /// history of its own.
+    fn paint_mask(&mut self, layer_id: &str) -> Result<(String, (i32, i32), i32)> {
+        let layer = crate::tree::find(&self.doc, layer_id).ok_or_else(|| err!("No layer with id \"{layer_id}\""))?;
+        let name = layer.base().name.clone();
+        let margin = self.effect_margin(layer_id);
+        let (w, h) = (self.doc.width as i32, self.doc.height as i32);
+        if let Some(mask) = &layer.base().mask {
+            let plain = mask.asset.starts_with("mask-") && mask.scale.is_none_or(|s| s == 1.0) && mask.offset.x.fract() == 0.0 && mask.offset.y.fract() == 0.0 && mask.enabled != Some(false) && mask.inverted != Some(true) && mask.density.is_none_or(|d| d == 1.0) && mask.feather.is_none_or(|f| f == 0.0);
+            let whole = self.renderer.decoded_image(&mask.asset, &self.assets).is_some_and(|image| mask.offset.x <= 0.0 && mask.offset.y <= 0.0 && mask.offset.x as i32 + image.w >= w && mask.offset.y as i32 + image.h >= h);
+            if plain && whole {
+                return Ok((mask.asset.clone(), (mask.offset.x as i32, mask.offset.y as i32), margin));
+            }
+        }
+        let hides_effects = layer.base().mask.as_ref().and_then(|m| m.hides_effects);
+        let cover = self.renderer.pixel_mask(&self.doc, &self.assets, layer_id, self.whole());
+        let mut n = 1;
+        while self.doc.assets.contains_key(&format!("mask-{n}")) {
+            n += 1;
+        }
+        let asset = format!("mask-{n}");
+        self.renderer.set_image(&asset, Image { w, h, data: cover.iter().flat_map(|&c| [c, c, c, 255]).collect() });
+        self.painted.insert(asset.clone());
+        let image = AssetRef { kind: AssetKind::Image, path: format!("assets/{asset}.png"), width: Some(w as u32), height: Some(h as u32) };
+        let mut mask = serde_json::json!({ "asset": asset, "offset": { "x": 0, "y": 0 }, "outside": "reveal" });
+        if let Some(hides) = hides_effects {
+            mask["hidesEffects"] = serde_json::json!(hides);
+        }
+        let props = serde_json::json!({ "mask": mask }).as_object().cloned().unwrap_or_default();
+        self.execute(Edit::Batch { edits: vec![Edit::SetAsset { id: asset.clone(), asset: Some(image) }, Edit::SetLayerProps { id: layer_id.to_string(), props }] }, &format!("Mask {name}"))?;
+        Ok((asset, (0, 0), margin))
+    }
+
+    /// A mask image was changed in place: draw what changed and record it for undo, as the tiles that differ from `before`.
+    fn mask_changed(&mut self, asset: String, offset: (i32, i32), margin: i32, before: &[u8], label: &str) {
+        let Some(image) = self.renderer.image(&asset) else { return };
+        let (ox, oy) = offset;
+        let mut patches = Vec::new();
+        let mut changed: Option<Region> = None;
+        for ty in (0..image.h).step_by(BELOW_TILE as usize) {
+            for tx in (0..image.w).step_by(BELOW_TILE as usize) {
+                let tile = Region::new(tx, ty, BELOW_TILE.min(image.w - tx), BELOW_TILE.min(image.h - ty));
+                let (was, now) = (crop(before, image.w, &tile), crop(&image.data, image.w, &tile));
+                if was != now {
+                    changed = union(changed, Some(Region::new(tile.x + ox, tile.y + oy, tile.w, tile.h)));
+                    patches.push((tile, was, now));
+                }
+            }
+        }
+        let Some(changed) = changed else { return };
+        self.painted.insert(asset.clone());
+        self.below = None;
+        self.renderer.sync(&self.doc);
+        self.redraw(Region::new(changed.x - margin, changed.y - margin, changed.w + margin * 2, changed.h + margin * 2));
+        self.push(Step::Paint { label: label.to_string(), asset, offset, patches, margin });
+    }
+
+    /// Erase the part of a layer inside a closed path (an SVG path in document
+    /// pixels: a rectangle or a lasso), or with `outside` everything of it but
+    /// that part, which is how a character is cut out: draw around it, erase
+    /// outside. Through the layer's mask, as one step of history.
+    pub fn erase_area(&mut self, layer_id: &str, d: &str, outside: bool, label: &str) -> Result<()> {
+        self.cancel_preview();
+        if self.stroke.is_some() {
+            return Err(err!("Finish the brush stroke first"));
+        }
+        let whole = self.whole();
+        let cover = self.renderer.path_cover(&self.doc, &self.assets, d, whole).ok_or_else(|| err!("The selection is empty"))?;
+        let (asset, offset, margin) = self.paint_mask(layer_id)?;
+        let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's mask is unavailable"))?;
+        let before = image.data.clone();
+        let w = whole.w as usize;
+        for (i, &inside) in cover.iter().enumerate() {
+            let take = if outside { 255 - inside } else { inside } as u32;
+            if take == 0 {
+                continue;
+            }
+            let (mx, my) = ((i % w) as i32 - offset.0, (i / w) as i32 - offset.1);
+            if mx < 0 || my < 0 || mx >= image.w || my >= image.h {
+                continue;
+            }
+            let m = (my as usize * image.w as usize + mx as usize) * 4;
+            let now = (image.data[m] as u32 * (255 - take) / 255) as u8;
+            image.data[m..m + 3].fill(now);
+        }
+        self.mask_changed(asset, offset, margin, &before, label);
+        Ok(())
+    }
+
+    /// Erase everything of a layer that is the color found at a document
+    /// point, to within `tolerance` (0 to 255 on each of red, green, blue and
+    /// opacity): the part touching the point if `contiguous`, or every part.
+    /// The edge is softened over as much again. It is erased through the
+    /// layer's mask, like the eraser, and is one step of history. Returns how
+    /// many pixels went.
+    pub fn magic_erase(&mut self, layer_id: &str, x: f64, y: f64, tolerance: f32, contiguous: bool, label: &str) -> Result<usize> {
+        self.cancel_preview();
+        if self.stroke.is_some() {
+            return Err(err!("Finish the brush stroke first"));
+        }
+        let whole = self.whole();
+        let (px, py) = (x.floor() as i32, y.floor() as i32);
+        if px < 0 || py < 0 || px >= whole.w || py >= whole.h {
+            return Err(err!("That point is off the card"));
+        }
+        let pixels = self.renderer.layer_pixels(&self.doc, &self.assets, layer_id, whole);
+        let (w, h) = (whole.w as usize, whole.h as usize);
+        let at = |i: usize| -> [f32; 4] { [pixels.data[i * 4] as f32, pixels.data[i * 4 + 1] as f32, pixels.data[i * 4 + 2] as f32, pixels.data[i * 4 + 3] as f32] };
+        let seed = py as usize * w + px as usize;
+        let wanted = at(seed);
+        if wanted[3] < 8.0 {
+            return Err(err!("There is nothing of this layer at that point"));
+        }
+        // How far a pixel is from the color clicked: the largest difference of any channel, color counted by how solid the pixel is.
+        let distance = |i: usize| -> f32 {
+            let p = at(i);
+            if p[3] < 8.0 {
+                return f32::INFINITY;
+            }
+            (0..4).map(|c| (p[c] - wanted[c]).abs()).fold(0.0, f32::max)
+        };
+        let tolerance = tolerance.clamp(0.0, 255.0);
+        let mut picked = vec![false; w * h];
+        if contiguous {
+            let mut queue = vec![seed];
+            picked[seed] = true;
+            while let Some(i) = queue.pop() {
+                let (ix, iy) = (i % w, i / w);
+                let mut visit = |j: usize, queue: &mut Vec<usize>| {
+                    if !picked[j] && distance(j) <= tolerance {
+                        picked[j] = true;
+                        queue.push(j);
+                    }
+                };
+                if ix > 0 { visit(i - 1, &mut queue); }
+                if ix + 1 < w { visit(i + 1, &mut queue); }
+                if iy > 0 { visit(i - w, &mut queue); }
+                if iy + 1 < h { visit(i + w, &mut queue); }
+            }
+        } else {
+            for (i, pick) in picked.iter_mut().enumerate() {
+                *pick = distance(i) <= tolerance;
+            }
+        }
+        let count = picked.iter().filter(|p| **p).count();
+
+        let (asset, offset, margin) = self.paint_mask(layer_id)?;
+        let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's mask is unavailable"))?;
+        let before = image.data.clone();
+        let (iw, ox, oy) = (image.w as usize, offset.0, offset.1);
+        let mut darken = |i: usize, to: u8| {
+            let (mx, my) = ((i % w) as i32 - ox, (i / w) as i32 - oy);
+            if mx < 0 || my < 0 || mx >= image.w || my >= image.h {
+                return;
+            }
+            let m = (my as usize * iw + mx as usize) * 4;
+            let now = image.data[m].min(to);
+            image.data[m..m + 3].fill(now);
+        };
+        for i in 0..w * h {
+            if picked[i] {
+                darken(i, 0);
+                continue;
+            }
+            // Next to what was picked: partly erased, the more so the closer its color, so the cut edge is not jagged.
+            let (ix, iy) = (i % w, i / w);
+            let beside = (ix > 0 && picked[i - 1]) || (ix + 1 < w && picked[i + 1]) || (iy > 0 && picked[i - w]) || (iy + 1 < h && picked[i + w]);
+            if beside && tolerance > 0.0 {
+                let d = distance(i);
+                if d <= tolerance * 2.0 {
+                    darken(i, (255.0 * (d - tolerance) / tolerance) as u8);
+                }
+            }
+        }
+        self.mask_changed(asset, offset, margin, &before, label);
+        Ok(count)
+    }
+
     /// Start a brush stroke on a pixel layer.
     pub fn stroke_begin(&mut self, layer_id: &str, brush: Brush) -> Result<()> {
         self.cancel_preview();
         if self.stroke.is_some() {
             return Err(err!("A brush stroke is already in progress"));
         }
-        let (asset, offset, margin) = paint_target(&self.doc.root, layer_id, 0).ok_or_else(|| err!("No layer with id \"{layer_id}\""))??;
+        let layer = crate::tree::find(&self.doc, layer_id).ok_or_else(|| err!("No layer with id \"{layer_id}\""))?;
+        // A paint layer's own pixels are painted and erased. Anything else (the art, a
+        // template's layers, text, a shape, a group) is erased through a mask, so that
+        // nothing of it is lost and it can be brought back.
+        let own_pixels = layer.id().starts_with("paint-") && matches!(layer, Layer::Pixel(_));
+        let mut brush = brush;
+        let (asset, offset, margin) = if own_pixels || !brush.erase {
+            // Color goes onto a pixel layer's own image (the editor gives the brush a paint layer for this).
+            match paint_target(&self.doc.root, layer_id, 0).ok_or_else(|| err!("No layer with id \"{layer_id}\""))? {
+                Ok(target) => target,
+                Err(_) if !brush.erase && !matches!(layer, Layer::Pixel(_)) => {
+                    let (name, kind) = (layer.base().name.clone(), layer.kind());
+                    return Err(err!("\"{name}\" is a {kind} layer: it can be erased, but color goes on a paint layer above it."));
+                }
+                Err(e) => return Err(e),
+            }
+        } else if brush.erase {
+            let target = self.paint_mask(layer_id)?;
+            // On a mask, black hides and white shows.
+            brush.color = if brush.restore { [255, 255, 255] } else { [0, 0, 0] };
+            brush.erase = false;
+            target
+        } else {
+            unreachable!("a brush either erases or paints")
+        };
         // Painting changes the image itself, which would silently change every other layer showing it.
         let mut users = 0;
         crate::tree::walk(&self.doc.root, &mut |layer| {

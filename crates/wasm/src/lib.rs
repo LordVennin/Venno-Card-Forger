@@ -364,6 +364,35 @@ pub unsafe extern "C" fn cs_drag_end(keep: u32, label_ptr: *const u8, label_len:
     })
 }
 
+/// Erase everything of a layer that is the color at a document point, to
+/// within `tolerance` (0 to 255): the part touching the point if `contiguous`
+/// is 1, or every part. One undoable step. The number of pixels erased is in
+/// the output buffer.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_magic_erase(ptr: *const u8, len: usize, x: f64, y: f64, tolerance: f32, contiguous: u32) -> u32 {
+    let id = text(ptr, len);
+    attempt(|s| {
+        let count = s.session.magic_erase(id?, x, y, tolerance, contiguous == 1, "Magic eraser").map_err(|e| e.to_string())?;
+        s.out = count.to_string().into_bytes();
+        Ok(())
+    })
+}
+
+/// Erase the part of a layer inside a closed path (an SVG path in document
+/// pixels), or with `outside` 1 everything of it but that part. One undoable step.
+///
+/// # Safety
+/// Both `(ptr, len)` pairs must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_erase_area(ptr: *const u8, len: usize, path_ptr: *const u8, path_len: usize, outside: u32) -> u32 {
+    let id = text(ptr, len);
+    let path = text(path_ptr, path_len);
+    attempt(|s| s.session.erase_area(id?, path?, outside == 1, if outside == 1 { "Erase outside the selection" } else { "Erase the selection" }).map_err(|e| e.to_string()))
+}
+
 /// The PostScript names of the loaded fonts, as a JSON list in the output buffer.
 #[no_mangle]
 pub extern "C" fn cs_font_names() {

@@ -26,13 +26,16 @@ pub struct Brush {
     pub color: [u8; 3],
     /// Erase (reduce alpha) instead of painting.
     pub erase: bool,
+    /// With `erase` on a layer that is erased through its mask: bring back what was erased.
+    #[serde(default)]
+    pub restore: bool,
     /// Distance between dabs as a fraction of the diameter.
     pub spacing: f32,
 }
 
 impl Default for Brush {
     fn default() -> Self {
-        Brush { size: 40.0, hardness: 0.8, opacity: 1.0, color: [0, 0, 0], erase: false, spacing: 0.1 }
+        Brush { size: 40.0, hardness: 0.8, opacity: 1.0, color: [0, 0, 0], erase: false, restore: false, spacing: 0.1 }
     }
 }
 

@@ -63,7 +63,7 @@ fn compositing() -> Sample {
         .map(|(i, (name, blend))| with(shape(&format!("blend-{name}"), &round_rect(12.0 + i as f64 * 58.0, 14.0, 50.0, 70.0, 8.0), [0.85, 0.45, 0.2, 1.0]), |b| b.blend = *blend))
         .collect();
     let orange: Color = [0.95, 0.5, 0.1, 1.0];
-    let mask = |x: f64, inverted: bool| Some(RasterMask { asset: "ramp".into(), offset: Vec2 { x, y: 110.0 }, outside: None, enabled: None, inverted: inverted.then_some(true), density: None, feather: None, hides_effects: None });
+    let mask = |x: f64, inverted: bool| Some(RasterMask { asset: "ramp".into(), offset: Vec2 { x, y: 110.0 }, scale: None, outside: None, enabled: None, inverted: inverted.then_some(true), density: None, feather: None, hides_effects: None });
     let vector = |d: String, inverted: bool| Some(VectorMask { path: Path { d, fill_rule: None }, enabled: None, inverted: inverted.then_some(true) });
 
     let mut layers = vec![

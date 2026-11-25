@@ -76,11 +76,15 @@ fn place(layer: &mut Layer, to: &Placement) -> Result<()> {
             Layer::Text(l) => &mut l.base,
         };
         if let Some(mask) = &mut base.mask {
-            if s != 1.0 || to.turn != 0.0 {
-                return Err(err!("\"{name}\" has a pixel mask, which cannot be scaled or turned yet. It can still be moved."));
+            if to.turn != 0.0 {
+                return Err(err!("\"{name}\" has a pixel mask, which cannot be turned yet. It can be moved and scaled."));
             }
             let (x, y) = to.point(mask.offset.x, mask.offset.y);
             mask.offset = Vec2 { x, y };
+            if s != 1.0 {
+                mask.scale = Some(mask.scale.unwrap_or(1.0) * s);
+                mask.feather = mask.feather.map(|f| f * s);
+            }
         }
         if let Some(mask) = &mut base.vector_mask {
             mask.path.d = to.path(&mask.path.d)?;

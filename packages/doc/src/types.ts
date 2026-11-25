@@ -131,6 +131,8 @@ export type RasterMask = {
   asset: AssetId;
   /** Document position of the mask image's top-left pixel. */
   offset: Vec2;
+  /** How many document pixels one pixel of the mask image covers. Default 1. */
+  scale?: number;
   /** What the mask does outside its image. Photoshop's "default color". Default "hide". */
   outside?: "hide" | "reveal";
   /** Masks can be switched off without being removed. Default true. */

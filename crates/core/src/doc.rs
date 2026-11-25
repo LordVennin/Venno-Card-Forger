@@ -243,6 +243,10 @@ pub struct RasterMask {
     pub asset: AssetId,
     /// Document position of the mask image's top-left pixel.
     pub offset: Vec2,
+    /// How many document pixels one pixel of the mask image covers. Default 1.
+    /// A layer that is scaled takes its mask with it this way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<f64>,
     /// What the mask does outside its image (Photoshop's "default color"). Default hide.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outside: Option<Outside>,

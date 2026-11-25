@@ -30,6 +30,8 @@ type Exports = {
   cs_layer_box(ptr: number, len: number): number;
   cs_drag(ptr: number, len: number, scale: number, turn: number, tx: number, ty: number): number;
   cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
+  cs_magic_erase(ptr: number, len: number, x: number, y: number, tolerance: number, contiguous: number): number;
+  cs_erase_area(ptr: number, len: number, pathPtr: number, pathLen: number, outside: number): number;
   cs_font_names(): void;
   cs_export_png(): number;
   cs_asset_bytes(ptr: number, len: number): number;
@@ -97,7 +99,13 @@ export type Brush = {
   opacity: number;
   /** sRGB, 0..255. */
   color: [number, number, number];
+  /**
+   * Erase instead of paint. A paint layer's own pixels are erased; any other layer
+   * (the art, a template's layers, text, shapes, groups) is erased through a mask.
+   */
   erase: boolean;
+  /** With `erase`, on a layer erased through its mask: bring back what was erased. */
+  restore?: boolean;
 };
 
 /** An edit, as the core's `Edit` enum serializes. */
@@ -308,6 +316,24 @@ export class Core {
   /** Finish a drag: keep it as one undoable step, or put the layer back. */
   dragEnd(keep: boolean, label = "Move"): void {
     this.check(this.passText(label, (ptr, len) => this.x.cs_drag_end(keep ? 1 : 0, ptr, len)));
+  }
+
+  /**
+   * Erase everything of a layer that is the color at a document point, to within
+   * `tolerance` (0 to 255): the part touching the point, or every part. It is erased
+   * through the layer's mask, as one undoable step. Returns how many pixels went.
+   */
+  magicErase(id: string, x: number, y: number, tolerance: number, contiguous: boolean): number {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_magic_erase(ptr, len, x, y, tolerance, contiguous ? 1 : 0)));
+    return Number(decoder.decode(this.out()));
+  }
+
+  /**
+   * Erase the part of a layer inside a closed path (an SVG path in document pixels), or
+   * with `outside` everything of it but that part. Through its mask, as one undoable step.
+   */
+  eraseArea(id: string, path: string, outside: boolean): void {
+    this.check(this.passText(id, (ptr, len) => this.passText(path, (pathPtr, pathLen) => this.x.cs_erase_area(ptr, len, pathPtr, pathLen, outside ? 1 : 0))));
   }
 
   /** The PostScript names of the loaded fonts. */
