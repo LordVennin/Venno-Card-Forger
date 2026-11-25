@@ -166,3 +166,29 @@ fn a_drag_while_zoomed_out_shows_on_screen_and_leaves_the_real_picture_exact() {
     assert_eq!(view(&s, 10, 10), [128, 128, 128, 255]);
     assert!(*s.doc() == before);
 }
+
+#[test]
+fn images_and_shapes_turn_about_a_point_and_text_says_it_cannot() {
+    let (mut doc, _) = scene();
+    // A quarter turn clockwise about the dot's own middle (75, 35): its corner (70, 30) goes to (80, 30).
+    place(&mut doc, "dot", &Placement::turn_about(std::f64::consts::FRAC_PI_2, 75.0, 35.0));
+    let Layer::Pixel(dot) = tree::find(&doc, "dot").unwrap() else { panic!() };
+    let m = dot.transform.map(|v| (v * 1e9).round() / 1e9);
+    assert_eq!(m, [0.0, -1.0, 80.0, 1.0, 0.0, 30.0]);
+    // The square about its top-left corner: the corner stays, the far corner swings below-left.
+    place(&mut doc, "square", &Placement::turn_about(std::f64::consts::FRAC_PI_2, 20.0, 20.0));
+    let Layer::Shape(square) = tree::find(&doc, "square").unwrap() else { panic!() };
+    let path = kurbo_points(&square.path.d);
+    assert_eq!(path, [(20, 20), (20, 60), (-20, 60), (-20, 20)]);
+    assert!(place_edit(&doc, "words", &Placement::turn_about(0.3, 0.0, 0.0)).unwrap_err().to_string().contains("cannot be turned"));
+    // A turned image still draws, and a session shows it.
+    let mut s = Session::new(doc, scene().1);
+    assert_eq!(px(&mut s, 75, 35), [255, 0, 0, 255]);
+}
+
+fn kurbo_points(d: &str) -> Vec<(i64, i64)> {
+    d.split(|c: char| c == 'M' || c == 'L' || c == 'Z').filter(|p| !p.trim().is_empty()).map(|p| {
+        let mut n = p.trim().split(',').map(|v| v.trim().parse::<f64>().unwrap().round() as i64);
+        (n.next().unwrap(), n.next().unwrap())
+    }).collect()
+}

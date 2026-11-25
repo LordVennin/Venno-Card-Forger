@@ -27,7 +27,7 @@ type Exports = {
   cs_add_fill(build: number, ptr: number, len: number, sourcePtr: number, sourceLen: number, paramsPtr: number, paramsLen: number): number;
   cs_hit(x: number, y: number): void;
   cs_layer_box(ptr: number, len: number): number;
-  cs_drag(ptr: number, len: number, scale: number, tx: number, ty: number): number;
+  cs_drag(ptr: number, len: number, scale: number, turn: number, tx: number, ty: number): number;
   cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
   cs_font_names(): void;
   cs_export_png(): number;
@@ -278,11 +278,12 @@ export class Core {
 
   /**
    * Show a layer moved and scaled, as a drag in progress: every point p of it,
-   * as it was when the drag began, goes to scale * p + (tx, ty). Call as often
+   * as it was when the drag began, is scaled, turned clockwise by `turn` radians and
+   * moved: scale * R(turn) * p + (tx, ty). Call as often
    * as the pointer moves, then `dragEnd`.
    */
-  drag(id: string, scale: number, tx: number, ty: number): void {
-    this.check(this.passText(id, (ptr, len) => this.x.cs_drag(ptr, len, scale, tx, ty)));
+  drag(id: string, scale: number, tx: number, ty: number, turn = 0): void {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_drag(ptr, len, scale, turn, tx, ty)));
   }
 
   /** Finish a drag: keep it as one undoable step, or put the layer back. */

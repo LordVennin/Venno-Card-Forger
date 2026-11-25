@@ -270,6 +270,8 @@
     box: Rect | null;
     /** For a scale: the corner that stays put. */
     anchor?: { x: number; y: number };
+    /** For a turn: the point turned about (the middle of the box). */
+    pivot?: { x: number; y: number };
     moved: boolean;
     /** Lines to snap to: the card's edges and middle, and the template's reference boxes. */
     snapX: number[];
@@ -306,7 +308,7 @@
     return best;
   }
 
-  function beginDrag(e: PointerEvent, id: string, corner?: { x: number; y: number }) {
+  function beginDrag(e: PointerEvent, id: string, corner?: { x: number; y: number }, turning = false) {
     const found = find(id);
     if (!found || !core) return;
     if (found.layer.locked?.all || found.layer.locked?.position) {
@@ -316,7 +318,8 @@
     const b = core.layerBox(id);
     const lines = snapLines(id);
     drag = { id, name: found.layer.name, from: toDoc(e), box: b, moved: false, snapX: lines.x, snapY: lines.y };
-    if (corner && b) drag.anchor = { x: b.x + b.width - (corner.x - b.x), y: b.y + b.height - (corner.y - b.y) };
+    if (turning && b) drag.pivot = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    else if (corner && b) drag.anchor = { x: b.x + b.width - (corner.x - b.x), y: b.y + b.height - (corner.y - b.y) };
   }
 
   function dragTo(e: PointerEvent) {
@@ -326,7 +329,15 @@
     if (!drag.moved && Math.hypot(dx, dy) * view.scale < 3 * dpr()) return;
     drag.moved = true;
     try {
-      if (drag.anchor && drag.box) {
+      if (drag.pivot) {
+        // Turning about the middle; Shift keeps to steps of fifteen degrees.
+        const angle = (q: { x: number; y: number }) => Math.atan2(q.y - drag!.pivot!.y, q.x - drag!.pivot!.x);
+        let turn = angle(p) - angle(drag.from);
+        if (e.shiftKey) turn = Math.round(turn / (Math.PI / 12)) * (Math.PI / 12);
+        const [sin, cos] = [Math.sin(turn), Math.cos(turn)];
+        const { x, y } = drag.pivot;
+        core.drag(drag.id, 1, x - (cos * x - sin * y), y - (sin * x + cos * y), turn);
+      } else if (drag.anchor && drag.box) {
         // Scaling keeps the opposite corner where it is and the layer's proportions as they are.
         const was = Math.hypot(drag.from.x - drag.anchor.x, drag.from.y - drag.anchor.y);
         const scale = Math.max(0.01, Math.hypot(p.x - drag.anchor.x, p.y - drag.anchor.y) / Math.max(was, 1));
@@ -355,10 +366,10 @@
     const done = drag;
     drag = null;
     if (done.moved) {
-      core.dragEnd(true, `${done.anchor ? "Scale" : "Move"} ${done.name}`);
+      core.dragEnd(true, `${done.pivot ? "Turn" : done.anchor ? "Scale" : "Move"} ${done.name}`);
       blit(core.dirty());
       refresh();
-    } else if (e && !done.anchor) {
+    } else if (e && !done.anchor && !done.pivot) {
       // A click without a drag picks what is under the pointer.
       select(core.hit(toDoc(e).x, toDoc(e).y) ?? undefined);
     }
@@ -735,6 +746,18 @@
             onpointerup={() => endDrag()}
           ></div>
         {/each}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="handle turn"
+          title="Drag to turn (Shift: steps of 15°)"
+          onpointerdown={(e) => {
+            e.stopPropagation();
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            beginDrag(stagePoint(e), active!, undefined, true);
+          }}
+          onpointermove={(e) => drag && dragTo(stagePoint(e))}
+          onpointerup={() => endDrag()}
+        ></div>
       </div>
     {/if}
     {#if typing}
@@ -928,6 +951,7 @@
   canvas.moving { cursor: default; }
   .outline { position: absolute; border: 1px solid #5b9dff; outline: 1px solid rgba(0, 0, 0, 0.5); pointer-events: none; box-sizing: border-box; }
   .handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #fff; border: 1px solid #1f5fd0; pointer-events: auto; touch-action: none; }
+  .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
   .checks { display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .fx { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding-left: 8px; }

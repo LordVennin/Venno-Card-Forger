@@ -312,17 +312,18 @@ pub unsafe extern "C" fn cs_layer_box(ptr: *const u8, len: usize) -> u32 {
 }
 
 /// Show a layer moved and scaled, as a drag in progress: every point `p` of it,
-/// as it was when the drag began, goes to `scale * p + (tx, ty)`. Nothing is
+/// as it was when the drag began, is scaled, turned clockwise by `turn` radians
+/// and moved: `scale * R(turn) * p + (tx, ty)`. Nothing is
 /// added to history until `cs_drag_end`.
 ///
 /// # Safety
 /// `(ptr, len)` must be valid as described in the module docs.
 #[no_mangle]
-pub unsafe extern "C" fn cs_drag(ptr: *const u8, len: usize, scale: f64, tx: f64, ty: f64) -> u32 {
+pub unsafe extern "C" fn cs_drag(ptr: *const u8, len: usize, scale: f64, turn: f64, tx: f64, ty: f64) -> u32 {
     let id = text(ptr, len);
     attempt(|s| {
         let from = s.drag_from.get_or_insert_with(|| s.session.doc().clone());
-        let edit = place_edit(from, id?, &Placement { scale, tx, ty }).map_err(|e| e.to_string())?;
+        let edit = place_edit(from, id?, &Placement { scale, turn, tx, ty }).map_err(|e| e.to_string())?;
         s.session.preview(edit).map_err(|e| e.to_string())
     })
 }
