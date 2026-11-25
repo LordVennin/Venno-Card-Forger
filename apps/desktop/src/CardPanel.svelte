@@ -90,8 +90,19 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string; fillSelection?: [number, number, number, number] };
+    const want = JSON.parse(text) as { open?: string; rename?: string; template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string; fillSelection?: [number, number, number, number] };
     tier = want.tier ?? tier;
+    if (want.open) {
+      // A saved card, reopened and changed through its form.
+      await openDocument(want.open);
+      if (want.rename) {
+        edit("name", want.rename);
+        await build();
+      }
+      if (want.export) await native.writeFile(want.export, core.exportPng());
+      say(`Reopened ${want.open}: form ${raw ? "restored" : "not restored"}`);
+      return;
+    }
     folder = want.template;
     await openTemplate();
     if (want.art) {
@@ -202,9 +213,9 @@
     }
   }
 
-  async function openDocument() {
+  async function openDocument(path?: string) {
     try {
-      const file = await native.openDocument();
+      const file = path ? { path, data: await native.documentFile(path) } : await native.openDocument();
       if (!file) return;
       busy = true;
       core.openCardsmith(file.data);
@@ -216,8 +227,28 @@
       raw = null;
       prints = [];
       warnings = [];
+      artPath = "";
       opened();
       await loadImages();
+      // With its template at hand, the card's form works again.
+      if (assetFolder) {
+        try {
+          const pack = await native.template(assetFolder);
+          const request = core.resumeCard(pack.doc, pack.manifest);
+          if (request.scryfall) {
+            raw = request.scryfall;
+            face = request.name ?? "";
+            extras = { setSize: request.setSize ?? null, symbolSvg: request.symbolSvg ?? null, watermarkSvg: request.watermarkSvg ?? null };
+            shadows = request.textShadows == null ? "template" : request.textShadows ? "on" : "off";
+            artPath = request.artPath ?? "";
+            search = String(raw.name ?? "");
+            folder = assetFolder;
+            symbolFor = `${raw.set}/${raw.rarity}/${side?.type_line}`;
+          }
+        } catch {
+          // Not a card built here, or saved before cards recorded how they were built: it opens as plain layers.
+        }
+      }
       say(`Opened ${fileName(file.path)}` + (template && !assetFolder ? `. Its template (${template}) is not in the templates folder, so layers that were hidden when it was saved have no picture.` : ""));
     } catch (err) {
       fail("That file could not be opened")(err);
@@ -404,7 +435,7 @@
     let report: BuildReport;
     try {
       const started = performance.now();
-      report = core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, textShadows: shadows === "template" ? null : shadows === "on" });
+      report = core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, artPath: artPath || null, textShadows: shadows === "template" ? null : shadows === "on" });
       warnings = report.warnings;
       changed();
       await loadImages();
@@ -487,12 +518,12 @@
 <aside class="card" bind:this={panel}>
   <h2>File</h2>
   <div class="row">
-    <button onclick={openDocument} disabled={busy} title="Open a saved card (.cardsmith)">Open…</button>
+    <button onclick={() => openDocument()} disabled={busy} title="Open a saved card (.cardsmith)">Open…</button>
     <button onclick={saveDocument} disabled={busy} title="Save the card with its layers, to carry on with later">Save…</button>
     <span class="path" title={filePath}>{filePath ? fileName(filePath) : ""}</span>
   </div>
   {#if filePath && !raw && !folder}
-    <p class="note">A reopened card keeps all its layers: move, restyle, paint and export as before. Its card form is not restored; to change the card's fields, build it again on its template.</p>
+    <p class="note">This file opened as plain layers: move, restyle, paint and export as before. Its card form is not available, because its template is not in the templates folder or it was not built as a card here.</p>
   {/if}
 
   <h2>Folders</h2>

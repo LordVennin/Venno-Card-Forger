@@ -206,6 +206,24 @@ pub unsafe extern "C" fn cs_open_template(doc_ptr: *const u8, doc_len: usize, ma
     })
 }
 
+/// Take up a saved card again: the open document was built on this template
+/// (its `doc.json` and `manifest.json`) in an earlier session. The request it
+/// was built from is in the output buffer, for the card form.
+///
+/// # Safety
+/// Both `(ptr, len)` pairs must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_resume_card(doc_ptr: *const u8, doc_len: usize, manifest_ptr: *const u8, manifest_len: usize) -> u32 {
+    let doc = text(doc_ptr, doc_len);
+    let manifest = text(manifest_ptr, manifest_len);
+    attempt(|s| {
+        let (bench, request) = Workbench::resume(Template::from_json(doc?, manifest?)?, &s.session)?;
+        s.bench = Some(bench);
+        s.out = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
 /// The assets that showing layers need and that have not been supplied, as
 /// JSON in the output buffer: `[{ "id", "path" }]`.
 #[no_mangle]

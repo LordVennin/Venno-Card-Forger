@@ -23,9 +23,13 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
 /// What to build: the card, and what the engine cannot work out from it.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildRequest {
+    /// Where the art's file is, for whoever makes fills from it. The engine does
+    /// not read it; it is kept with the card so a reopened one still knows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub art_path: Option<String>,
     /// The card, ready for the engine...
     #[serde(default)]
     pub card: Option<CardData>,
@@ -132,9 +136,8 @@ impl Workbench {
         self.art = None;
     }
 
-    /// Build the card into the session's document as one undoable step,
-    /// replacing the build that is showing, if one is.
-    pub fn build(&mut self, session: &mut Session, request: &BuildRequest) -> Result<Report, String> {
+    /// The card a request describes and the choices that go with it.
+    fn prepare(&self, request: &BuildRequest) -> Result<(CardData, Options), String> {
         let card = match (&request.card, &request.scryfall) {
             (Some(card), _) => card.clone(),
             (None, Some(scryfall)) => {
@@ -156,6 +159,46 @@ impl Workbench {
             text_shadows: request.text_shadows,
             ..Options::default()
         };
+        Ok((card, options))
+    }
+
+    /// Take up a card that was built in an earlier session and saved: the
+    /// document open in `session` must be one this template's card was built
+    /// into. The build it records is made again from the bare template, which
+    /// tells what the engine did from what was changed by hand since, so the
+    /// card's fields can be edited as before and hand changes are kept.
+    /// Returns the request the card was built from, for the card form.
+    pub fn resume(template: Template, session: &Session) -> Result<(Workbench, BuildRequest), String> {
+        let doc = session.doc();
+        let noted = doc.card.as_ref().ok_or("This document is not a card built on a template.")?;
+        let build = noted.get("_build").and_then(Value::as_u64).ok_or("This card was saved before cards kept a record of how they were built.")?;
+        let request: BuildRequest = noted.get("_request").cloned().ok_or("This card was saved before cards kept a record of how they were built.".to_string()).and_then(|r| serde_json::from_value(r).map_err(|e| e.to_string()))?;
+        let mut bench = Workbench::new(template);
+        // The art is whatever picture the card's art layer shows.
+        if let Some(cardsmith_core::doc::Layer::Art(art)) = tree::find(doc, "card-art") {
+            if let Some((id, asset)) = art.asset.as_ref().and_then(|id| doc.assets.get(id).map(|a| (id, a))) {
+                bench.art = Some(Art { asset: id.clone(), path: asset.path.clone(), width: asset.width.unwrap_or(1), height: asset.height.unwrap_or(1) });
+            }
+        }
+        let (card, options) = bench.prepare(&request)?;
+        let built = build_card(&bench.template, &card, session.fonts(), &options)?;
+        let mut scratch = bench.template.doc.clone();
+        let inverse = apply(&mut scratch, &built.edit).map_err(|e| e.to_string())?;
+        bench.inverses.insert(build, inverse);
+        bench.built.insert(build, scratch);
+        if let Some(plan) = built.fill {
+            bench.plans.insert(build, plan);
+        }
+        // Past every number already used for a build or a picture in this document.
+        let used = doc.assets.keys().filter_map(|id| id.rsplit('-').next()?.parse::<u64>().ok()).max().unwrap_or(0);
+        bench.next = build.max(used) + 1;
+        Ok((bench, request))
+    }
+
+    /// Build the card into the session's document as one undoable step,
+    /// replacing the build that is showing, if one is.
+    pub fn build(&mut self, session: &mut Session, request: &BuildRequest) -> Result<Report, String> {
+        let (card, options) = self.prepare(request)?;
         let built = build_card(&self.template, &card, session.fonts(), &options)?;
         let mut warnings = built.warnings;
         if request.symbol_svg.is_some() && options.symbol.is_none() {
@@ -200,6 +243,8 @@ impl Workbench {
         }
         let mut noted = serde_json::to_value(&card).map_err(|e| e.to_string())?;
         noted["_build"] = json!(build);
+        // How it was built, so a saved card can be taken up again.
+        noted["_request"] = serde_json::to_value(request).map_err(|e| e.to_string())?;
         edits.push(Edit::SetDocProps { props: json!({ "card": noted }).as_object().cloned().unwrap_or_default() });
 
         let label = if showing.is_some() { format!("Update {}", card.name) } else { format!("Build {}", card.name) };

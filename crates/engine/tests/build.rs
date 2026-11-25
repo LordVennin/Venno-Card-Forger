@@ -827,3 +827,45 @@ fn text_shadows_follow_the_template_unless_asked_for_and_are_added_where_the_tem
     // The normal template's 6 px at 3264 wide, for a document 2000 wide.
     assert_eq!((*distance, *size), (3.68, 3.68));
 }
+
+#[test]
+fn a_saved_card_is_taken_up_again_with_its_fields_and_hand_changes() {
+    use cardsmith_core::arrange::{place_edit, Placement};
+    use cardsmith_core::serialize::load_cardsmith_available;
+    let (mut bench, mut session) = bench();
+    bench.set_art(&mut session, picture(400, 300)).unwrap();
+    let eldrazi = json!({ "object": "card", "layout": "normal", "name": "ab", "mana_cost": "{7}", "colors": [], "type_line": "Creature — Eldrazi", "oracle_text": "a", "power": "2", "toughness": "3", "set": "tst", "collector_number": "7", "rarity": "rare", "artist": "bb", "lang": "en" });
+    let request: BuildRequest = serde_json::from_value(json!({ "scryfall": eldrazi, "artPath": "/pictures/art.png", "textShadows": true })).unwrap();
+    let report = bench.build(&mut session, &request).unwrap();
+    assert!(bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
+    let drag = place_edit(session.doc(), "card-art", &Placement::shift(30.0, -20.0)).unwrap();
+    session.execute(drag, "Move art").unwrap();
+    let moved = match layer(session.doc(), "card-art") { Layer::Art(a) => a.transform, _ => panic!() };
+    let file = session.save_available().unwrap();
+
+    // Another day: the file is opened and its template found again.
+    let (doc, assets) = load_cardsmith_available(&file).unwrap();
+    let mut reopened = Session::with_fonts(doc, assets, fonts());
+    let (mut bench, request) = Workbench::resume(template(), &reopened).unwrap();
+    assert_eq!((request.art_path.as_deref(), request.text_shadows, request.scryfall.as_ref().unwrap()["name"].as_str()), (Some("/pictures/art.png"), Some(true), Some("ab")));
+    // The card's name is changed in the form: one step, the art stays where it was dragged, the fill stays.
+    let mut edited = request.clone();
+    edited.scryfall.as_mut().unwrap()["name"] = json!("bbbb");
+    let next = bench.build(&mut reopened, &edited).unwrap();
+    assert_eq!(runs(reopened.doc(), "name"), "bbbb");
+    let Layer::Art(art) = layer(reopened.doc(), "card-art") else { panic!() };
+    assert_eq!(art.transform, moved);
+    assert!(next.fill_kept && tree::find(reopened.doc(), "card-fill").is_some());
+    assert_eq!(reopened.labels(), ["Update bbbb"]);
+    assert!(reopened.undo());
+    assert_eq!(runs(reopened.doc(), "name"), "ab");
+    // New art gets a name of its own, past the ones the file already uses.
+    bench.set_art(&mut reopened, picture(40, 30)).unwrap();
+    bench.build(&mut reopened, &edited).unwrap();
+    let Layer::Art(art) = layer(reopened.doc(), "card-art") else { panic!() };
+    assert!(art.asset.as_deref().is_some_and(|id| id != "card-art-1"), "{:?}", art.asset);
+
+    // A document that is not a built card says so.
+    let plain = Session::with_fonts(template().doc, Default::default(), fonts());
+    assert!(Workbench::resume(template(), &plain).is_err());
+}

@@ -61,10 +61,11 @@ export const native = {
     return path;
   },
 
+  documentFile: (path: string) => bytes("document_file", { path }),
   /** Ask for a saved document and read it. Null if the user backed out. */
   async openDocument(): Promise<{ path: string; data: Uint8Array } | null> {
     const path = await open({ title: "Open a card", filters: [{ name: "Cardsmith document", extensions: ["cardsmith"] }] });
-    return typeof path === "string" ? { path, data: await bytes("document_file", { path }) } : null;
+    return typeof path === "string" ? { path, data: await native.documentFile(path) } : null;
   },
 
   /** Write bytes to a file. The bytes go as the request's body, not as JSON. */

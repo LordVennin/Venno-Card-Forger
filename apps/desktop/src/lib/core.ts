@@ -20,6 +20,7 @@ type Exports = {
   cs_open_cardsmith(ptr: number, len: number): number;
   cs_open_json(jsonPtr: number, jsonLen: number, assetsPtr: number, assetsLen: number): number;
   cs_open_template(docPtr: number, docLen: number, manifestPtr: number, manifestLen: number): number;
+  cs_resume_card(docPtr: number, docLen: number, manifestPtr: number, manifestLen: number): number;
   cs_missing_assets(): void;
   cs_add_asset(idPtr: number, idLen: number, ptr: number, len: number, redraw: number): number;
   cs_set_art(ptr: number, len: number): number;
@@ -64,6 +65,8 @@ export type BuildReport = { build: number; warnings: string[]; fill: FillInfo | 
  * the card form) and the name of the face wanted, or card data already read from it.
  */
 export type BuildRequest = {
+  /** Where the art's file is. Kept with the card so a reopened one can still have its fill made again. */
+  artPath?: string | null;
   scryfall?: Record<string, unknown>;
   name?: string;
   card?: Record<string, unknown>;
@@ -181,6 +184,15 @@ export class Core {
   /** Open a template package (its doc.json and manifest.json) to build a card on. Its images come later, through `missingAssets`. */
   openTemplate(doc: string, manifest: string): void {
     this.check(this.passText(doc, (docPtr, docLen) => this.passText(manifest, (ptr, len) => this.x.cs_open_template(docPtr, docLen, ptr, len))));
+  }
+
+  /**
+   * Take up a saved card again: the open document was built on this template in an earlier
+   * session. Returns what it was built from, for the card form. Throws if it is not such a card.
+   */
+  resumeCard(doc: string, manifest: string): BuildRequest {
+    this.check(this.passText(doc, (docPtr, docLen) => this.passText(manifest, (ptr, len) => this.x.cs_resume_card(docPtr, docLen, ptr, len))));
+    return JSON.parse(decoder.decode(this.out()));
   }
 
   /** The images that layers now showing need and that have not been supplied. */
