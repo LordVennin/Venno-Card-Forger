@@ -77,7 +77,8 @@ export type BuildRequest = {
   verticalFullart?: boolean;
 };
 
-export type CoreState = { canUndo: boolean; canRedo: boolean; labels: string[]; warnings: string[] };
+/** `labels` are the steps done, oldest first; `redoLabels` the steps undone, the next to redo first. */
+export type CoreState = { canUndo: boolean; canRedo: boolean; labels: string[]; redoLabels: string[]; warnings: string[] };
 
 /** `scale` screen pixels per document pixel, with document point (x, y) at the view's top-left. */
 export type View = { scale: number; x: number; y: number; width: number; height: number };

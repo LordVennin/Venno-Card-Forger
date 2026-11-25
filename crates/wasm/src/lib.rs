@@ -391,6 +391,7 @@ pub extern "C" fn cs_state_json() {
             "canUndo": s.session.can_undo(),
             "canRedo": s.session.can_redo(),
             "labels": s.session.labels(),
+            "redoLabels": s.session.redo_labels(),
             "warnings": s.session.warnings(),
         });
         s.out = serde_json::to_vec(&state).unwrap_or_default();

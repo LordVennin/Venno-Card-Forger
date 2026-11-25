@@ -522,6 +522,17 @@
       {/each}
     </select>
   {/if}
+  {#if prints.some((p) => p.thumbnail)}
+    <div class="prints" title="Printings, newest first">
+      {#each prints as p}
+        {#if p.thumbnail}
+          <button class:chosen={printing === `${p.set}/${p.number}`} onclick={() => ((printing = `${p.set}/${p.number}`), pickPrinting())} title="{p.setName} · {p.set.toUpperCase()} {p.number} · {p.year} · {p.artist}">
+            <img src={p.thumbnail} alt="{p.setName} {p.number}" loading="lazy" />
+          </button>
+        {/if}
+      {/each}
+    </div>
+  {/if}
   <button class="quiet" onclick={blank}>…or write a card from nothing</button>
 
   {#if raw && side}
@@ -538,6 +549,13 @@
       <textarea rows="5" data-field="oracle_text" value={side.oracle_text ?? ""} oninput={(e) => (edit("oracle_text", e.currentTarget.value), symbolsTyped("oracle_text", e.currentTarget))}></textarea>
     </label>
     {#if palette?.field === "oracle_text"}{@render symbols()}{/if}
+    {#if /\{[^{}\s]+\}/.test(side.oracle_text ?? "")}
+      <div class="chips" title="The rules text with its symbols">
+        {#each String(side.oracle_text).split(/(\{[^{}\s]+\})/) as part}
+          {#if /^\{[^{}\s]+\}$/.test(part)}<span class="sym" style:background={symbolColor(part)}>{part.slice(1, -1)}</span>{:else}{part}{/if}
+        {/each}
+      </div>
+    {/if}
     <label class="tall">Flavor <textarea rows="3" value={side.flavor_text ?? ""} oninput={(e) => edit("flavor_text", e.currentTarget.value)}></textarea></label>
     <div class="row">
       <label>Power <input class="short" data-field="power" value={side.power ?? ""} oninput={(e) => edit("power", e.currentTarget.value)} /></label>
@@ -641,6 +659,12 @@
   .quiet { background: none; border: none; color: #8ea1e1; text-align: left; padding: 0; }
   .warning { color: #f0b232; margin: 0; }
   .note { color: #9a9ca3; margin: 0; font-size: 12px; }
+  .prints { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+  .prints button { padding: 0; border: 2px solid transparent; border-radius: 5px; background: none; flex: none; }
+  .prints button.chosen { border-color: #5865f2; }
+  .prints img { display: block; height: 96px; border-radius: 4px; }
+  .chips { white-space: pre-wrap; color: #c8c9cd; font-size: 12px; line-height: 1.7; }
+  .chips .sym { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
   .chip { padding: 0 6px; font-size: 11px; color: #b5b7bd; }
   .palette { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #1e1f22; border: 1px solid #50545c; border-radius: 4px; }
   .palette .row { gap: 3px; }

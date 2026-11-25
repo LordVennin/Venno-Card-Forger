@@ -16,13 +16,13 @@
   let samples = $state<string[]>([]);
   let current = $state(0);
   let doc = $state.raw<Doc>();
-  let history = $state.raw<CoreState>({ canUndo: false, canRedo: false, labels: [], warnings: [] });
+  let history = $state.raw<CoreState>({ canUndo: false, canRedo: false, labels: [], redoLabels: [], warnings: [] });
   let active = $state<string>();
   let status = $state("Loading core…");
   let busy = $state(false);
 
   // The tool in hand: moving layers about, or painting.
-  let tool = $state<"move" | "paint">("move");
+  let tool = $state<"move" | "paint" | "pick">("move");
   // The selected layer's box, in document pixels, for the outline and handles.
   let box = $state.raw<Rect | null>(null);
   // A text layer being typed into on the canvas.
@@ -474,6 +474,52 @@
     }
   }
 
+  // ---- the layers list ---------------------------------------------------------------
+
+  /** Go back or forward through history to a step: `steps` undos if negative, redos if positive. */
+  function travel(steps: number) {
+    run(steps < 0 ? "Undo" : "Redo", () => {
+      for (let i = 0; i < Math.abs(steps); i++) steps < 0 ? core!.undo() : core!.redo();
+    });
+  }
+
+  let dragged: string | null = null;
+  /** Drop a layer from the list just above another one, in that one's group. */
+  function dropAbove(target: string) {
+    const [from, to] = [dragged && find(dragged), find(target)];
+    const id = dragged;
+    dragged = null;
+    if (!from || !to || !id || id === target) return;
+    // A group cannot go inside itself.
+    if (from.layer.kind === "group" && find(target, from.layer as Layer & { kind: "group" })) {
+      status = "A group cannot be moved into itself.";
+      return;
+    }
+    // The place is counted after the layer has left its old one.
+    const index = to.index + (from.parent === to.parent && from.index < to.index ? 0 : 1);
+    run("Reorder", () => core!.execute({ type: "moveLayer", id, parent: to.parent, index }, `Reorder ${from.layer.name}`));
+  }
+
+  /** Switch one of the selected layer's effects on or off, or change one of its numbers. */
+  function setEffect(index: number, change: Record<string, unknown>) {
+    if (!selected?.effects) return;
+    const effects = selected.effects.map((effect, i) => (i === index ? { ...effect, ...change } : effect));
+    setProp({ effects }, "Layer effect");
+  }
+  const EFFECT_NAMES: Record<string, string> = { colorOverlay: "Color overlay", gradientOverlay: "Gradient overlay", stroke: "Stroke", dropShadow: "Drop shadow", innerShadow: "Inner shadow", outerGlow: "Outer glow", bevel: "Bevel" };
+
+  /** Take the brush color from what is on screen under the pointer. */
+  function pickColor(e: PointerEvent) {
+    if (!core || !canvas) return;
+    const [x, y] = [Math.floor(e.offsetX * dpr()), Math.floor(e.offsetY * dpr())];
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+    const at = (y * canvas.width + x) * 4;
+    const pixels = core.viewPixels();
+    if (pixels[at + 3] === 0) return;
+    color = "#" + [pixels[at], pixels[at + 1], pixels[at + 2]].map((v) => v!.toString(16).padStart(2, "0")).join("");
+    status = `Brush color ${color}`;
+  }
+
   function removeSelected() {
     const found = active ? find(active) : null;
     if (!found) return;
@@ -500,6 +546,10 @@
       return;
     }
     if (e.button !== 0) return;
+    if (tool === "pick") {
+      pickColor(e);
+      return;
+    }
     if (tool === "move") {
       if (typing) commitText(true);
       // Drag moves the selected layer wherever the pointer is; with none selected, or with Ctrl, what is under it.
@@ -586,6 +636,7 @@
       const step = e.shiftKey ? 10 : 1;
       nudge(e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0, e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0);
     } else if (e.key.toLowerCase() === "v") tool = "move";
+    else if (e.key.toLowerCase() === "i") tool = "pick";
     else if (e.key.toLowerCase() === "t" && !mod) newText();
     else if (e.key === "[") size = Math.max(1, Math.round(size / 1.25));
     else if (e.key === "]") size = Math.min(1000, Math.round(size * 1.25) + 1);
@@ -634,6 +685,7 @@
     <button class:active={tool === "move"} onclick={() => (tool = "move")} title="Move and scale layers (V)">Move</button>
     <button class:active={tool === "paint" && !erase} onclick={() => ((tool = "paint"), (erase = false))} title="Brush (B)">Brush</button>
     <button class:active={tool === "paint" && erase} onclick={() => ((tool = "paint"), (erase = true))} title="Eraser (E)">Eraser</button>
+    <button class:active={tool === "pick"} onclick={() => (tool = "pick")} title="Take the brush color from the picture (I)">Eyedropper</button>
     <label title="Brush size in document pixels ([ and ])">Size <input type="range" min="1" max="800" bind:value={size} /> <output>{size}</output></label>
     <label>Hardness <input type="range" min="0" max="1" step="0.05" bind:value={hardness} /> <output>{Math.round(hardness * 100)}%</output></label>
     <label>Opacity <input type="range" min="0.05" max="1" step="0.05" bind:value={opacity} /> <output>{Math.round(opacity * 100)}%</output></label>
@@ -659,6 +711,7 @@
       onpointercancel={() => pointerUp()}
       ondblclick={doubleClick}
       class:moving={tool === "move"}
+      class:picking={tool === "pick"}
       onpointerleave={() => (cursor = null)}
       onwheel={wheel}
       oncontextmenu={(e) => e.preventDefault()}
@@ -747,12 +800,52 @@
           {@const shape = selected}
           <label>Color <input type="color" value={hex(shape.fill.type === "solid" ? shape.fill.color : [0, 0, 0, 1])} onchange={(e) => setProp({ fill: { type: "solid", color: rgb(e.currentTarget.value) } }, "Shape color")} /></label>
         {/if}
+        <label>Name <input class="text" value={selected.name} onchange={(e) => setProp({ name: e.currentTarget.value || selected!.name }, "Rename")} /></label>
+        <div class="checks">
+          <label title="Show this layer only where the layer beneath it has ink"><input type="checkbox" checked={selected.clip} onchange={(e) => setProp({ clip: e.currentTarget.checked }, "Clip to the layer below")} /> Clip</label>
+          <label title="Keep it from being moved"><input type="checkbox" checked={!!selected.locked?.position} onchange={(e) => setProp({ locked: { ...selected!.locked, position: e.currentTarget.checked } }, "Lock position")} /> Lock</label>
+          {#if selected.mask}
+            <label title="The layer's pixel mask"><input type="checkbox" checked={selected.mask.enabled !== false} onchange={(e) => setProp({ mask: { ...selected!.mask, enabled: e.currentTarget.checked } }, "Mask")} /> Mask</label>
+          {/if}
+          {#if selected.vectorMask}
+            <label title="The layer's vector mask"><input type="checkbox" checked={selected.vectorMask.enabled !== false} onchange={(e) => setProp({ vectorMask: { ...selected!.vectorMask, enabled: e.currentTarget.checked } }, "Vector mask")} /> Vector mask</label>
+          {/if}
+        </div>
+        {#if selected.effects?.length}
+          <label class="fx-head"><input type="checkbox" checked={selected.effectsEnabled !== false} onchange={(e) => setProp({ effectsEnabled: e.currentTarget.checked }, "Layer effects")} /> Effects</label>
+          {#each selected.effects as effect, i}
+            <div class="fx">
+              <label><input type="checkbox" checked={effect.enabled} onchange={(e) => setEffect(i, { enabled: e.currentTarget.checked })} /> {EFFECT_NAMES[effect.type] ?? effect.type}</label>
+              {#if "opacity" in effect}
+                <label title="Opacity">%<input class="number" type="number" min="0" max="100" value={Math.round(effect.opacity * 100)} onchange={(e) => setEffect(i, { opacity: Math.min(100, Math.max(0, Number(e.currentTarget.value))) / 100 })} /></label>
+              {/if}
+              {#if "distance" in effect}
+                <label title="Distance in pixels">↘<input class="number" type="number" min="0" value={effect.distance} onchange={(e) => setEffect(i, { distance: Math.max(0, Number(e.currentTarget.value)) })} /></label>
+              {/if}
+              {#if "size" in effect}
+                <label title="Size in pixels">⌀<input class="number" type="number" min="0" value={effect.size} onchange={(e) => setEffect(i, { size: Math.max(0, Number(e.currentTarget.value)) })} /></label>
+              {/if}
+              {#if "color" in effect}
+                <input type="color" value={hex(effect.color)} onchange={(e) => setEffect(i, { color: rgb(e.currentTarget.value, effect.color[3]) })} />
+              {/if}
+            </div>
+          {/each}
+        {/if}
         <button class="small" onclick={removeSelected} title="Delete this layer (Del)">Delete layer</button>
       </div>
     {/if}
     <ul>
       {#each layers as { layer, depth } (layer.id)}
-        <li style:padding-left="{depth * 14}px" class:hidden={!layer.visible} class:selected={layer.id === active}>
+        <li
+          style:padding-left="{depth * 14}px"
+          class:hidden={!layer.visible}
+          class:selected={layer.id === active}
+          draggable="true"
+          ondragstart={() => (dragged = layer.id)}
+          ondragover={(e) => dragged && dragged !== layer.id && e.preventDefault()}
+          ondrop={(e) => (e.preventDefault(), dropAbove(layer.id))}
+          title="Drag onto another layer to put it just above that one"
+        >
           <input type="checkbox" checked={layer.visible} onchange={() => toggle(layer)} title="Visible" />
           <button class="name" onclick={() => select(layer.id)} ondblclick={() => editText(layer.id)} title={layer.kind === "text" ? "Double-click to edit the text" : "Select this layer"}>
             {layer.name}
@@ -761,10 +854,15 @@
         </li>
       {/each}
     </ul>
-    {#if history.labels.length}
+    {#if history.labels.length || history.redoLabels.length}
       <h2>History</h2>
-      <ol>
-        {#each history.labels.slice(-12) as label}<li>{label}</li>{/each}
+      <ol class="history">
+        {#each history.labels as label, i}
+          <li class:now={i === history.labels.length - 1}><button class="name" onclick={() => travel(i + 1 - history.labels.length)} title="Go back to just after this step">{label}</button></li>
+        {/each}
+        {#each history.redoLabels as label, i}
+          <li class="undone"><button class="name" onclick={() => travel(i + 1)} title="Do this step again">{label}</button></li>
+        {/each}
       </ol>
     {/if}
   </aside>
@@ -831,6 +929,15 @@
   .outline { position: absolute; border: 1px solid #5b9dff; outline: 1px solid rgba(0, 0, 0, 0.5); pointer-events: none; box-sizing: border-box; }
   .handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #fff; border: 1px solid #1f5fd0; pointer-events: auto; touch-action: none; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
+  .checks { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+  .fx { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding-left: 8px; }
+  .fx .number { width: 3.4em; }
+  .props .text { background: #2b2d31; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 2px 4px; font: inherit; min-width: 0; flex: 1; }
+  .history { max-height: 220px; overflow: auto; }
+  .history li.now { background: #3d4270; }
+  .history li.undone .name { color: #666; font-style: italic; }
+  ol.history li .name { color: #c8c9cd; }
+  canvas.picking { cursor: crosshair; }
   .new { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
   .props { display: flex; flex-direction: column; gap: 5px; padding: 6px; margin-bottom: 8px; background: #1e1f22; border-radius: 4px; font-size: 12px; }
   .props select, .props input[type="number"] { background: #2b2d31; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 2px 4px; font: inherit; min-width: 0; flex: 1; }

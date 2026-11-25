@@ -792,6 +792,11 @@ impl Session {
         self.done.iter().map(Step::label).collect()
     }
 
+    /// Labels of the steps that were undone and can be done again, the next one first.
+    pub fn redo_labels(&self) -> Vec<&str> {
+        self.undone.iter().rev().map(Step::label).collect()
+    }
+
     // ---- painting ----------------------------------------------------------------
 
     /// Add an empty, document-sized pixel layer on top and return its id.
