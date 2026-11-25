@@ -393,6 +393,31 @@ pub unsafe extern "C" fn cs_erase_area(ptr: *const u8, len: usize, path_ptr: *co
     attempt(|s| s.session.erase_area(id?, path?, outside == 1, if outside == 1 { "Erase outside the selection" } else { "Erase the selection" }).map_err(|e| e.to_string()))
 }
 
+/// Copy a layer (and everything in it) just above itself. The copy's id is in the output buffer.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_duplicate(ptr: *const u8, len: usize) -> u32 {
+    let id = text(ptr, len);
+    attempt(|s| {
+        s.out = s.session.duplicate(id?).map_err(|e| e.to_string())?.into_bytes();
+        Ok(())
+    })
+}
+
+/// Extend the stroke through several points at once and redraw once: `count`
+/// triples of 32-bit floats (x, y, pressure) at `ptr`.
+///
+/// # Safety
+/// `ptr` must point to `count * 12` readable bytes, as allocated by `cs_alloc`.
+#[no_mangle]
+pub unsafe extern "C" fn cs_stroke_through(ptr: *const u8, count: usize) {
+    let data = bytes(ptr, count * 12);
+    let points: Vec<(f32, f32, f32)> = data.chunks_exact(12).map(|p| (f32::from_le_bytes([p[0], p[1], p[2], p[3]]), f32::from_le_bytes([p[4], p[5], p[6], p[7]]), f32::from_le_bytes([p[8], p[9], p[10], p[11]]))).collect();
+    with(|s| s.session.stroke_through(&points));
+}
+
 /// The PostScript names of the loaded fonts, as a JSON list in the output buffer.
 #[no_mangle]
 pub extern "C" fn cs_font_names() {

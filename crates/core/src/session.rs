@@ -149,6 +149,8 @@ struct Proxy {
     doc_stale: bool,
     renderer: Renderer,
     frame: Raster,
+    /// Only the part on screen has been kept up to date (during a drag); the rest is out of date.
+    partial: bool,
     /// The version of each image the copy's smaller one was made from.
     made: HashMap<String, u64>,
     texts: TextOutlines,
@@ -191,6 +193,8 @@ pub struct Session {
     stashed: BTreeSet<String>,
     /// An edit being tried out (a drag in progress): what it is, and how to take it back.
     preview: Option<(Edit, Edit)>,
+    /// A drag is in progress, from its first step until it is kept or given up.
+    dragging: bool,
     /// Copies of other sizes, kept for when the view or a drag wants them again.
     spare: Vec<Proxy>,
     /// Present while the view is zoomed out far enough to be drawn from a smaller copy.
@@ -227,6 +231,7 @@ impl Session {
             painted: BTreeSet::new(),
             stashed: BTreeSet::new(),
             preview: None,
+            dragging: false,
             spare: Vec::new(),
             proxy: None,
             stale: Vec::new(),
@@ -273,7 +278,14 @@ impl Session {
     /// at full size: its areas are small, and it works on the real pixels.
     fn redraw(&mut self, region: Region) {
         let Some(region) = region.intersect(&self.whole()) else { return };
-        if self.stroke.is_some() {
+        if self.stroke.is_some() && self.proxy.is_some() {
+            // Zoomed out, a stroke is drawn through the smaller copy like any other change: the
+            // painted part of the image is shrunk into the copy's image, and that part of the
+            // copy is drawn. Nothing is drawn at full size until it is wanted.
+            self.note_stale(vec![region]);
+            self.shrink_painted(region);
+            self.draw_small(region);
+        } else if self.stroke.is_some() {
             // Whole blocks of the smaller copy, so it can be refreshed from the frame exactly.
             let k = self.proxy.as_ref().map_or(1, |p| 1 << p.level);
             let (x0, y0) = (region.x.div_euclid(k) * k, region.y.div_euclid(k) * k);
@@ -342,9 +354,19 @@ impl Session {
         self.stale = std::mem::take(&mut self.stale).into_iter().flat_map(|old| subtract(old, &region)).collect();
     }
 
-    /// Draw one region of the document into the smaller copy.
+    /// Draw one region of the document into the smaller copy. During a drag
+    /// only the part of it on screen is drawn, and the copy is marked as
+    /// partial; the rest is caught up when the drag ends.
     fn draw_small(&mut self, region: Region) {
+        let dragging = self.dragging;
+        let region = if dragging {
+            let Some(shown) = region.intersect(&self.visible()) else { return };
+            shown
+        } else {
+            region
+        };
         let Some(proxy) = self.proxy.as_mut() else { return };
+        proxy.partial |= dragging;
         if proxy.doc_stale {
             proxy.doc = scale_doc(&self.doc, proxy.level, self.renderer.fonts(), &mut proxy.texts);
             proxy.doc_stale = false;
@@ -387,6 +409,47 @@ impl Session {
             let (to, from) = (proxy.frame.region.index(small.x, y) * 4, part.region.index(small.x, y) * 4);
             proxy.frame.data[to..to + width].copy_from_slice(&part.data[from..from + width]);
         }
+    }
+
+    /// Make sure the smaller copy's version of an image is up to date, making it afresh if not.
+    fn sync_proxy_image(&mut self, asset: &str) {
+        let Some(proxy) = self.proxy.as_mut() else { return };
+        let version = self.renderer.image_version(asset);
+        if proxy.made.get(asset) != Some(&version) {
+            if let Some(image) = self.renderer.image(asset) {
+                proxy.renderer.set_image(asset, downscale(image, proxy.level));
+                proxy.made.insert(asset.to_string(), version);
+            }
+        }
+    }
+
+    /// During a stroke: bring the smaller copy's version of the painted image up
+    /// to date over `region` of the document, by shrinking just that part.
+    fn shrink_painted(&mut self, region: Region) {
+        let (Some(active), Some(proxy)) = (self.stroke.as_ref(), self.proxy.as_mut()) else { return };
+        let Some(full) = self.renderer.image(&active.asset) else { return };
+        if proxy.renderer.image(&active.asset).is_none() {
+            return;
+        }
+        // Whatever of the image this stroke has changed is shrunk here, so the copy's image stays current.
+        proxy.made.insert(active.asset.clone(), self.renderer.image_version(&active.asset));
+        let k = 1 << proxy.level;
+        // The part of the image, in its own pixels, as whole blocks of the smaller one.
+        let (ox, oy) = active.offset;
+        let (x0, y0) = (((region.x - ox).div_euclid(k) * k).max(0), ((region.y - oy).div_euclid(k) * k).max(0));
+        let (x1, y1) = (((region.x + region.w - ox + k - 1).div_euclid(k) * k).min(full.w), ((region.y + region.h - oy + k - 1).div_euclid(k) * k).min(full.h));
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+        let part = Region::new(x0, y0, x1 - x0, y1 - y0);
+        let small = downscale(&Image { w: part.w, h: part.h, data: crop(&full.data, full.w, &part) }, proxy.level);
+        let Some(target) = proxy.renderer.image_mut(&active.asset, &AssetBytes::new()) else { return };
+        let at = Region::new(x0 / k, y0 / k, small.w.min(target.w - x0 / k), small.h.min(target.h - y0 / k));
+        if at.w <= 0 || at.h <= 0 {
+            return;
+        }
+        let rows: Vec<u8> = (0..at.h).flat_map(|y| small.data[(y * small.w) as usize * 4..(y * small.w + at.w) as usize * 4].iter().copied()).collect();
+        paste(target, &at, &rows);
     }
 
     /// Refresh the smaller copy from the full-size frame over `region`, which is whole blocks of it.
@@ -438,8 +501,9 @@ impl Session {
     pub fn set_view(&mut self, view: View) {
         self.view = View { scale: view.scale.max(1e-3), ..view };
         self.view_pixels = vec![0; view.w as usize * view.h as usize * 4];
-        if self.stroke.is_none() {
-            self.use_level(self.wanted_level());
+        if self.stroke.is_none() && !self.use_level(self.wanted_level()) && self.dragging {
+            // Scrolled or zoomed in the middle of a drag: what has come on screen is drawn.
+            self.draw_small(self.whole());
         }
         if self.proxy.is_none() && self.stroke.is_none() {
             // What was left undrawn off screen and has come into view.
@@ -459,11 +523,18 @@ impl Session {
     /// large part of the card and speed matters more than sharpness.
     fn wanted_level(&self) -> u32 {
         let level = ((1.0 / self.view.scale).log2().floor() as i32).clamp(0, 3) as u32;
-        if self.preview.is_some() && level >= 1 {
-            (level + 1).min(3)
-        } else {
-            level
+        if !self.dragging || self.view_pixels.is_empty() {
+            return level;
         }
+        // Dragging: every step redraws what moved with everything over and under it, so the
+        // copy is the largest that keeps the part on screen under about a third of a million
+        // pixels, however far in the view is zoomed. It is sharp again when the drag ends.
+        let visible = self.visible();
+        let mut drag = level;
+        while drag < 3 && (visible.area() >> (2 * drag)) > 350_000 {
+            drag += 1;
+        }
+        drag
     }
 
     /// Draw the screen from the copy of this level (0: the real pixels) from now on. Returns true if that is a change.
@@ -479,11 +550,13 @@ impl Session {
                 None => {
                     let k = 1 << level;
                     let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
-                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
+                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, partial: false, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
                 }
             };
             proxy.doc_stale = true;
+            proxy.partial = false;
             self.proxy = Some(proxy);
+            // During a drag only what is on screen is drawn (see `draw_small`).
             self.draw_small(self.whole());
         } else {
             // The real pixels on screen again: draw what changed while they were not shown.
@@ -659,9 +732,21 @@ impl Session {
             return Err(err!("Finish the brush stroke first"));
         }
         let Some((_, back)) = self.preview.take() else {
-            let back = self.apply_and_redraw(&edit)?;
+            // The smaller copy takes over first, so even the first step is drawn small.
+            self.dragging = true;
+            let switched = !self.view_pixels.is_empty() && self.use_level(self.wanted_level());
+            let back = match self.apply_and_redraw(&edit) {
+                Ok(back) => back,
+                Err(e) => {
+                    self.dragging = false;
+                    self.level_changed();
+                    return Err(e);
+                }
+            };
             self.preview = Some((edit, back));
-            self.level_changed();
+            if switched {
+                self.dirty_view = Region::new(0, 0, self.view.w as i32, self.view.h as i32);
+            }
             return Ok(());
         };
         // Back to the start and on to the new state as one change, so only what differs between
@@ -676,6 +761,8 @@ impl Session {
             Err(e) => {
                 // Refused, so nothing changed: the earlier preview is still what shows. Take it back.
                 self.apply_and_redraw(&back).expect("a recorded inverse always applies");
+                self.dragging = false;
+                self.level_changed();
                 Err(e)
             }
         }
@@ -687,7 +774,17 @@ impl Session {
         if self.view_pixels.is_empty() {
             return;
         }
-        if self.use_level(self.wanted_level()) {
+        let switched = self.use_level(self.wanted_level());
+        // The same copy carries on after a drag: bring the part that was off screen up to date.
+        let catch_up = !switched && !self.dragging && self.proxy.as_ref().is_some_and(|p| p.partial);
+        if catch_up {
+            if let Some(proxy) = &mut self.proxy {
+                proxy.partial = false;
+            }
+            self.draw_small(self.whole());
+            self.update_view(self.whole());
+        }
+        if switched || catch_up {
             self.dirty_view = Region::new(0, 0, self.view.w as i32, self.view.h as i32);
         }
     }
@@ -697,6 +794,7 @@ impl Session {
         let Some((edit, inverse)) = self.preview.take() else { return false };
         self.push(Step::Edit { label: label.to_string(), edit, inverse });
         self.dirty_view = Region::new(0, 0, 0, 0);
+        self.dragging = false;
         self.level_changed();
         true
     }
@@ -705,6 +803,7 @@ impl Session {
     pub fn cancel_preview(&mut self) {
         if let Some((_, back)) = self.preview.take() {
             self.apply_and_redraw(&back).expect("a recorded inverse always applies");
+            self.dragging = false;
             self.level_changed();
         }
     }
@@ -717,6 +816,42 @@ impl Session {
     /// A layer's bounds (left, top, width, height) without the reach of its effects.
     pub fn layer_box(&mut self, id: &str) -> Option<Region> {
         self.renderer.layer_box(&self.doc, &self.assets, id)
+    }
+
+    /// Make a copy of a layer (and everything in it, if it is a group) just
+    /// above it, as one step of history. The copy shares the original's
+    /// pictures; a shared mask is given its own the first time either is erased.
+    /// Returns the copy's id.
+    pub fn duplicate(&mut self, layer_id: &str) -> Result<String> {
+        let path = crate::tree::locate(&self.doc, layer_id).ok_or_else(|| err!("No layer with id \"{layer_id}\""))?;
+        let mut copy = crate::tree::layer_at(&self.doc, &path).clone();
+        let parent = if path.len() == 1 { self.doc.root.base.id.clone() } else { crate::tree::layer_at(&self.doc, &path[..path.len() - 1]).id().to_string() };
+        let taken: BTreeSet<String> = crate::tree::all_ids(&self.doc).into_iter().map(str::to_string).collect();
+        fn rename(layer: &mut Layer, taken: &BTreeSet<String>, made: &mut BTreeSet<String>) {
+            let base = layer.id().split("-copy").next().unwrap_or_default().to_string();
+            let mut n = 1;
+            let mut id = format!("{base}-copy");
+            while taken.contains(&id) || made.contains(&id) {
+                n += 1;
+                id = format!("{base}-copy{n}");
+            }
+            made.insert(id.clone());
+            layer.base_mut().id = id;
+            // A copy is the user's own layer, not one the card engine looks after.
+            layer.base_mut().role = None;
+            if let Layer::Group(group) = layer {
+                for child in &mut group.children {
+                    rename(child, taken, made);
+                }
+            }
+        }
+        rename(&mut copy, &taken, &mut BTreeSet::new());
+        let name = format!("{} copy", copy.base().name);
+        copy.base_mut().name = name;
+        let id = copy.id().to_string();
+        let label = format!("Duplicate {}", crate::tree::layer_at(&self.doc, &path).base().name);
+        self.execute(Edit::AddLayer { parent, layer: copy, index: Some(path[path.len() - 1] + 1) }, &label)?;
+        Ok(id)
     }
 
     /// Apply a structural edit. A refused edit changes nothing.
@@ -847,7 +982,9 @@ impl Session {
         if let Some(mask) = &layer.base().mask {
             let plain = mask.asset.starts_with("mask-") && mask.scale.is_none_or(|s| s == 1.0) && mask.offset.x.fract() == 0.0 && mask.offset.y.fract() == 0.0 && mask.enabled != Some(false) && mask.inverted != Some(true) && mask.density.is_none_or(|d| d == 1.0) && mask.feather.is_none_or(|f| f == 0.0);
             let whole = self.renderer.decoded_image(&mask.asset, &self.assets).is_some_and(|image| mask.offset.x <= 0.0 && mask.offset.y <= 0.0 && mask.offset.x as i32 + image.w >= w && mask.offset.y as i32 + image.h >= h);
-            if plain && whole {
+            let mut users = 0;
+            crate::tree::walk(&self.doc.root, &mut |other| users += usize::from(other.base().mask.as_ref().is_some_and(|m| m.asset == mask.asset)));
+            if plain && whole && users == 1 {
                 return Ok((mask.asset.clone(), (mask.offset.x as i32, mask.offset.y as i32), margin));
             }
         }
@@ -1061,7 +1198,8 @@ impl Session {
             return Err(err!("This layer shares its image with another layer. Painting on shared images is not supported yet."));
         }
         let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's image is unavailable"))?;
-        self.stroke = Some(ActiveStroke { stroke: Stroke::new(image, brush), asset, offset, margin });
+        self.stroke = Some(ActiveStroke { stroke: Stroke::new(image, brush), asset: asset.clone(), offset, margin });
+        self.sync_proxy_image(&asset);
         // While the stroke runs, effects on this layer and on the groups around it change with
         // every dab, so they are computed fresh instead of read from the cache.
         let mut live = Vec::new();
@@ -1090,6 +1228,23 @@ impl Session {
         let Some(changed) = active.stroke.line_to(image, x - ox as f32, y - oy as f32, pressure) else { return };
         let m = active.margin;
         self.redraw(Region::new(changed.x + ox - m, changed.y + oy - m, changed.w + m * 2, changed.h + m * 2));
+    }
+
+    /// Extend the stroke through several positions (x, y, pressure) and redraw
+    /// once for all of them: what a fast pointer sends between two frames.
+    pub fn stroke_through(&mut self, points: &[(f32, f32, f32)]) {
+        self.dirty_view = Region::new(0, 0, 0, 0);
+        let Some(active) = self.stroke.as_mut() else { return };
+        let Some(image) = self.renderer.image_mut(&active.asset, &self.assets) else { return };
+        let (ox, oy) = active.offset;
+        let mut changed: Option<Region> = None;
+        for &(x, y, pressure) in points {
+            changed = union(changed, active.stroke.line_to(image, x - ox as f32, y - oy as f32, pressure));
+        }
+        let m = active.margin;
+        if let Some(changed) = changed {
+            self.redraw(Region::new(changed.x + ox - m, changed.y + oy - m, changed.w + m * 2, changed.h + m * 2));
+        }
     }
 
     /// Finish the stroke and record it for undo.

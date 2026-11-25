@@ -132,3 +132,64 @@ fn a_drawn_area_is_erased_or_everything_but_it_which_cuts_a_figure_out() {
     assert_eq!(px(&mut s, 105, 35), [255, 0, 0, 255]);
     assert!(s.erase_area("art", "not a path", false, "Erase").is_err());
 }
+
+#[test]
+fn several_stroke_points_at_once_paint_the_same_as_one_at_a_time_and_a_copy_gets_its_own_mask() {
+    let points = [(110.0, 40.0, 1.0), (130.0, 60.0, 1.0), (150.0, 50.0, 1.0)];
+    let (doc, assets) = scene();
+    let mut one = Session::new(doc.clone(), assets.clone());
+    one.stroke_begin("art", eraser(12.0, false)).unwrap();
+    for (x, y, p) in points {
+        one.stroke_to(x, y, p);
+    }
+    one.stroke_end("Eraser");
+    let mut many = Session::new(doc, assets);
+    many.stroke_begin("art", eraser(12.0, false)).unwrap();
+    many.stroke_through(&points);
+    many.stroke_end("Eraser");
+    assert!(one.frame() == many.frame());
+    assert_exact(&mut many);
+
+    // A copy of an erased layer shares its mask until one of them is erased again; then that one gets its own.
+    let copy = many.duplicate("art").unwrap();
+    let shared = |s: &Session, id: &str| tree::find(s.doc(), id).unwrap().base().mask.as_ref().unwrap().asset.clone();
+    assert_eq!(shared(&many, "art"), shared(&many, &copy));
+    many.magic_erase(&copy, 105.0, 85.0, 30.0, true, "Magic eraser").unwrap();
+    assert!(shared(&many, "art") != shared(&many, &copy));
+    // The original still shows its red where the copy lost it (the copy sits on top of it, now clear there).
+    assert_eq!(px(&mut many, 105, 85), [255, 0, 0, 255]);
+    assert_exact(&mut many);
+}
+
+#[test]
+fn strokes_made_zoomed_out_show_as_a_fresh_small_render_would_and_leave_the_real_picture_exact() {
+    use cardsmith_core::session::View;
+    // A bigger scene, so that a quarter-size copy has something to show.
+    let mut doc = Doc::empty(800, 480, 72.0);
+    doc.assets.insert("art".into(), serde_json::from_value(json!({ "kind": "image", "path": "assets/art.png", "width": 60, "height": 60 })).unwrap());
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 800.0, 480.0, WHITE), pixel("art", "art", [8.0, 0.0, 160.0, 0.0, 8.0, 0.0]), rect("over", 600.0, 0.0, 200.0, 480.0, GRAY)];
+    let assets = scene().1;
+    let view = View { scale: 0.25, x: 0.0, y: 0.0, w: 200, h: 120 };
+    let mut s = Session::new(doc, assets.clone());
+    s.set_view(view);
+    s.stroke_begin("art", eraser(80.0, false)).unwrap();
+    s.stroke_through(&[(200.0, 100.0, 1.0), (400.0, 240.0, 1.0)]);
+    s.stroke_to(520.0, 400.0, 1.0);
+    s.stroke_end("Eraser");
+    s.stroke_begin("art", eraser(60.0, true)).unwrap();
+    s.stroke_to(400.0, 240.0, 1.0);
+    s.stroke_end("Restore");
+    let shown = s.view_pixels().to_vec();
+    // The same document opened afresh at the same zoom shows the same screen.
+    let (saved, saved_assets) = load_cardsmith(&s.save().unwrap()).unwrap();
+    let mut fresh = Session::new(saved, saved_assets);
+    fresh.set_view(view);
+    let differing = shown.chunks_exact(4).zip(fresh.view_pixels().chunks_exact(4)).filter(|(a, b)| a != b).count();
+    assert_eq!(differing, 0, "the screen after zoomed-out strokes differs from a fresh one at {differing} pixels");
+    // Erased in the middle of the stroke's start, brought back at its middle.
+    let at = |x: usize, y: usize| -> [u8; 4] { shown[(y * 200 + x) * 4..(y * 200 + x) * 4 + 4].try_into().unwrap() };
+    assert_eq!((at(50, 25), at(100, 60)), ([255, 255, 255, 255], [0, 0, 255, 255]));
+    assert_exact(&mut s);
+    assert!(s.undo() && s.undo());
+    assert_exact(&mut s);
+}

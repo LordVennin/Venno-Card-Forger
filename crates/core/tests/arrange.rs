@@ -192,3 +192,56 @@ fn kurbo_points(d: &str) -> Vec<(i64, i64)> {
         (n.next().unwrap(), n.next().unwrap())
     }).collect()
 }
+
+#[test]
+fn a_layer_is_duplicated_just_above_itself_with_everything_in_it() {
+    let mut s = session();
+    let copy = s.duplicate("pair").unwrap();
+    assert_eq!(copy, "pair-copy");
+    let order: Vec<&str> = s.doc().root.children.iter().map(|l| l.id()).collect();
+    assert_eq!(order, ["bg", "pair", "pair-copy", "words", "masked"]);
+    let Layer::Group(group) = tree::find(s.doc(), "pair-copy").unwrap() else { panic!() };
+    assert_eq!((group.base.name.as_str(), group.children.iter().map(|l| l.id()).collect::<Vec<_>>()), ("pair copy", vec!["square-copy", "dot-copy"]));
+    // The copy moves on its own, and a second copy gets a name of its own.
+    let moved = place_edit(s.doc(), "pair-copy", &Placement::shift(0.0, 50.0)).unwrap();
+    s.execute(moved, "Move").unwrap();
+    assert_eq!((px(&mut s, 30, 30), px(&mut s, 30, 80), px(&mut s, 75, 85)), ([128, 128, 128, 255], [128, 128, 128, 255], [255, 0, 0, 255]));
+    assert_eq!(s.duplicate("pair").unwrap(), "pair-copy2");
+    assert_eq!(s.duplicate("dot").unwrap(), "dot-copy3");
+    assert_eq!(s.labels(), ["Duplicate pair", "Move", "Duplicate pair", "Duplicate dot"]);
+    assert!(s.undo() && s.undo() && s.undo() && s.undo());
+    assert!(tree::find(s.doc(), "pair-copy").is_none());
+    assert!(s.duplicate("nothing").is_err());
+}
+
+#[test]
+fn a_drag_zoomed_in_draws_only_what_is_on_screen_and_the_whole_picture_is_right_afterwards() {
+    // A big document seen at full size through a small window: the drag is drawn from a smaller copy.
+    let mut doc = Doc::empty(1600, 1200, 72.0);
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 1600.0, 1200.0, WHITE), rect("block", 100.0, 100.0, 900.0, 700.0, GRAY), rect("far", 1400.0, 1000.0, 100.0, 100.0, GRAY)];
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.set_view(View { scale: 1.0, x: 0.0, y: 0.0, w: 800, h: 600 });
+    let view = |s: &Session, x: usize, y: usize| -> [u8; 4] { s.view_pixels()[(y * 800 + x) * 4..(y * 800 + x) * 4 + 4].try_into().unwrap() };
+    let before = s.doc().clone();
+    for dx in [40.0, 200.0, 400.0] {
+        s.preview(place_edit(&before, "block", &Placement::shift(dx, 0.0)).unwrap()).unwrap();
+    }
+    // The block's left edge was at 100 and is now at 500.
+    assert_eq!((view(&s, 300, 300), view(&s, 700, 300)), ([255, 255, 255, 255], [128, 128, 128, 255]));
+    assert!(s.commit_preview("Move"));
+    assert_eq!((view(&s, 300, 300), view(&s, 700, 300)), ([255, 255, 255, 255], [128, 128, 128, 255]));
+    // Scrolling to what was off screen during the drag shows it right, and the full picture is exact.
+    s.set_view(View { scale: 1.0, x: 800.0, y: 600.0, w: 800, h: 600 });
+    assert_eq!((view(&s, 650, 450), view(&s, 300, 150)), ([128, 128, 128, 255], [128, 128, 128, 255]));
+    let full = cardsmith_core::render::render(s.doc(), &AssetBytes::new()).pixels;
+    assert!(s.frame() == full);
+    // Zoomed out, then a drag, then the same checks through the smaller copy.
+    s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 400, h: 300 });
+    let before = s.doc().clone();
+    s.preview(place_edit(&before, "far", &Placement::shift(-1300.0, -900.0)).unwrap()).unwrap();
+    assert!(s.commit_preview("Move"));
+    let small = |s: &Session, x: usize, y: usize| -> [u8; 4] { s.view_pixels()[(y * 400 + x) * 4..(y * 400 + x) * 4 + 4].try_into().unwrap() };
+    assert_eq!((small(&s, 37, 37), small(&s, 362, 262)), ([128, 128, 128, 255], [255, 255, 255, 255]));
+    let full = cardsmith_core::render::render(s.doc(), &AssetBytes::new()).pixels;
+    assert!(s.frame() == full);
+}

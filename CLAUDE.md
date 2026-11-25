@@ -140,6 +140,7 @@ Local fixtures (all gitignored, under `fixtures/local/`): `fonts/` holds the fon
 - Text tests use `crates/core/tests/fixtures/blocks.ttf`, a font of rectangles made by `tools/make-test-font.py`. Real fonts are only ever read from `fixtures/local/fonts`.
 - `crates/wasm`: the C ABI the webview calls, including the card workbench (`cs_open_template`, `cs_build_card`, `cs_add_fill`, ...). `apps/desktop/src/lib/core.ts` is its TypeScript wrapper.
 - `crates/engine/src/workbench.rs`: a card being built and rebuilt in an open session (one undo step per build, late fills). `crates/fill/src/tiers.rs`: the installed fill tiers and the fallback order, shared by the CLI and the app.
+- `apps/desktop/scripts/lag-timing.ts` times dragging a picture layer and erasing on it on a built card, at any zoom; run it before and after any change to how drags or strokes are drawn.
 - `apps/desktop/scripts/erase-check.ts` runs the magic eraser and the eraser on a built card in the WebAssembly core, with timings, and writes the result.
 - `apps/desktop/scripts/view-dump.ts` builds a card in the WebAssembly core as the app does and writes what the screen shows, and what Export PNG writes, to files.
 - `apps/desktop/scripts/card-timing.ts` times opening a template, building, rebuilding, hiding and dragging in the WebAssembly core outside the app; run it before and after any change to how the session redraws.

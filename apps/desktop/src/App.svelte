@@ -251,26 +251,45 @@
     return { size, hardness, opacity, erase, restore: erase && restore, color: [(n >> 16) & 255, (n >> 8) & 255, n & 255] };
   }
 
-  function strokePoints(events: PointerEvent[]) {
+  // Pointer positions arrive faster than the screen redraws. They are kept here and the core is
+  // asked to paint (or to move the dragged layer) once a frame, so slow redraws never pile up.
+  let waiting: [number, number, number][] = [];
+  let frame = 0;
+  let dragPoint: PointerEvent | null = null;
+
+  function onFrame() {
+    frame = 0;
     if (!core) return;
-    const started = performance.now();
-    let dirty: Rect | null = null;
+    if (waiting.length) {
+      const points = waiting;
+      waiting = [];
+      const started = performance.now();
+      core.strokeThrough(points);
+      const inCore = performance.now() - started;
+      blit(core.dirty());
+      strokeCore.push(inCore);
+      strokeBlit.push(performance.now() - started - inCore);
+    }
+    if (dragPoint) {
+      const e = dragPoint;
+      dragPoint = null;
+      dragTo(e);
+    }
+  }
+
+  /** Do what is waiting now, without waiting for the next frame: before a stroke or a drag ends. */
+  function flush() {
+    if (frame) cancelAnimationFrame(frame);
+    onFrame();
+  }
+
+  function strokePoints(events: PointerEvent[]) {
     for (const e of events) {
       const p = toDoc(e);
       // Mice report no pressure; pens and touch do.
-      core.strokeTo(p.x, p.y, e.pointerType === "mouse" ? 1 : Math.max(e.pressure, 0.05));
-      const d = core.dirty();
-      if (!d) continue;
-      if (!dirty) dirty = d;
-      else {
-        const x = Math.min(dirty.x, d.x), y = Math.min(dirty.y, d.y);
-        dirty = { x, y, width: Math.max(dirty.x + dirty.width, d.x + d.width) - x, height: Math.max(dirty.y + dirty.height, d.y + d.height) - y };
-      }
+      waiting.push([p.x, p.y, e.pointerType === "mouse" ? 1 : Math.max(e.pressure, 0.05)]);
     }
-    const inCore = performance.now() - started;
-    if (dirty) blit(dirty);
-    strokeCore.push(inCore);
-    strokeBlit.push(performance.now() - started - inCore);
+    frame ||= requestAnimationFrame(onFrame);
   }
 
   // ---- moving and scaling ------------------------------------------------------------
@@ -601,6 +620,11 @@
     status = `Brush color ${color}`;
   }
 
+  function duplicateSelected() {
+    if (!active) return;
+    run("Duplicate", () => select(core!.duplicate(active!)));
+  }
+
   function removeSelected() {
     const found = active ? find(active) : null;
     if (!found) return;
@@ -708,7 +732,9 @@
       const [x1, y1] = [Math.min(doc!.width, Math.max(selecting.x, p.x)), Math.min(doc!.height, Math.max(selecting.y, p.y))];
       selection = x1 - x > 1 && y1 - y > 1 ? { x: Math.round(x), y: Math.round(y), width: Math.round(x1 - x), height: Math.round(y1 - y) } : null;
     } else if (drag) {
-      dragTo(e);
+      // Only the latest position matters; it is acted on once a frame.
+      dragPoint = e;
+      frame ||= requestAnimationFrame(onFrame);
     } else if (painting) {
       // Browsers batch fast pointer movement; take every point so strokes stay smooth.
       const events = e.getCoalescedEvents?.() ?? [];
@@ -717,6 +743,7 @@
   }
 
   function pointerUp(e?: PointerEvent) {
+    flush();
     panning = null;
     selecting = null;
     endDrag(e);
@@ -748,6 +775,9 @@
     } else if (mod && e.key.toLowerCase() === "y") {
       e.preventDefault();
       run("Redo", () => core!.redo());
+    } else if (mod && e.key.toLowerCase() === "j") {
+      e.preventDefault();
+      duplicateSelected();
     } else if (e.key === "Escape" && drag) {
       core!.dragEnd(false);
       drag = null;
@@ -892,8 +922,8 @@
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
               beginDrag(stagePoint(e), active!, { x: box!.x + hx * box!.width, y: box!.y + hy * box!.height });
             }}
-            onpointermove={(e) => drag && dragTo(stagePoint(e))}
-            onpointerup={() => endDrag()}
+            onpointermove={(e) => drag && ((dragPoint = stagePoint(e)), (frame ||= requestAnimationFrame(onFrame)))}
+            onpointerup={() => (flush(), endDrag())}
           ></div>
         {/each}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -905,8 +935,8 @@
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             beginDrag(stagePoint(e), active!, undefined, true);
           }}
-          onpointermove={(e) => drag && dragTo(stagePoint(e))}
-          onpointerup={() => endDrag()}
+          onpointermove={(e) => drag && ((dragPoint = stagePoint(e)), (frame ||= requestAnimationFrame(onFrame)))}
+          onpointerup={() => (flush(), endDrag())}
         ></div>
       </div>
     {/if}
@@ -1010,7 +1040,10 @@
             </div>
           {/each}
         {/if}
-        <button class="small" onclick={removeSelected} title="Delete this layer (Del)">Delete layer</button>
+        <div class="new">
+          <button class="small" onclick={duplicateSelected} title="Make a copy of this layer just above it (Ctrl+J)">Duplicate</button>
+          <button class="small" onclick={removeSelected} title="Delete this layer (Del)">Delete</button>
+        </div>
       </div>
     {/if}
     <ul>

@@ -32,6 +32,8 @@ type Exports = {
   cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
   cs_magic_erase(ptr: number, len: number, x: number, y: number, tolerance: number, contiguous: number): number;
   cs_erase_area(ptr: number, len: number, pathPtr: number, pathLen: number, outside: number): number;
+  cs_duplicate(ptr: number, len: number): number;
+  cs_stroke_through(ptr: number, count: number): void;
   cs_font_names(): void;
   cs_export_png(): number;
   cs_asset_bytes(ptr: number, len: number): number;
@@ -336,6 +338,12 @@ export class Core {
     this.check(this.passText(id, (ptr, len) => this.passText(path, (pathPtr, pathLen) => this.x.cs_erase_area(ptr, len, pathPtr, pathLen, outside ? 1 : 0))));
   }
 
+  /** Copy a layer (and everything in it) just above itself, as one undoable step. Returns the copy's id. */
+  duplicate(id: string): string {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_duplicate(ptr, len)));
+    return decoder.decode(this.out());
+  }
+
   /** The PostScript names of the loaded fonts. */
   fontNames(): string[] {
     this.x.cs_font_names();
@@ -369,6 +377,13 @@ export class Core {
   /** Extend the stroke to a document position. `pressure` (0..1) scales the brush size. */
   strokeTo(x: number, y: number, pressure = 1): void {
     this.x.cs_stroke_to(x, y, pressure);
+  }
+
+  /** Extend the stroke through several points ([x, y, pressure] each) and redraw once for all of them. */
+  strokeThrough(points: [number, number, number][]): void {
+    if (!points.length) return;
+    const data = new Uint8Array(new Float32Array(points.flat()).buffer);
+    this.pass(data, (ptr) => this.x.cs_stroke_through(ptr, points.length));
   }
 
   strokeEnd(label: string): void {
