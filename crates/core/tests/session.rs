@@ -169,7 +169,7 @@ fn painting_respects_layer_offsets_and_refuses_unsuitable_layers() {
 
     assert!(s.stroke_begin("scaled", red(6.0)).unwrap_err().0.contains("scaled or rotated"));
     assert!(s.stroke_begin("twin-a", red(6.0)).unwrap_err().0.contains("shares its image"));
-    assert!(s.stroke_begin("card", red(6.0)).unwrap_err().0.contains("Only pixel layers"));
+    assert!(s.stroke_begin("card", red(6.0)).unwrap_err().0.contains("color goes on a paint layer"));
     assert!(s.stroke_begin("nope", red(6.0)).unwrap_err().0.contains("No layer"));
 }
 
