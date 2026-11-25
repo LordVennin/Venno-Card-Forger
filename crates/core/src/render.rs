@@ -1085,6 +1085,44 @@ impl Renderer {
         find(&mut pass, &doc.root, &at)
     }
 
+    /// What is wrong with a document that a look at it can tell, without
+    /// drawing it: showing text whose font is not loaded, and showing layers
+    /// whose image is missing or unreadable. In the words a full render uses.
+    pub fn check(&mut self, doc: &Doc, assets: &AssetBytes) -> Vec<String> {
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        fn visit(pass: &mut RenderPass, group: &GroupLayer) {
+            for layer in group.children.iter().filter(|l| l.base().visible) {
+                let name = &layer.base().name;
+                if let Some(mask) = &layer.base().mask {
+                    pass.image(&mask.asset, name);
+                }
+                match layer {
+                    Layer::Group(inner) => visit(pass, inner),
+                    Layer::Text(text) => {
+                        pass.text_cache(text);
+                    }
+                    Layer::Pixel(l) => {
+                        pass.image(&l.asset, name);
+                    }
+                    Layer::Fill(l) => {
+                        pass.image(&l.asset, name);
+                    }
+                    Layer::Art(l) => {
+                        if let Some(asset) = &l.asset {
+                            pass.image(asset, name);
+                        }
+                    }
+                    Layer::Shape(_) => {}
+                }
+            }
+        }
+        visit(&mut pass, &doc.root);
+        let mut warnings = pass.warnings;
+        warnings.dedup();
+        warnings
+    }
+
     /// How much of each pixel of `region` a closed path covers (0..255). `None` if the path cannot be read or is empty.
     pub fn path_cover(&mut self, doc: &Doc, assets: &AssetBytes, d: &str, region: Region) -> Option<Vec<u8>> {
         let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);

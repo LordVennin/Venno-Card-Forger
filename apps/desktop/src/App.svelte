@@ -43,6 +43,8 @@
   // A card field the card panel should put the cursor in (after a double-click on its text on the canvas).
   let focusField = $state<string | null>(null);
   let imageInput = $state<HTMLInputElement>();
+  // The loaded fonts' names, read when the document is re-read, not every time the panel is drawn.
+  let fonts = $state.raw<string[]>([]);
   // The card panel, which fetches a template's images as layers come to need them.
   let panel = $state<{ loadImages(): Promise<void> }>();
 
@@ -180,6 +182,7 @@
     history = core.state();
     if (active && !find(active)) active = undefined;
     box = active ? core.layerBox(active) : null;
+    fonts = core.fontNames();
   }
 
   /** A layer by id, with the group it is in and its place there. */
@@ -1098,7 +1101,7 @@
           <label
             >Font
             <select value={text.style.font} onchange={(e) => setProp({ style: { ...text.style, font: e.currentTarget.value } }, "Font")}>
-              {#each core?.fontNames() ?? [] as font}<option value={font}>{font}</option>{/each}
+              {#each fonts as font}<option value={font}>{font}</option>{/each}
             </select>
           </label>
           <label>

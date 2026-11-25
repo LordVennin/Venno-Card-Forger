@@ -273,7 +273,11 @@ impl Session {
         };
         *session.renderer.fonts_mut() = fonts;
         session.renderer.sync(&session.doc);
-        session.redraw(whole);
+        // Nothing is drawn yet. What is drawn first depends on the view the host sets: a small
+        // copy for a card seen whole, which is a fraction of the work of the full-size picture.
+        // The full-size picture is drawn when it is asked for (`frame`, `settle`).
+        session.stale = vec![whole];
+        session.check();
         session
     }
 
@@ -394,9 +398,7 @@ impl Session {
             }
             _ => self.renderer.draw_region(&self.doc, &self.assets, region),
         };
-        if region == self.whole() {
-            self.warnings = warnings;
-        }
+        let _ = warnings;
         let width = region.w as usize * 4;
         for y in region.y..region.y + region.h {
             let to = self.frame.region.index(region.x, y) * 4;
@@ -458,9 +460,7 @@ impl Session {
         let (x1, y1) = ((region.x + region.w + k - 1).div_euclid(k) + 1, (region.y + region.h + k - 1).div_euclid(k) + 1);
         let Some(small) = Region::new(x0, y0, x1 - x0, y1 - y0).intersect(&proxy.frame.region) else { return };
         let (part, warnings) = proxy.renderer.draw_region(&proxy.doc, &AssetBytes::new(), small);
-        if small == proxy.frame.region {
-            self.warnings = warnings;
-        }
+        let _ = warnings;
         let width = small.w as usize * 4;
         for y in small.y..small.y + small.h {
             let (to, from) = (proxy.frame.region.index(small.x, y) * 4, part.region.index(small.x, y) * 4);
@@ -536,6 +536,12 @@ impl Session {
         while let Some(region) = self.stale.pop() {
             self.draw_full(region);
         }
+    }
+
+    /// Look the document over for what is wrong with it (fonts not loaded, images missing).
+    /// Done after anything that can change the answer; it draws nothing.
+    fn check(&mut self) {
+        self.warnings = self.renderer.check(&self.doc, &self.assets);
     }
 
     /// The full-resolution frame: straight RGBA, document size.
@@ -1078,6 +1084,7 @@ impl Session {
         self.cancel_preview();
         let inverse = self.apply_and_redraw(&edit)?;
         self.push(Step::Edit { label: label.to_string(), edit, inverse });
+        self.check();
         Ok(())
     }
 
@@ -1115,6 +1122,7 @@ impl Session {
         let Some(step) = self.done.pop() else { return false };
         self.replay(&step, false);
         self.undone.push(step);
+        self.check();
         true
     }
 
@@ -1126,6 +1134,7 @@ impl Session {
         let Some(step) = self.undone.pop() else { return false };
         self.replay(&step, true);
         self.done.push(step);
+        self.check();
         true
     }
 
@@ -1222,16 +1231,21 @@ impl Session {
         Ok((asset, (0, 0), margin))
     }
 
-    /// A mask image was changed in place: draw what changed and record it for undo, as the tiles that differ from `before`.
-    fn mask_changed(&mut self, asset: String, offset: (i32, i32), margin: i32, before: &[u8], label: &str) {
+    /// A mask image was changed in place, inside `area` of the document: draw
+    /// what changed and record it for undo, as the tiles that differ from
+    /// `before`, which is the mask's pixels over `area` as they were.
+    fn mask_changed(&mut self, asset: String, offset: (i32, i32), margin: i32, area: Region, before: &[u8], label: &str) {
         let Some(image) = self.renderer.image(&asset) else { return };
         let (ox, oy) = offset;
+        // The area in the mask image's own pixels.
+        let inside = Region::new(area.x - ox, area.y - oy, area.w, area.h);
         let mut patches = Vec::new();
         let mut changed: Option<Region> = None;
-        for ty in (0..image.h).step_by(BELOW_TILE as usize) {
-            for tx in (0..image.w).step_by(BELOW_TILE as usize) {
-                let tile = Region::new(tx, ty, BELOW_TILE.min(image.w - tx), BELOW_TILE.min(image.h - ty));
-                let (was, now) = (crop(before, image.w, &tile), crop(&image.data, image.w, &tile));
+        for ty in (inside.y.div_euclid(BELOW_TILE)..=(inside.y + inside.h - 1).div_euclid(BELOW_TILE)).map(|t| t * BELOW_TILE) {
+            for tx in (inside.x.div_euclid(BELOW_TILE)..=(inside.x + inside.w - 1).div_euclid(BELOW_TILE)).map(|t| t * BELOW_TILE) {
+                let Some(tile) = Region::new(tx, ty, BELOW_TILE, BELOW_TILE).intersect(&inside) else { continue };
+                let was = crop(before, inside.w, &Region::new(tile.x - inside.x, tile.y - inside.y, tile.w, tile.h));
+                let now = crop(&image.data, image.w, &tile);
                 if was != now {
                     changed = union(changed, Some(Region::new(tile.x + ox, tile.y + oy, tile.w, tile.h)));
                     patches.push((tile, was, now));
@@ -1246,6 +1260,14 @@ impl Session {
         self.push(Step::Paint { label: label.to_string(), asset, offset, patches, margin });
     }
 
+    /// The part of the document a mask image covers, cut to `area`; and the mask's pixels there now.
+    fn mask_before(&mut self, asset: &str, offset: (i32, i32), area: Region) -> Option<(Region, Vec<u8>)> {
+        let image = self.renderer.image_mut(asset, &self.assets)?;
+        let area = area.intersect(&Region::new(offset.0, offset.1, image.w, image.h))?;
+        let before = crop(&image.data, image.w, &Region::new(area.x - offset.0, area.y - offset.1, area.w, area.h));
+        Some((area, before))
+    }
+
     /// Erase the part of a layer inside a closed path (an SVG path in document
     /// pixels: a rectangle or a lasso), or with `outside` everything of it but
     /// that part, which is how a character is cut out: draw around it, erase
@@ -1256,25 +1278,28 @@ impl Session {
             return Err(err!("Finish the brush stroke first"));
         }
         let whole = self.whole();
-        let cover = self.renderer.path_cover(&self.doc, &self.assets, d, whole).ok_or_else(|| err!("The selection is empty"))?;
+        // Only where the path is, or with `outside`, only where the layer is: not the whole card.
+        let bounds = kurbo::BezPath::from_svg(d).ok().map(|path| kurbo::Shape::bounding_box(&path)).ok_or_else(|| err!("The selection is empty"))?;
+        let around = Region::new(bounds.x0.floor() as i32 - 1, bounds.y0.floor() as i32 - 1, (bounds.x1.ceil() - bounds.x0.floor()) as i32 + 2, (bounds.y1.ceil() - bounds.y0.floor()) as i32 + 2);
+        let wanted = if outside { self.layer_box(layer_id).unwrap_or(whole) } else { around };
+        let Some(wanted) = wanted.intersect(&whole) else { return Err(err!("The selection is off the card")) };
+        let cover = self.renderer.path_cover(&self.doc, &self.assets, d, wanted).ok_or_else(|| err!("The selection is empty"))?;
         let (asset, offset, margin) = self.paint_mask(layer_id)?;
+        let Some((area, before)) = self.mask_before(&asset, offset, wanted) else { return Ok(()) };
         let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's mask is unavailable"))?;
-        let before = image.data.clone();
-        let w = whole.w as usize;
-        for (i, &inside) in cover.iter().enumerate() {
-            let take = if outside { 255 - inside } else { inside } as u32;
-            if take == 0 {
-                continue;
+        for y in area.y..area.y + area.h {
+            for x in area.x..area.x + area.w {
+                let inside = cover[wanted.index(x, y)];
+                let take = if outside { 255 - inside } else { inside } as u32;
+                if take == 0 {
+                    continue;
+                }
+                let m = ((y - offset.1) as usize * image.w as usize + (x - offset.0) as usize) * 4;
+                let now = (image.data[m] as u32 * (255 - take) / 255) as u8;
+                image.data[m..m + 3].fill(now);
             }
-            let (mx, my) = ((i % w) as i32 - offset.0, (i / w) as i32 - offset.1);
-            if mx < 0 || my < 0 || mx >= image.w || my >= image.h {
-                continue;
-            }
-            let m = (my as usize * image.w as usize + mx as usize) * 4;
-            let now = (image.data[m] as u32 * (255 - take) / 255) as u8;
-            image.data[m..m + 3].fill(now);
         }
-        self.mask_changed(asset, offset, margin, &before, label);
+        self.mask_changed(asset, offset, margin, area, &before, label);
         Ok(())
     }
 
@@ -1291,36 +1316,48 @@ impl Session {
         }
         let whole = self.whole();
         let (px, py) = (x.floor() as i32, y.floor() as i32);
-        if px < 0 || py < 0 || px >= whole.w || py >= whole.h {
-            return Err(err!("That point is off the card"));
-        }
-        let pixels = self.renderer.layer_pixels(&self.doc, &self.assets, layer_id, whole);
-        let (w, h) = (whole.w as usize, whole.h as usize);
-        let at = |i: usize| -> [f32; 4] { [pixels.data[i * 4] as f32, pixels.data[i * 4 + 1] as f32, pixels.data[i * 4 + 2] as f32, pixels.data[i * 4 + 3] as f32] };
-        let seed = py as usize * w + px as usize;
-        let wanted = at(seed);
-        if wanted[3] < 8.0 {
+        // Only where the layer is: a picture a quarter the size of the card is a quarter of the work.
+        let Some(area) = self.layer_box(layer_id).and_then(|b| b.intersect(&whole)) else {
+            return Err(err!("There is nothing of this layer at that point"));
+        };
+        if px < area.x || py < area.y || px >= area.x + area.w || py >= area.y + area.h {
             return Err(err!("There is nothing of this layer at that point"));
         }
-        // How far a pixel is from the color clicked: the largest difference of any channel, color counted by how solid the pixel is.
-        let distance = |i: usize| -> f32 {
-            let p = at(i);
-            if p[3] < 8.0 {
-                return f32::INFINITY;
+        let pixels = self.renderer.layer_pixels(&self.doc, &self.assets, layer_id, area);
+        let (w, h) = (area.w as usize, area.h as usize);
+        let data = &pixels.data;
+        let seed = (py - area.y) as usize * w + (px - area.x) as usize;
+        let wanted = [data[seed * 4] as i32, data[seed * 4 + 1] as i32, data[seed * 4 + 2] as i32, data[seed * 4 + 3] as i32];
+        if wanted[3] < 8 {
+            return Err(err!("There is nothing of this layer at that point"));
+        }
+        // How far a pixel is from the color clicked: the largest difference of any channel
+        // (0..255), or more than any tolerance where there is nothing of the layer.
+        let distance = |i: usize| -> i32 {
+            let p = &data[i * 4..i * 4 + 4];
+            if p[3] < 8 {
+                return i32::MAX;
             }
-            (0..4).map(|c| (p[c] - wanted[c]).abs()).fold(0.0, f32::max)
+            (p[0] as i32 - wanted[0]).abs().max((p[1] as i32 - wanted[1]).abs()).max((p[2] as i32 - wanted[2]).abs()).max((p[3] as i32 - wanted[3]).abs())
         };
-        let tolerance = tolerance.clamp(0.0, 255.0);
+        let tolerance = tolerance.clamp(0.0, 255.0) as i32;
         let mut picked = vec![false; w * h];
+        // The pixels just outside what is picked, to soften the cut edge afterwards.
+        let mut edge: Vec<usize> = Vec::new();
         if contiguous {
             let mut queue = vec![seed];
             picked[seed] = true;
             while let Some(i) = queue.pop() {
                 let (ix, iy) = (i % w, i / w);
                 let mut visit = |j: usize, queue: &mut Vec<usize>| {
-                    if !picked[j] && distance(j) <= tolerance {
+                    if picked[j] {
+                        return;
+                    }
+                    if distance(j) <= tolerance {
                         picked[j] = true;
                         queue.push(j);
+                    } else {
+                        edge.push(j);
                     }
                 };
                 if ix > 0 { visit(i - 1, &mut queue); }
@@ -1329,18 +1366,27 @@ impl Session {
                 if iy + 1 < h { visit(i + w, &mut queue); }
             }
         } else {
-            for (i, pick) in picked.iter_mut().enumerate() {
-                *pick = distance(i) <= tolerance;
+            for i in 0..w * h {
+                picked[i] = distance(i) <= tolerance;
+            }
+            for i in 0..w * h {
+                if picked[i] {
+                    continue;
+                }
+                let (ix, iy) = (i % w, i / w);
+                if (ix > 0 && picked[i - 1]) || (ix + 1 < w && picked[i + 1]) || (iy > 0 && picked[i - w]) || (iy + 1 < h && picked[i + w]) {
+                    edge.push(i);
+                }
             }
         }
         let count = picked.iter().filter(|p| **p).count();
 
         let (asset, offset, margin) = self.paint_mask(layer_id)?;
+        let Some((kept, before)) = self.mask_before(&asset, offset, area) else { return Ok(0) };
         let image = self.renderer.image_mut(&asset, &self.assets).ok_or_else(|| err!("The layer's mask is unavailable"))?;
-        let before = image.data.clone();
         let (iw, ox, oy) = (image.w as usize, offset.0, offset.1);
         let mut darken = |i: usize, to: u8| {
-            let (mx, my) = ((i % w) as i32 - ox, (i / w) as i32 - oy);
+            let (mx, my) = (area.x + (i % w) as i32 - ox, area.y + (i / w) as i32 - oy);
             if mx < 0 || my < 0 || mx >= image.w || my >= image.h {
                 return;
             }
@@ -1348,22 +1394,19 @@ impl Session {
             let now = image.data[m].min(to);
             image.data[m..m + 3].fill(now);
         };
-        for i in 0..w * h {
-            if picked[i] {
-                darken(i, 0);
-                continue;
-            }
-            // Next to what was picked: partly erased, the more so the closer its color, so the cut edge is not jagged.
-            let (ix, iy) = (i % w, i / w);
-            let beside = (ix > 0 && picked[i - 1]) || (ix + 1 < w && picked[i + 1]) || (iy > 0 && picked[i - w]) || (iy + 1 < h && picked[i + w]);
-            if beside && tolerance > 0.0 {
+        for (i, _) in picked.iter().enumerate().filter(|(_, p)| **p) {
+            darken(i, 0);
+        }
+        // Next to what was picked: partly erased, the more so the closer its color, so the cut edge is not jagged.
+        if tolerance > 0 {
+            for i in edge {
                 let d = distance(i);
-                if d <= tolerance * 2.0 {
-                    darken(i, (255.0 * (d - tolerance) / tolerance) as u8);
+                if d <= tolerance * 2 {
+                    darken(i, (255 * (d - tolerance) / tolerance) as u8);
                 }
             }
         }
-        self.mask_changed(asset, offset, margin, &before, label);
+        self.mask_changed(asset, offset, margin, kept, &before, label);
         Ok(count)
     }
 
@@ -1470,12 +1513,10 @@ impl Session {
         self.renderer.set_live(&[]);
         self.renderer.sync(&self.doc);
         let Some(image) = self.renderer.image(&active.asset) else { return };
-        let patches: Vec<(Region, Vec<u8>, Vec<u8>)> = active
-            .stroke
-            .patches(image)
-            .into_iter()
-            .map(|region| (region, crop(active.stroke.before(), image.w, &region), crop(&image.data, image.w, &region)))
-            .collect();
+        let patches: Vec<(Region, Vec<u8>, Vec<u8>)> = active.stroke.before().into_iter().map(|(region, before)| {
+            let after = crop(&image.data, image.w, &region);
+            (region, before, after)
+        }).collect();
         if patches.is_empty() {
             return;
         }
@@ -1497,8 +1538,6 @@ impl Session {
         self.renderer.forget_image(id);
         self.below = None;
         self.renderer.sync(&self.doc);
-        // Complaints that an image was missing are out of date now; a later draw makes them again if they still hold.
-        self.warnings.retain(|warning| !warning.contains("is unavailable") && !warning.contains("has no data"));
         // Only the layers that show this image, or one supplied quietly before it, need drawing again.
         let mut fresh = std::mem::take(&mut self.stashed);
         fresh.insert(id.to_string());
@@ -1516,6 +1555,7 @@ impl Session {
         });
         let areas = self.areas(&Reach::Layers(users));
         self.redraw_all(areas);
+        self.check();
         Ok(())
     }
 
@@ -1580,6 +1620,7 @@ impl Session {
         self.below = None;
         self.renderer.sync(&self.doc);
         self.redraw(self.whole());
+        self.check();
         Ok(names)
     }
 

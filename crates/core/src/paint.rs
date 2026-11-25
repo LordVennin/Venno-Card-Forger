@@ -8,7 +8,7 @@
 
 use crate::raster::{Image, Region};
 use serde::Deserialize;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 /// Undo data is kept per block of this many pixels, so a long thin stroke stores only what it crossed.
 pub const PATCH: i32 = 256;
@@ -41,17 +41,23 @@ impl Default for Brush {
 
 pub struct Stroke {
     brush: Brush,
-    /// The image's pixels as they were when the stroke began.
-    before: Vec<u8>,
-    /// Strongest dab coverage each pixel has received so far, 0..255.
-    coverage: Vec<u8>,
+    /// The `PATCH`-sized blocks of the image the stroke has touched, each with the image's
+    /// pixels there as they were when the stroke first reached it, and the strongest dab
+    /// coverage each of its pixels has received so far (0..255). Kept only for blocks the
+    /// stroke touches: copying a card-sized image at every pen-down took tens of milliseconds.
+    patches: BTreeMap<(i32, i32), Block>,
     /// Everything this stroke has touched, in image pixels.
     dirty: Option<Region>,
-    /// The `PATCH`-sized blocks of the image the stroke has touched.
-    patches: BTreeSet<(i32, i32)>,
     last: Option<(f32, f32)>,
     /// Distance travelled since the last dab.
     carry: f32,
+}
+
+struct Block {
+    /// The part of the image this block covers (a whole block, cut at the image's edge).
+    region: Region,
+    before: Vec<u8>,
+    coverage: Vec<u8>,
 }
 
 fn union(a: Option<Region>, b: Region) -> Region {
@@ -67,7 +73,8 @@ fn union(a: Option<Region>, b: Region) -> Region {
 
 impl Stroke {
     pub fn new(image: &Image, brush: Brush) -> Stroke {
-        Stroke { brush, before: image.data.clone(), coverage: vec![0; image.w as usize * image.h as usize], dirty: None, patches: BTreeSet::new(), last: None, carry: 0.0 }
+        let _ = image;
+        Stroke { brush, patches: BTreeMap::new(), dirty: None, last: None, carry: 0.0 }
     }
 
     /// Everything the stroke has changed so far, in image pixels.
@@ -77,13 +84,13 @@ impl Stroke {
 
     /// The blocks of the image the stroke has touched, each cut to the image.
     pub fn patches(&self, image: &Image) -> Vec<Region> {
-        let whole = Region::new(0, 0, image.w, image.h);
-        self.patches.iter().filter_map(|&(px, py)| Region::new(px * PATCH, py * PATCH, PATCH, PATCH).intersect(&whole)).collect()
+        let _ = image;
+        self.patches.values().map(|block| block.region).collect()
     }
 
-    /// The image's pixels before the stroke, for undo.
-    pub fn before(&self) -> &[u8] {
-        &self.before
+    /// The blocks of the image the stroke has touched, each with its pixels as they were before the stroke, for undo.
+    pub fn before(&self) -> Vec<(Region, Vec<u8>)> {
+        self.patches.values().map(|block| (block.region, block.before.clone())).collect()
     }
 
     /// Extend the stroke to (x, y) in image pixels. `pressure` (0..1) scales
@@ -118,49 +125,55 @@ impl Stroke {
     fn dab(&mut self, image: &mut Image, cx: f32, cy: f32, radius: f32) -> Option<Region> {
         let area = Region::new((cx - radius - 1.0).floor() as i32, (cy - radius - 1.0).floor() as i32, (radius * 2.0 + 3.0).ceil() as i32, (radius * 2.0 + 3.0).ceil() as i32)
             .intersect(&Region::new(0, 0, image.w, image.h))?;
-        for py in area.y.div_euclid(PATCH)..=(area.y + area.h - 1).div_euclid(PATCH) {
-            for px in area.x.div_euclid(PATCH)..=(area.x + area.w - 1).div_euclid(PATCH) {
-                self.patches.insert((px, py));
-            }
-        }
+        let whole = Region::new(0, 0, image.w, image.h);
         let inner = radius * self.brush.hardness.clamp(0.0, 1.0);
         let fade = radius - inner;
         let opacity = self.brush.opacity.clamp(0.0, 1.0);
         let color = self.brush.color.map(|c| c as f32);
         let stride = image.w as usize;
-        for y in area.y..area.y + area.h {
-            let dy = y as f32 + 0.5 - cy;
-            for x in area.x..area.x + area.w {
-                let dx = x as f32 + 0.5 - cx;
-                let d = (dx * dx + dy * dy).sqrt();
-                // Anti-aliased disc, optionally with a smooth falloff outside the hard core.
-                let mut c = (radius - d + 0.5).clamp(0.0, 1.0);
-                if fade > 0.0 && d > inner {
-                    let t = ((d - inner) / fade).min(1.0);
-                    c = c.min(1.0 - t * t * (3.0 - 2.0 * t));
-                }
-                let c8 = (c * 255.0 + 0.5) as u8;
-                let p = y as usize * stride + x as usize;
-                if c8 <= self.coverage[p] {
-                    continue;
-                }
-                self.coverage[p] = c8;
-                let a = c8 as f32 / 255.0 * opacity;
-                let i = p * 4;
-                let before = &self.before[i..i + 4];
-                let px = &mut image.data[i..i + 4];
-                if self.brush.erase {
-                    px[3] = (before[3] as f32 * (1.0 - a) + 0.5) as u8;
-                } else {
-                    // Straight-alpha source-over of the brush color onto the original pixel.
-                    let keep = before[3] as f32 / 255.0 * (1.0 - a);
-                    let out = a + keep;
-                    if out > 0.0 {
-                        for k in 0..3 {
-                            px[k] = ((color[k] * a + before[k] as f32 * keep) / out + 0.5) as u8;
+        for py in area.y.div_euclid(PATCH)..=(area.y + area.h - 1).div_euclid(PATCH) {
+            for px in area.x.div_euclid(PATCH)..=(area.x + area.w - 1).div_euclid(PATCH) {
+                let block = self.patches.entry((px, py)).or_insert_with(|| {
+                    // First touch: remember this block as it is, before anything is painted on it.
+                    let region = Region::new(px * PATCH, py * PATCH, PATCH, PATCH).intersect(&whole).expect("a dab is inside the image");
+                    Block { region, before: crop(&image.data, image.w, &region), coverage: vec![0; region.area()] }
+                });
+                let Some(part) = area.intersect(&block.region) else { continue };
+                for y in part.y..part.y + part.h {
+                    let dy = y as f32 + 0.5 - cy;
+                    for x in part.x..part.x + part.w {
+                        let dx = x as f32 + 0.5 - cx;
+                        let d = (dx * dx + dy * dy).sqrt();
+                        // Anti-aliased disc, optionally with a smooth falloff outside the hard core.
+                        let mut c = (radius - d + 0.5).clamp(0.0, 1.0);
+                        if fade > 0.0 && d > inner {
+                            let t = ((d - inner) / fade).min(1.0);
+                            c = c.min(1.0 - t * t * (3.0 - 2.0 * t));
+                        }
+                        let c8 = (c * 255.0 + 0.5) as u8;
+                        let b = block.region.index(x, y);
+                        if c8 <= block.coverage[b] {
+                            continue;
+                        }
+                        block.coverage[b] = c8;
+                        let a = c8 as f32 / 255.0 * opacity;
+                        let before = &block.before[b * 4..b * 4 + 4];
+                        let i = (y as usize * stride + x as usize) * 4;
+                        let px = &mut image.data[i..i + 4];
+                        if self.brush.erase {
+                            px[3] = (before[3] as f32 * (1.0 - a) + 0.5) as u8;
+                        } else {
+                            // Straight-alpha source-over of the brush color onto the original pixel.
+                            let keep = before[3] as f32 / 255.0 * (1.0 - a);
+                            let out = a + keep;
+                            if out > 0.0 {
+                                for k in 0..3 {
+                                    px[k] = ((color[k] * a + before[k] as f32 * keep) / out + 0.5) as u8;
+                                }
+                            }
+                            px[3] = (out * 255.0 + 0.5) as u8;
                         }
                     }
-                    px[3] = (out * 255.0 + 0.5) as u8;
                 }
             }
         }
@@ -290,14 +303,10 @@ mod tests {
         let dirty = stroke.dirty().unwrap();
         assert!(dirty.x >= 0 && dirty.y >= 0 && dirty.x + dirty.w <= 30 && dirty.y + dirty.h <= 30);
         assert_ne!(image.data, original);
-        let before = crop(stroke.before(), 30, &dirty);
-        let painted = image.data.clone();
-        paste(&mut image, &dirty, &before);
-        assert_eq!(image.data, original);
-        // The touched blocks cover the same change.
-        image.data = painted;
-        for patch in stroke.patches(&image) {
-            let before = crop(stroke.before(), 30, &patch);
+        // The touched blocks, each kept as it was, put everything back; and they are the blocks reported.
+        let kept = stroke.before();
+        assert_eq!(kept.iter().map(|(region, _)| *region).collect::<Vec<_>>(), stroke.patches(&image));
+        for (patch, before) in kept {
             paste(&mut image, &patch, &before);
         }
         assert_eq!(image.data, original);
