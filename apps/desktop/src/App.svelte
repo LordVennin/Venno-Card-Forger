@@ -526,21 +526,58 @@
     });
   }
 
-  let dragged: string | null = null;
-  /** Drop a layer from the list just above another one, in that one's group. */
-  function dropAbove(target: string) {
-    const [from, to] = [dragged && find(dragged), find(target)];
-    const id = dragged;
+  // Reordering in the list: a row is picked up by its grip and dropped on another row. Done with
+  // plain pointer events, because the desktop window keeps the browser's own drag and drop for itself.
+  let dragged = $state<string | null>(null);
+  let dropAt = $state<{ id: string; where: "above" | "below" | "inside" } | null>(null);
+
+  function rowUnder(e: PointerEvent): { id: string; where: "above" | "below" | "inside" } | null {
+    const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("li[data-layer]");
+    if (!row || row.dataset.layer === dragged) return null;
+    const r = row.getBoundingClientRect();
+    const lower = e.clientY > r.top + r.height / 2;
+    // The lower half of a group's row means "into the group".
+    return { id: row.dataset.layer!, where: lower ? (row.dataset.kind === "group" ? "inside" : "below") : "above" };
+  }
+
+  /** Put the dragged layer above or below another in that one's group, or into a group at its top. */
+  function dropLayer() {
+    const [from, target] = [dragged && find(dragged), dropAt && find(dropAt.id)];
+    const [id, where] = [dragged, dropAt?.where];
     dragged = null;
-    if (!from || !to || !id || id === target) return;
+    dropAt = null;
+    if (!from || !target || !id || !where) return;
     // A group cannot go inside itself.
-    if (from.layer.kind === "group" && find(target, from.layer as Layer & { kind: "group" })) {
+    if (from.layer.kind === "group" && (target.layer.id === id || find(target.layer.id, from.layer as Layer & { kind: "group" }))) {
       status = "A group cannot be moved into itself.";
       return;
     }
-    // The place is counted after the layer has left its old one.
-    const index = to.index + (from.parent === to.parent && from.index < to.index ? 0 : 1);
-    run("Reorder", () => core!.execute({ type: "moveLayer", id, parent: to.parent, index }, `Reorder ${from.layer.name}`));
+    let parent = target.parent;
+    let index: number;
+    if (where === "inside" && target.layer.kind === "group") {
+      parent = target.layer.id;
+      index = target.layer.children.length - (from.parent === parent ? 1 : 0);
+    } else {
+      // The list shows the top layer first, so "above" in the list is a higher place in the group.
+      // Places are counted after the layer has left its old one.
+      const shift = from.parent === parent && from.index < target.index ? 1 : 0;
+      index = target.index - shift + (where === "above" ? 1 : 0);
+    }
+    run("Reorder", () => core!.execute({ type: "moveLayer", id, parent, index }, `Reorder ${from.layer.name}`));
+    select(id);
+  }
+
+  /** Move the selected layer one place up or down among the layers of its group. */
+  function step(by: 1 | -1) {
+    const found = active ? find(active) : null;
+    if (!found) return;
+    const siblings = found.parent === doc!.root.id ? doc!.root.children.length : ((find(found.parent)?.layer as Layer & { kind: "group" }).children.length ?? 0);
+    const index = found.index + by;
+    if (index < 0 || index >= siblings) {
+      status = by > 0 ? "It is already the top layer of its group." : "It is already the bottom layer of its group.";
+      return;
+    }
+    run("Reorder", () => core!.execute({ type: "moveLayer", id: found.layer.id, parent: found.parent, index }, `Move ${found.layer.name} ${by > 0 ? "up" : "down"}`));
   }
 
   /** Switch one of the selected layer's effects on or off, or change one of its numbers. */
@@ -775,6 +812,9 @@
     } else if (mod && e.key.toLowerCase() === "y") {
       e.preventDefault();
       run("Redo", () => core!.redo());
+    } else if (mod && (e.key === "]" || e.key === "[")) {
+      e.preventDefault();
+      step(e.key === "]" ? 1 : -1);
     } else if (mod && e.key.toLowerCase() === "j") {
       e.preventDefault();
       duplicateSelected();
@@ -1041,6 +1081,8 @@
           {/each}
         {/if}
         <div class="new">
+          <button class="small" onclick={() => step(1)} title="One place up in its group (Ctrl+])">Up</button>
+          <button class="small" onclick={() => step(-1)} title="One place down in its group (Ctrl+[)">Down</button>
           <button class="small" onclick={duplicateSelected} title="Make a copy of this layer just above it (Ctrl+J)">Duplicate</button>
           <button class="small" onclick={removeSelected} title="Delete this layer (Del)">Delete</button>
         </div>
@@ -1052,12 +1094,26 @@
           style:padding-left="{depth * 14}px"
           class:hidden={!layer.visible}
           class:selected={layer.id === active}
-          draggable="true"
-          ondragstart={() => (dragged = layer.id)}
-          ondragover={(e) => dragged && dragged !== layer.id && e.preventDefault()}
-          ondrop={(e) => (e.preventDefault(), dropAbove(layer.id))}
-          title="Drag onto another layer to put it just above that one"
+          data-layer={layer.id}
+          data-kind={layer.kind}
+          class:lifted={dragged === layer.id}
+          class:drop-above={dropAt?.id === layer.id && dropAt.where === "above"}
+          class:drop-below={dropAt?.id === layer.id && dropAt.where === "below"}
+          class:drop-inside={dropAt?.id === layer.id && dropAt.where === "inside"}
         >
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            class="grip"
+            title="Drag to another place in the list: onto the top half of a row to go above it, the bottom half to go below (or into a group)"
+            onpointerdown={(e) => {
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              // Not selected yet: that would open its properties above the list and move every row.
+              dragged = layer.id;
+            }}
+            onpointermove={(e) => dragged && (dropAt = rowUnder(e))}
+            onpointerup={dropLayer}
+            onpointercancel={() => ((dragged = null), (dropAt = null))}>⠿</span>
           <input type="checkbox" checked={layer.visible} onchange={() => toggle(layer)} title="Visible" />
           <button class="name" onclick={() => select(layer.id)} ondblclick={() => editText(layer.id)} title={layer.kind === "text" ? "Double-click to edit the text" : "Select this layer"}>
             {layer.name}
@@ -1146,6 +1202,11 @@
   header select { background: #3a3d43; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 3px 6px; font: inherit; }
   .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
+  .grip { cursor: grab; color: #6d7078; padding: 0 2px; touch-action: none; user-select: none; }
+  li.lifted { opacity: 0.45; }
+  li.drop-above { box-shadow: 0 -2px 0 #5b9dff; }
+  li.drop-below { box-shadow: 0 2px 0 #5b9dff; }
+  li.drop-inside { outline: 2px solid #5b9dff; outline-offset: -2px; }
   .checks { display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .fx { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding-left: 8px; }
   .fx .number { width: 3.4em; }

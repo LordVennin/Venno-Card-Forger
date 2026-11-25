@@ -996,28 +996,51 @@ impl Renderer {
         let at = Region::new(x, y, 1, 1);
         at.intersect(&doc_region)?;
         let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        /// How solid a layer's own picture is at the point (0..255), all its masks counted.
+        fn ink(pass: &mut RenderPass, layer: &Layer, at: &Region) -> u8 {
+            let Some(content) = pass.content(layer, at) else { return 0 };
+            if content.region != *at {
+                return 0;
+            }
+            let shown = pass.mask_coverage(layer, at, MaskPart::All).map_or(255, |cover| cover[0]) as u32;
+            (content.data[3] as u32 * shown / 255) as u8
+        }
         fn find(pass: &mut RenderPass, group: &GroupLayer, at: &Region) -> Option<String> {
-            for layer in group.children.iter().rev().filter(|l| l.base().visible && l.base().opacity > 0.0) {
-                // A group's own mask hides what is in it.
-                if let Layer::Group(inner) = layer {
-                    let hidden = pass.mask_coverage(layer, at, MaskPart::All).is_some_and(|cover| cover[0] < 16);
-                    if !hidden {
-                        if let Some(found) = find(pass, inner, at) {
-                            return Some(found);
+            for (i, layer) in group.children.iter().enumerate().rev() {
+                let base = layer.base();
+                if !base.visible || base.opacity <= 0.0 {
+                    continue;
+                }
+                // A clipped layer shows only where the layer it is clipped to has ink: a color laid
+                // over a frame piece covers the whole card on paper, and only the piece on screen.
+                if base.clip {
+                    let under = group.children[..i].iter().rev().find(|l| !l.base().clip);
+                    if under.is_none_or(|under| !under.base().visible || ink(pass, under, at) < 16) {
+                        continue;
+                    }
+                }
+                let masked_away = pass.mask_coverage(layer, at, MaskPart::All).is_some_and(|cover| cover[0] < 16);
+                match layer {
+                    // A group's own mask hides what is in it.
+                    Layer::Group(inner) => {
+                        if !masked_away {
+                            if let Some(found) = find(pass, inner, at) {
+                                return Some(found);
+                            }
                         }
                     }
-                    continue;
-                }
-                // Text is picked by the box around its ink: nobody aims for the strokes of a letter.
-                if let Layer::Text(text) = layer {
-                    if pass.text_bounds(text).is_some_and(|b| b.intersect(at).is_some()) {
-                        return Some(layer.id().to_string());
+                    // Text is picked by the box around its ink: nobody aims for the strokes of a letter.
+                    Layer::Text(text) => {
+                        if !masked_away && pass.text_bounds(text).is_some_and(|b| b.intersect(at).is_some()) {
+                            return Some(layer.id().to_string());
+                        }
                     }
-                    continue;
-                }
-                let Some(content) = pass.masked_content(layer, at) else { continue };
-                if content.region == *at && content.data[3] >= 16 {
-                    return Some(layer.id().to_string());
+                    _ => {
+                        // With its fill at nothing, only a layer's effects show; there is no picture of it to click.
+                        if base.fill_opacity != Some(0.0) && ink(pass, layer, at) >= 16 {
+                            return Some(layer.id().to_string());
+                        }
+                    }
                 }
             }
             None

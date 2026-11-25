@@ -245,3 +245,22 @@ fn a_drag_zoomed_in_draws_only_what_is_on_screen_and_the_whole_picture_is_right_
     let full = cardsmith_core::render::render(s.doc(), &AssetBytes::new()).pixels;
     assert!(s.frame() == full);
 }
+
+#[test]
+fn a_click_passes_through_layers_that_show_nothing_at_that_point() {
+    // A picture in the middle; over it, a small frame piece with a card-sized color clipped to it, a
+    // card-sized layer hidden there by its mask, and a layer whose fill is nothing.
+    let mut doc = Doc::empty(200, 120, 72.0);
+    doc.assets.insert("dot".into(), serde_json::from_value(json!({ "kind": "image", "path": "assets/dot.png", "width": 10, "height": 10 })).unwrap());
+    let color = patch(rect("color", 0.0, 0.0, 200.0, 120.0, GRAY), json!({ "clip": true }));
+    let holed = patch(rect("holed", 0.0, 0.0, 200.0, 120.0, GRAY), json!({ "vectorMask": { "path": { "d": "M0 0L200 0L200 20L0 20Z" } } }));
+    let ghost = patch(rect("ghost", 0.0, 0.0, 200.0, 120.0, GRAY), json!({ "fillOpacity": 0 }));
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 200.0, 120.0, WHITE), pixel("art", "dot", [8.0, 0.0, 60.0, 0.0, 8.0, 30.0]), rect("piece", 0.0, 100.0, 200.0, 20.0, GRAY), color, holed, ghost];
+    let mut s = Session::new(doc, scene().1);
+    // The middle of the card: nothing over the picture shows there, so the picture is what is clicked.
+    assert_eq!(s.hit(100.0, 60.0).as_deref(), Some("art"));
+    // On the frame piece, the color clipped to it is what shows; at the top, the masked layer.
+    assert_eq!((s.hit(100.0, 110.0).as_deref(), s.hit(100.0, 10.0).as_deref()), (Some("color"), Some("holed")));
+    // Beside the picture, only the background.
+    assert_eq!(s.hit(20.0, 60.0).as_deref(), Some("bg"));
+}
