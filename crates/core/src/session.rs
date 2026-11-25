@@ -1303,6 +1303,141 @@ impl Session {
         Ok(())
     }
 
+    /// [`Session::magic_erase`] for an image layer that is shown enlarged and
+    /// not turned: the search for the color runs over the image's own pixels,
+    /// and what it finds is laid into the mask through the layer's placement,
+    /// smoothly. `None` if the layer is not such a layer.
+    fn magic_erase_picture(&mut self, layer_id: &str, x: f64, y: f64, tolerance: f32, contiguous: bool, label: &str) -> Result<Option<usize>> {
+        let Some(layer) = crate::tree::find(&self.doc, layer_id) else { return Ok(None) };
+        let (asset, m) = match layer {
+            Layer::Pixel(l) => (l.asset.clone(), l.transform),
+            Layer::Fill(l) => (l.asset.clone(), l.transform),
+            Layer::Art(l) => match &l.asset {
+                Some(asset) => (asset.clone(), l.transform),
+                None => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        let (scale, tx, ty) = (m[0], m[2], m[5]);
+        if m[1] != 0.0 || m[3] != 0.0 || (m[0] - m[4]).abs() > 1e-9 || scale <= 1.0 {
+            return Ok(None);
+        }
+        let Some(image) = self.renderer.decoded_image(&asset, &self.assets) else { return Ok(None) };
+        let (w, h) = (image.w as usize, image.h as usize);
+        let (sx, sy) = (((x - tx) / scale).floor(), ((y - ty) / scale).floor());
+        if sx < 0.0 || sy < 0.0 || sx >= w as f64 || sy >= h as f64 {
+            return Err(err!("There is nothing of this layer at that point"));
+        }
+        let seed = sy as usize * w + sx as usize;
+        let data = &image.data;
+        let wanted = [data[seed * 4] as i32, data[seed * 4 + 1] as i32, data[seed * 4 + 2] as i32, data[seed * 4 + 3] as i32];
+        if wanted[3] < 8 {
+            return Err(err!("There is nothing of this layer at that point"));
+        }
+        let (mask_asset, offset, margin) = self.paint_mask(layer_id)?;
+        // What has already been erased counts as not there, as seen from each of the image's pixels.
+        let mask = self.renderer.image(&mask_asset).ok_or_else(|| err!("The layer's mask is unavailable"))?;
+        let (mw, mh) = (mask.w, mask.h);
+        let erased = |i: usize| -> bool {
+            let (dx, dy) = ((tx + ((i % w) as f64 + 0.5) * scale).floor() as i32 - offset.0, (ty + ((i / w) as f64 + 0.5) * scale).floor() as i32 - offset.1);
+            dx >= 0 && dy >= 0 && dx < mw && dy < mh && mask.data[(dy as usize * mw as usize + dx as usize) * 4] < 8
+        };
+        if erased(seed) {
+            return Err(err!("There is nothing of this layer at that point"));
+        }
+        let distance = |i: usize| -> i32 {
+            let p = &data[i * 4..i * 4 + 4];
+            if p[3] < 8 || erased(i) {
+                return i32::MAX;
+            }
+            (p[0] as i32 - wanted[0]).abs().max((p[1] as i32 - wanted[1]).abs()).max((p[2] as i32 - wanted[2]).abs()).max((p[3] as i32 - wanted[3]).abs())
+        };
+        let tolerance = tolerance.clamp(0.0, 255.0) as i32;
+        // How much of each image pixel stays: 0 where the color was found, part at the cut edge, 255 elsewhere.
+        let mut stays = vec![255u8; w * h];
+        let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0usize, 0usize);
+        let mut count = 0usize;
+        let mut take = |i: usize, to: u8, stays: &mut Vec<u8>| {
+            stays[i] = stays[i].min(to);
+            let (ix, iy) = (i % w, i / w);
+            (x0, y0, x1, y1) = (x0.min(ix), y0.min(iy), x1.max(ix + 1), y1.max(iy + 1));
+        };
+        let soften = |d: i32| -> u8 { if tolerance > 0 && d <= tolerance * 2 { (255 * (d - tolerance) / tolerance) as u8 } else { 255 } };
+        if contiguous {
+            let mut queue = vec![seed];
+            take(seed, 0, &mut stays);
+            while let Some(i) = queue.pop() {
+                count += 1;
+                let (ix, iy) = (i % w, i / w);
+                let mut visit = |j: usize, queue: &mut Vec<usize>, stays: &mut Vec<u8>| {
+                    if stays[j] == 0 {
+                        return;
+                    }
+                    let d = distance(j);
+                    if d <= tolerance {
+                        take(j, 0, stays);
+                        queue.push(j);
+                    } else if soften(d) < 255 {
+                        take(j, soften(d).max(1), stays);
+                    }
+                };
+                if ix > 0 { visit(i - 1, &mut queue, &mut stays); }
+                if ix + 1 < w { visit(i + 1, &mut queue, &mut stays); }
+                if iy > 0 { visit(i - w, &mut queue, &mut stays); }
+                if iy + 1 < h { visit(i + w, &mut queue, &mut stays); }
+            }
+        } else {
+            for i in 0..w * h {
+                let d = distance(i);
+                if d <= tolerance {
+                    take(i, 0, &mut stays);
+                    count += 1;
+                }
+            }
+            for i in 0..w * h {
+                if stays[i] == 0 {
+                    continue;
+                }
+                let (ix, iy) = (i % w, i / w);
+                if (ix > 0 && stays[i - 1] == 0) || (ix + 1 < w && stays[i + 1] == 0) || (iy > 0 && stays[i - w] == 0) || (iy + 1 < h && stays[i + w] == 0) {
+                    let d = distance(i);
+                    if soften(d) < 255 {
+                        take(i, soften(d).max(1), &mut stays);
+                    }
+                }
+            }
+        }
+        if x1 <= x0 {
+            return Ok(Some(0));
+        }
+        // The part of the card those image pixels cover, and a pixel more for the smooth edge.
+        let touched = Region::new((tx + (x0 as f64 - 1.0) * scale).floor() as i32, (ty + (y0 as f64 - 1.0) * scale).floor() as i32, ((x1 - x0 + 2) as f64 * scale).ceil() as i32 + 1, ((y1 - y0 + 2) as f64 * scale).ceil() as i32 + 1);
+        let Some(touched) = touched.intersect(&self.whole()) else { return Ok(Some(0)) };
+        let Some((area, before)) = self.mask_before(&mask_asset, offset, touched) else { return Ok(Some(0)) };
+        let mask = self.renderer.image_mut(&mask_asset, &self.assets).ok_or_else(|| err!("The layer's mask is unavailable"))?;
+        let at = |ix: i64, iy: i64| -> f64 { stays[iy.clamp(0, h as i64 - 1) as usize * w + ix.clamp(0, w as i64 - 1) as usize] as f64 };
+        for dy in area.y..area.y + area.h {
+            // Where this card pixel's middle falls among the image's pixel middles.
+            let v = (dy as f64 + 0.5 - ty) / scale - 0.5;
+            let (iy, fy) = (v.floor() as i64, v - v.floor());
+            for dx in area.x..area.x + area.w {
+                let u = (dx as f64 + 0.5 - tx) / scale - 0.5;
+                let (ix, fx) = (u.floor() as i64, u - u.floor());
+                let (a, b, c, d) = (at(ix, iy), at(ix + 1, iy), at(ix, iy + 1), at(ix + 1, iy + 1));
+                if a == 255.0 && b == 255.0 && c == 255.0 && d == 255.0 {
+                    continue;
+                }
+                let keep = ((a * (1.0 - fx) + b * fx) * (1.0 - fy) + (c * (1.0 - fx) + d * fx) * fy + 0.5) as u8;
+                let i = ((dy - offset.1) as usize * mask.w as usize + (dx - offset.0) as usize) * 4;
+                let now = mask.data[i].min(keep);
+                mask.data[i..i + 3].fill(now);
+            }
+        }
+        self.mask_changed(mask_asset, offset, margin, area, &before, label);
+        // In card pixels, as the other way of doing it counts.
+        Ok(Some((count as f64 * scale * scale).round() as usize))
+    }
+
     /// Erase everything of a layer that is the color found at a document
     /// point, to within `tolerance` (0 to 255 on each of red, green, blue and
     /// opacity): the part touching the point if `contiguous`, or every part.
@@ -1313,6 +1448,11 @@ impl Session {
         self.cancel_preview();
         if self.stroke.is_some() {
             return Err(err!("Finish the brush stroke first"));
+        }
+        // A picture shown larger than it is (card art nearly always is) is searched in its own
+        // pixels, of which there are far fewer than card pixels under it.
+        if let Some(gone) = self.magic_erase_picture(layer_id, x, y, tolerance, contiguous, label)? {
+            return Ok(gone);
         }
         let whole = self.whole();
         let (px, py) = (x.floor() as i32, y.floor() as i32);

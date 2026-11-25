@@ -193,3 +193,27 @@ fn strokes_made_zoomed_out_show_as_a_fresh_small_render_would_and_leave_the_real
     assert!(s.undo() && s.undo());
     assert_exact(&mut s);
 }
+
+#[test]
+fn on_an_enlarged_picture_the_magic_eraser_works_in_the_pictures_own_pixels_with_a_smooth_cut() {
+    // The picture at three times its size: the blue square (20..40 in it) covers 160..220 across and 90..150 down.
+    let (mut doc, assets) = scene();
+    doc.width = 400;
+    doc.height = 300;
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 400.0, 300.0, WHITE), pixel("art", "art", [3.0, 0.0, 100.0, 0.0, 3.0, 30.0])];
+    let mut s = Session::new(doc, assets);
+    let gone = s.magic_erase("art", 110.0, 40.0, 30.0, true, "Magic eraser").unwrap();
+    // Counted in card pixels: the red field, nine card pixels to each of the picture's.
+    assert_eq!(gone, (60 * 60 - 20 * 20) * 9);
+    assert_eq!((px(&mut s, 110, 40), px(&mut s, 270, 200), px(&mut s, 190, 120)), ([255, 255, 255, 255], [255, 255, 255, 255], [0, 0, 255, 255]));
+    // The cut follows the square's edge: just inside it the blue is whole, just outside it there is none.
+    assert_eq!((px(&mut s, 163, 120), px(&mut s, 156, 120)), ([0, 0, 255, 255], [255, 255, 255, 255]));
+    assert_exact(&mut s);
+    // What is gone is not found again; what is left can still be clicked away, and undone.
+    assert!(s.magic_erase("art", 110.0, 40.0, 30.0, true, "Magic eraser").unwrap_err().to_string().contains("nothing of this layer"));
+    s.magic_erase("art", 190.0, 120.0, 30.0, true, "Magic eraser").unwrap();
+    assert_eq!(px(&mut s, 190, 120), [255, 255, 255, 255]);
+    assert!(s.undo() && s.undo() && s.undo());
+    assert_eq!((px(&mut s, 110, 40), px(&mut s, 190, 120)), ([255, 0, 0, 255], [0, 0, 255, 255]));
+    assert_exact(&mut s);
+}
