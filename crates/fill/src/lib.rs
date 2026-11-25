@@ -25,11 +25,11 @@ pub struct Placed<'a> {
     pub scale: f64,
 }
 
-/// A finished fill: an RGB picture of the whole card area at a reduced size.
+/// A finished fill: a picture of the card area at a reduced size, clear where the art is.
 pub struct Filled {
     pub width: u32,
     pub height: u32,
-    /// Straight-alpha RGBA, fully opaque.
+    /// Straight-alpha RGBA: opaque where the fill is, clear where the art is.
     pub rgba: Vec<u8>,
     /// How many document pixels one pixel of the fill covers.
     pub scale: f64,
@@ -102,8 +102,35 @@ impl Working {
         !self.hole.iter().any(|m| *m) || self.hole.iter().all(|m| *m)
     }
 
+    /// The finished fill: the made-up picture where there was none, and nothing
+    /// where the art is. Only a rim of it reaches under the art's edge (three
+    /// working pixels), so that no gap shows at the art's softened edge and
+    /// rounded corners. The art itself is not copied into the fill: at this
+    /// reduced size it would be a blurred double of it, there to be seen the
+    /// moment the art is moved, scaled or cut out.
     pub fn finish(self) -> Filled {
-        Filled { width: self.width, height: self.height, rgba: self.rgb.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(), scale: self.scale }
+        const RIM: i32 = 3;
+        let (w, h) = (self.width as i32, self.height as i32);
+        // How far each pixel is from the nearest missing one, up to the rim's width, in two passes.
+        let far = RIM + 1;
+        let mut reach = vec![far; (w * h) as usize];
+        for pass in 0..2 {
+            let order: Box<dyn Iterator<Item = i32>> = if pass == 0 { Box::new(0..w * h) } else { Box::new((0..w * h).rev()) };
+            for i in order {
+                let (x, y) = (i % w, i / w);
+                let mut best = if self.hole[i as usize] { 0 } else { reach[i as usize] };
+                let (dx, dy) = if pass == 0 { (-1, -1) } else { (1, 1) };
+                if (0..w).contains(&(x + dx)) {
+                    best = best.min(reach[(i + dx) as usize] + 1);
+                }
+                if (0..h).contains(&(y + dy)) {
+                    best = best.min(reach[(i + dy * w) as usize] + 1);
+                }
+                reach[i as usize] = best;
+            }
+        }
+        let rgba = self.rgb.chunks_exact(3).zip(&reach).flat_map(|(p, &d)| if d <= RIM { [p[0], p[1], p[2], 255] } else { [0, 0, 0, 0] }).collect();
+        Filled { width: self.width, height: self.height, rgba, scale: self.scale }
     }
 }
 

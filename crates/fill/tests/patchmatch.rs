@@ -78,16 +78,21 @@ fn art_in_the_middle_of_a_card_is_extended_to_its_edges() {
     let fill = fill_edges(&placed, (400, 300), [110.0, 100.0, 290.0, 200.0], 200, 1).unwrap();
     assert_eq!((fill.width, fill.height, fill.scale), (200, 150, 2.0));
     let at = |x: u32, y: u32| { let i = ((y * fill.width + x) * 4) as usize; [fill.rgba[i], fill.rgba[i + 1], fill.rgba[i + 2], fill.rgba[i + 3]] };
-    // Inside the kept area: the art itself (card 200,150 is art row 30).
-    let inside = at(100, 75);
-    assert!((inside[0] as i32 - 120).abs() <= 6 && inside[3] == 255, "{inside:?}");
+    // Inside the kept area there is nothing: the fill is not a second, blurred copy of the art.
+    assert_eq!(at(100, 75), [0, 0, 0, 0]);
+    // Only a rim reaches under the art's edge (the kept area starts at working pixel 55): three pixels of it, the art's own colors.
+    let rim = at(56, 75);
+    assert!((rim[0] as i32 - 120).abs() <= 6 && rim[3] == 255, "{rim:?}");
+    assert_eq!((at(57, 75)[3], at(58, 75)[3], at(60, 75)[3]), (255, 0, 0));
     // Left and right of it, at the same height, the same colors carry on.
     for x in [10, 190] {
         let beside = at(x, 75);
         assert!((beside[0] as i32 - 120).abs() <= 40 && beside[1] == 100, "{beside:?} at x {x}");
     }
-    // Everything is opaque: the fill covers the whole card.
-    assert!(fill.rgba.chunks_exact(4).all(|p| p[3] == 255));
+    // Everything outside the kept area is opaque: the fill reaches every edge of the card.
+    for (x, y) in [(0, 0), (199, 149), (100, 10), (100, 140), (54, 75)] {
+        assert_eq!(at(x, y)[3], 255, "at {x}, {y}");
+    }
     // Art that covers the whole card leaves nothing to fill.
     let whole = Placed { width: 100, height: 60, rgba: &art, x: 0.0, y: 0.0, scale: 5.0 };
     assert!(fill_edges(&whole, (400, 300), [0.0, 0.0, 400.0, 300.0], 200, 1).is_none());
@@ -116,7 +121,10 @@ fn providers_are_tried_in_order_and_the_first_that_works_is_used() {
     assert_eq!(outcome.notices, ["lama is not available: its model has not been downloaded", "sdcpp failed: out of memory"]);
     let filled = outcome.filled.unwrap();
     assert_eq!((filled.width, filled.height), (100, 100));
-    assert!(filled.rgba.chunks_exact(4).all(|p| p == [90, 120, 150, 255]));
+    // The art's one color carried out to the edges, and nothing where the art is.
+    assert!(filled.rgba.chunks_exact(4).all(|p| p == [90, 120, 150, 255] || p == [0, 0, 0, 0]));
+    let at = |x: usize, y: usize| filled.rgba[(y * 100 + x) * 4 + 3];
+    assert_eq!((at(5, 5), at(50, 50), at(95, 50)), (255, 0, 255));
     // With nothing left to fall back on, the reasons are the error.
     let error = fill_with_fallback(&mut [&mut Missing, &mut Broken], &request()).err().unwrap();
     assert!(error.contains("not been downloaded") && error.contains("out of memory"), "{error}");

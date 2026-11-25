@@ -73,10 +73,9 @@ cp "$(value_of input_path "$script")" "$(value_of output_path "$script")""#
     assert_eq!((outcome.provider, outcome.notices.len()), ("sdcpp", 0), "{:?}", std::fs::read_to_string(dir.join("run/log.txt")));
     let filled = outcome.filled.unwrap();
     assert_eq!((filled.width, filled.height), (100, 100));
-    // The art is kept where it is trusted, and the rest is filled from its colors.
-    let at = |x: u32, y: u32| { let i = ((y * 100 + x) * 4) as usize; [filled.rgba[i], filled.rgba[i + 1], filled.rgba[i + 2]] };
-    assert_eq!((at(50, 40), at(50, 60)), ([40, 80, 200], [50, 160, 60]));
-    assert!(filled.rgba.chunks_exact(4).all(|p| p[3] == 255));
+    // Where the art is trusted the fill is clear (it is not a second copy of the art); the rest is filled.
+    let at = |x: u32, y: u32| { let i = ((y * 100 + x) * 4) as usize; filled.rgba[i + 3] };
+    assert_eq!((at(50, 40), at(50, 60), at(2, 2), at(97, 97)), (0, 0, 255, 255));
 
     // What it was given: the seed, the prompt with its quotes escaped, absolute paths, and a mask that is white where the card is missing.
     let script = std::fs::read_to_string(dir.join("run/fill.dgl")).unwrap();
