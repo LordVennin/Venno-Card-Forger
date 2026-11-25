@@ -89,11 +89,12 @@ fn changed_layers(before: &Doc, after: &Doc) -> Vec<String> {
     type Seen<'a> = BTreeMap<&'a str, (&'a str, u64)>;
     fn note<'a>(group: &'a GroupLayer, layers: &mut Seen<'a>, order: &mut BTreeMap<&'a str, Vec<&'a str>>) {
         for layer in &group.children {
-            let mut own = serde_json::to_value(layer).unwrap_or_default();
-            if let Some(fields) = own.as_object_mut() {
-                fields.remove("children");
-            }
-            layers.insert(layer.id(), (group.base.id.as_str(), hash(own.to_string().as_bytes())));
+            // A layer's own fields only: a group's children are looked at in their own right.
+            let own = match layer {
+                Layer::Group(g) => serde_json::to_vec(&(&g.base, g.pass_through)),
+                other => serde_json::to_vec(other),
+            };
+            layers.insert(layer.id(), (group.base.id.as_str(), hash(&own.unwrap_or_default())));
             order.entry(group.base.id.as_str()).or_default().push(layer.id());
             if let Layer::Group(inner) = layer {
                 note(inner, layers, order);
@@ -889,8 +890,16 @@ impl Session {
     /// Apply an edit and redraw what it could have changed: where the affected
     /// layers were before, and where they are after. Returns the inverse edit.
     fn apply_and_redraw(&mut self, edit: &Edit) -> Result<Edit> {
+        self.apply_and_redraw_in(edit, None)
+    }
+
+    /// As [`Session::apply_and_redraw`], for an edit whose reach the caller
+    /// knows: a step of a drag changes the dragged layers and nothing else,
+    /// which saves trying the edit on a copy of the document to find out.
+    fn apply_and_redraw_in(&mut self, edit: &Edit, known: Option<Reach>) -> Result<Edit> {
         self.below = None;
         let reach = match edit {
+            _ if known.is_some() => known.expect("just checked"),
             // A batch is judged by what it changes in the end, found by trying it on a copy.
             Edit::Batch { .. } => {
                 let mut trial = self.doc.clone();
@@ -939,7 +948,7 @@ impl Session {
             // The smaller copy takes over first, so even the first step is drawn small.
             self.dragging = true;
             let switched = self.viewing && self.use_level(self.wanted_level());
-            let back = match self.apply_and_redraw(&edit) {
+            let back = match self.apply_and_redraw_in(&edit, Some(Reach::of(&edit))) {
                 Ok(back) => back,
                 Err(e) => {
                     self.dragging = false;
@@ -955,7 +964,9 @@ impl Session {
         };
         // Back to the start and on to the new state as one change, so only what differs between
         // the last state and this one is drawn.
-        match self.apply_and_redraw(&Edit::Batch { edits: vec![back.clone(), edit.clone()] }) {
+        // Both halves touch the same layers: the ones being dragged.
+        let reach = Reach::of(&edit);
+        match self.apply_and_redraw_in(&Edit::Batch { edits: vec![back.clone(), edit.clone()] }, Some(reach)) {
             Ok(Edit::Batch { mut edits }) if edits.len() == 2 => {
                 // The inverse of the pair is "undo the new edit, then redo the old": the first half takes this state back.
                 self.preview = Some((edit, edits.swap_remove(0)));

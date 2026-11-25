@@ -168,9 +168,9 @@ pub struct Renderer {
     images: HashMap<String, Option<Rc<Image>>>,
     /// Bumped whenever an image's pixels change. Part of layer fingerprints.
     versions: HashMap<String, u64>,
-    paths: HashMap<String, Option<Rc<tiny_skia::Path>>>,
-    /// Keyed by what is being filled: see `fill_coverage` and `stroke_coverage`.
-    coverage: HashMap<String, Coverage>,
+    paths: HashMap<PathKey, Option<Rc<tiny_skia::Path>>>,
+    /// Keyed by what is being filled, how (0 nonzero fill, 1 even-odd fill, 2 stroke) and, for a stroke, how wide.
+    coverage: HashMap<(PathKey, u8, u32), Coverage>,
     effects: HashMap<String, EffectCache>,
     /// Fingerprint of everything that decides each effect-bearing layer's effect tiles.
     fingerprints: HashMap<String, u64>,
@@ -179,6 +179,8 @@ pub struct Renderer {
     /// The fonts text layers are drawn with. Supplied by the user, not stored in documents.
     fonts: Fonts,
     texts: HashMap<String, TextCache>,
+    /// How many path and coverage entries were left after the caches were last cleared of unused ones.
+    kept_paths: usize,
 }
 
 struct RenderPass<'a> {
@@ -315,21 +317,21 @@ impl<'a> RenderPass<'a> {
 
     /// Coverage of a path's fill over `region`. `None` if the path is unusable or empty.
     fn fill_coverage(&mut self, source: &Path, region: &Region) -> Option<Vec<u8>> {
-        let key = format!("{}|{}", if source.fill_rule == Some(FillRule::Evenodd) { "eo" } else { "nz" }, source.d);
+        let key = (path_key(&source.d), u8::from(source.fill_rule == Some(FillRule::Evenodd)), 0);
         if !self.cache.coverage.contains_key(&key) {
             let path = self.path(source)?;
-            self.cache.coverage.insert(key.clone(), Coverage::new(path, fill_rule(source)));
+            self.cache.coverage.insert(key, Coverage::new(path, fill_rule(source)));
         }
         Some(self.cache.coverage.get_mut(&key)?.over(region))
     }
 
     /// Coverage of a path stroked `width` pixels wide (centered on the path) over `region`.
     fn stroke_coverage(&mut self, source: &Path, width: f32, region: &Region) -> Option<Vec<u8>> {
-        let key = format!("s{}|{}", width.to_bits(), source.d);
+        let key = (path_key(&source.d), 2, width.to_bits());
         if !self.cache.coverage.contains_key(&key) {
             let path = self.path(source)?;
             let outline = path.stroke(&tiny_skia::Stroke { width, ..Default::default() }, 1.0)?;
-            self.cache.coverage.insert(key.clone(), Coverage::new(Rc::new(outline), tiny_skia::FillRule::Winding));
+            self.cache.coverage.insert(key, Coverage::new(Rc::new(outline), tiny_skia::FillRule::Winding));
         }
         Some(self.cache.coverage.get_mut(&key)?.over(region))
     }
@@ -800,18 +802,35 @@ fn ink(raster: &mut Raster, coverage: &[u8], color: &Color) {
     }
 }
 
-/// FNV-1a, fed in pieces.
+/// What a path's text is known by in the caches: a hash of it and its length, which
+/// costs nothing to copy or compare where the text itself can be hundreds of kilobytes.
+type PathKey = (u64, usize);
+
+fn path_key(d: &str) -> PathKey {
+    let mut hash = Fnv::new();
+    hash.write(d.as_bytes());
+    (hash.0, d.len())
+}
+
+/// A hash fed in pieces (it began as FNV-1a, and keeps the name).
 struct Fnv(u64);
 
 impl Fnv {
     fn new() -> Fnv {
         Fnv(0xcbf2_9ce4_8422_2325)
     }
+    /// Eight bytes at a time: fingerprints are taken of whole documents, long paths included, on every edit.
     fn write(&mut self, bytes: &[u8]) {
-        for &byte in bytes {
-            self.0 ^= byte as u64;
-            self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+        let mut chunks = bytes.chunks_exact(8);
+        for chunk in &mut chunks {
+            let word = u64::from_le_bytes(chunk.try_into().expect("eight bytes"));
+            self.0 = (self.0 ^ word).wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(29);
         }
+        for &byte in chunks.remainder() {
+            self.0 = (self.0 ^ byte as u64).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        // The length too, so that leading zero bytes count.
+        self.0 = (self.0 ^ bytes.len() as u64).wrapping_mul(0x0000_0100_0000_01b3);
     }
     fn json<T: serde::Serialize>(&mut self, value: &T) {
         self.write(&serde_json::to_vec(value).unwrap_or_default());
@@ -832,12 +851,13 @@ impl Renderer {
     }
 
     fn parsed(&mut self, source: &Path) -> Result<Option<Rc<tiny_skia::Path>>, ()> {
-        if let Some(cached) = self.paths.get(&source.d) {
+        let key = path_key(&source.d);
+        if let Some(cached) = self.paths.get(&key) {
             return Ok(cached.clone());
         }
         // A malformed path is not cached, so its warning is reported on every render.
         let path = build_path(source)?.map(Rc::new);
-        self.paths.insert(source.d.clone(), path.clone());
+        self.paths.insert(key, path.clone());
         Ok(path)
     }
 
@@ -857,6 +877,23 @@ impl Renderer {
             }
         });
         self.texts.retain(|id, _| alive.contains(id.as_str()));
+        // Paths no layer has any more (every position of a dragged shape leaves one behind) are
+        // let go with their coverage. Checked only when there is something to gain, as it means
+        // hashing every path in the document.
+        if self.coverage.len() + self.paths.len() > self.kept_paths * 2 + 64 {
+            let mut used = HashSet::new();
+            crate::tree::walk(&doc.root, &mut |layer| {
+                if let Layer::Shape(shape) = layer {
+                    used.insert(path_key(&shape.path.d));
+                }
+                if let Some(mask) = &layer.base().vector_mask {
+                    used.insert(path_key(&mask.path.d));
+                }
+            });
+            self.paths.retain(|key, _| used.contains(key));
+            self.coverage.retain(|(key, _, _), _| used.contains(key));
+            self.kept_paths = self.coverage.len() + self.paths.len();
+        }
     }
 
     /// The fonts text is drawn with. After adding one, call [`Renderer::sync`].
@@ -1146,7 +1183,7 @@ pub fn render(doc: &Doc, assets: &AssetBytes) -> RenderResult {
 
 /// FNV-1a hash of a pixel buffer. For comparing renders across builds.
 pub fn hash(pixels: &[u8]) -> u64 {
-    let mut h = Fnv::new();
-    h.write(pixels);
-    h.0
+    // Plain FNV-1a, byte by byte: these values are compared between builds and written down,
+    // so they do not change with the faster hash the caches use among themselves.
+    pixels.iter().fold(0xcbf2_9ce4_8422_2325, |h, &byte| (h ^ byte as u64).wrapping_mul(0x0000_0100_0000_01b3))
 }

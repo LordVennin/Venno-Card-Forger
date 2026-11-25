@@ -21,18 +21,41 @@ use crate::raster::Image;
 use crate::text::{layout_text, Fonts};
 use std::collections::HashMap;
 
-/// Outlines of text layers already laid out, by layer id: what they were made from, and one path per color.
-pub type TextOutlines = HashMap<String, (u64, Vec<(Color, String)>)>;
+/// What making one smaller copy after another can reuse: the document is scaled
+/// again after every edit, and nearly all of it is the same as the time before.
+#[derive(Default)]
+pub struct TextOutlines {
+    /// Outlines of text layers already laid out, by layer id: what they were made from, and one path per color.
+    texts: HashMap<String, (u64, Vec<(Color, String)>)>,
+    /// Paths already scaled, by a hash of the path they were scaled from and its length.
+    paths: HashMap<(u64, usize), String>,
+}
 
-fn scale_path(d: &str, s: f64) -> String {
-    match kurbo::BezPath::from_svg(d) {
+impl TextOutlines {
+    pub fn new() -> TextOutlines {
+        TextOutlines::default()
+    }
+}
+
+fn scale_path(d: &str, s: f64, cache: &mut TextOutlines) -> String {
+    let key = (fnv(d.as_bytes()), d.len());
+    if let Some(done) = cache.paths.get(&key) {
+        return done.clone();
+    }
+    let scaled = match kurbo::BezPath::from_svg(d) {
         Ok(mut path) => {
             path.apply_affine(kurbo::Affine::scale(s));
             path.to_svg()
         }
         // The renderer will report it; scaled or not, it draws nothing.
         Err(_) => d.to_string(),
+    };
+    // A dragged shape leaves a path behind for every position it passed through.
+    if cache.paths.len() > 2048 {
+        cache.paths.clear();
     }
+    cache.paths.insert(key, scaled.clone());
+    scaled
 }
 
 fn outline(path: &tiny_skia::Path, s: f64) -> String {
@@ -52,13 +75,13 @@ fn outline(path: &tiny_skia::Path, s: f64) -> String {
     d
 }
 
-fn scale_base(base: &mut LayerBase, s: f64) {
+fn scale_base(base: &mut LayerBase, s: f64, cache: &mut TextOutlines) {
     if let Some(mask) = &mut base.mask {
         mask.offset = Vec2 { x: mask.offset.x * s, y: mask.offset.y * s };
         mask.feather = mask.feather.map(|f| f * s);
     }
     if let Some(mask) = &mut base.vector_mask {
-        mask.path.d = scale_path(&mask.path.d, s);
+        mask.path.d = scale_path(&mask.path.d, s, cache);
     }
     for effect in base.effects.iter_mut().flatten() {
         match effect {
@@ -77,34 +100,40 @@ fn scale_base(base: &mut LayerBase, s: f64) {
     }
 }
 
+/// A quick hash, eight bytes at a time: paths run to hundreds of kilobytes.
 fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf29ce484222325, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
+    let mut chunks = bytes.chunks_exact(8);
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for chunk in &mut chunks {
+        h = (h ^ u64::from_le_bytes(chunk.try_into().expect("eight bytes"))).wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(29);
+    }
+    chunks.remainder().iter().fold(h, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3))
 }
 
 fn scale_group(group: &mut GroupLayer, s: f64, fonts: &Fonts, texts: &mut TextOutlines) {
-    scale_base(&mut group.base, s);
+    scale_base(&mut group.base, s, texts);
     for layer in &mut group.children {
         match layer {
             Layer::Group(inner) => scale_group(inner, s, fonts, texts),
             Layer::Pixel(l) => {
-                scale_base(&mut l.base, s);
+                scale_base(&mut l.base, s, texts);
                 l.transform[2] *= s;
                 l.transform[5] *= s;
             }
             Layer::Fill(l) => {
-                scale_base(&mut l.base, s);
+                scale_base(&mut l.base, s, texts);
                 l.transform[2] *= s;
                 l.transform[5] *= s;
             }
             Layer::Art(l) => {
-                scale_base(&mut l.base, s);
+                scale_base(&mut l.base, s, texts);
                 l.transform[2] *= s;
                 l.transform[5] *= s;
                 l.frame_ref = Rect { x: l.frame_ref.x * s, y: l.frame_ref.y * s, w: l.frame_ref.w * s, h: l.frame_ref.h * s };
             }
             Layer::Shape(l) => {
-                scale_base(&mut l.base, s);
-                l.path.d = scale_path(&l.path.d, s);
+                scale_base(&mut l.base, s, texts);
+                l.path.d = scale_path(&l.path.d, s, texts);
                 if let Some(stroke) = &mut l.stroke {
                     stroke.width *= s;
                 }
@@ -113,13 +142,13 @@ fn scale_group(group: &mut GroupLayer, s: f64, fonts: &Fonts, texts: &mut TextOu
                 // Laid out at full size, as the real document does, then its outlines scaled:
                 // a group standing in for the layer, holding one shape for each color of ink.
                 let made_from = fnv(format!("{}|{}|{s}", serde_json::to_string(&(&l.bounds, &l.origin, &l.content, &l.style, &l.fit, &l.vertical_align)).unwrap_or_default(), fonts.version()).as_bytes());
-                if texts.get(&l.base.id).is_none_or(|(from, _)| *from != made_from) {
+                if texts.texts.get(&l.base.id).is_none_or(|(from, _)| *from != made_from) {
                     let parts = layout_text(l, fonts).parts.iter().map(|(color, path)| (*color, outline(path, s))).collect();
-                    texts.insert(l.base.id.clone(), (made_from, parts));
+                    texts.texts.insert(l.base.id.clone(), (made_from, parts));
                 }
                 let mut base = l.base.clone();
-                scale_base(&mut base, s);
-                let children = texts[&l.base.id]
+                scale_base(&mut base, s, texts);
+                let children = texts.texts[&l.base.id]
                     .1
                     .iter()
                     .enumerate()
@@ -140,7 +169,8 @@ pub fn scale_doc(doc: &Doc, level: u32, fonts: &Fonts, texts: &mut TextOutlines)
     small.dpi = doc.dpi * s;
     small.card = None;
     scale_group(&mut small.root, s, fonts, texts);
-    texts.retain(|id, _| crate::tree::find(doc, id).is_some());
+    let alive: std::collections::HashSet<&str> = crate::tree::all_ids(doc).into_iter().collect();
+    texts.texts.retain(|id, _| alive.contains(id.as_str()));
     small
 }
 

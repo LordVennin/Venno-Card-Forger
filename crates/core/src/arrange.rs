@@ -129,15 +129,28 @@ fn place(layer: &mut Layer, to: &Placement) -> Result<()> {
 
 /// The properties of `after` that differ from `before`, as a property patch.
 fn changed_props(before: &Layer, after: &Layer) -> Map<String, Value> {
-    let fields = |layer: &Layer| serde_json::to_value(layer).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    // A group's children are placed in their own right; only its own fields are compared here.
+    let fields = |layer: &Layer| {
+        let own = match layer {
+            Layer::Group(g) => serde_json::to_value(&g.base),
+            other => serde_json::to_value(other),
+        };
+        own.ok().and_then(|v| v.as_object().cloned()).unwrap_or_default()
+    };
     let (old, new) = (fields(before), fields(after));
     new.into_iter().filter(|(key, value)| key != "children" && old.get(key) != Some(value)).collect()
 }
 
 fn collect(layer: &Layer, to: &Placement, edits: &mut Vec<Edit>) -> Result<()> {
-    let mut placed = layer.clone();
+    // The layer alone: a group without what is in it, which is placed below.
+    let alone = match layer {
+        Layer::Group(g) => Layer::Group(GroupLayer { base: g.base.clone(), children: Vec::new(), pass_through: g.pass_through }),
+        other => other.clone(),
+    };
+    let layer_alone = &alone;
+    let mut placed = alone.clone();
     place(&mut placed, to)?;
-    let props = changed_props(layer, &placed);
+    let props = changed_props(layer_alone, &placed);
     if !props.is_empty() {
         edits.push(Edit::SetLayerProps { id: layer.id().to_string(), props });
     }
