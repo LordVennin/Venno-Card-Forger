@@ -76,6 +76,9 @@ pub struct Report {
     pub warnings: Vec<String>,
     /// Present when the art leaves space that should be filled.
     pub fill: Option<FillInfo>,
+    /// The art sits exactly where it did, so the fill already made for it was
+    /// kept and no new one is needed (unless a different one is wanted).
+    pub fill_kept: bool,
 }
 
 pub struct Workbench {
@@ -162,9 +165,16 @@ impl Workbench {
         self.next += 1;
         let mut edits = Vec::new();
         let showing = Self::showing(session.doc());
+        // A fill made for art that has not moved is still right: typing in the rules box
+        // must not make it again. It comes out with the old build and goes straight back in.
+        let mut kept = None;
         if let Some(inverse) = showing.and_then(|n| self.inverses.get(&n)) {
             // The fill was added after the build it belongs to, so it comes out first.
-            if tree::find(session.doc(), FILL_LAYER).is_some() {
+            if let Some(layer) = tree::find(session.doc(), FILL_LAYER) {
+                let same_place = built.fill.is_some() && showing.and_then(|n| self.plans.get(&n)) == built.fill.as_ref();
+                if same_place {
+                    kept = Some(layer.clone());
+                }
                 edits.push(Edit::RemoveLayer { id: FILL_LAYER.into() });
             }
             edits.push(inverse.clone());
@@ -172,6 +182,10 @@ impl Workbench {
             return Err("This document holds a card built in an earlier session. Open its template again to change the card.".into());
         }
         edits.push(built.edit);
+        let fill_kept = kept.is_some();
+        if let (Some(layer), Some(plan)) = (kept, &built.fill) {
+            edits.push(Edit::AddLayer { parent: plan.parent.clone(), layer, index: Some(plan.index) });
+        }
         let mut noted = serde_json::to_value(&card).map_err(|e| e.to_string())?;
         noted["_build"] = json!(build);
         edits.push(Edit::SetDocProps { props: json!({ "card": noted }).as_object().cloned().unwrap_or_default() });
@@ -184,17 +198,20 @@ impl Workbench {
             self.plans.insert(build, plan);
             info
         });
-        Ok(Report { build, warnings, fill })
+        Ok(Report { build, warnings, fill, fill_kept })
     }
 
     /// Add a finished fill (PNG bytes of the whole card area) for a build, on
     /// its own layer beneath the art. Returns false, changing nothing, when
     /// that build is no longer the one showing.
     pub fn add_fill(&mut self, session: &mut Session, build: u64, png: Vec<u8>, source: &str, params: Value) -> Result<bool, String> {
-        if Self::showing(session.doc()) != Some(build) {
+        // The card may have been rebuilt while the fill was being made. If its art has
+        // not moved, the fill is as good for the card now showing.
+        let Some(showing) = Self::showing(session.doc()) else { return Ok(false) };
+        let plan = self.plans.get(&build).ok_or("That build needs no fill.")?;
+        if showing != build && self.plans.get(&showing) != Some(plan) {
             return Ok(false);
         }
-        let plan = self.plans.get(&build).ok_or("That build needs no fill.")?;
         let image = decode_image(&png).ok_or("The fill is not a readable picture.")?;
         let asset = format!("card-fill-{}", self.next);
         self.next += 1;

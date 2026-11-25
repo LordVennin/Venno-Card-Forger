@@ -49,8 +49,8 @@ type Exports = {
 
 /** Where the art sits and what of it to trust, in document pixels, for whoever makes the fill. */
 export type FillInfo = { artPosition: [number, number]; artScale: number; canvas: [number, number]; keep: [number, number, number, number] };
-/** What building a card reports. `build` names it; a fill made for it is given back with that number. */
-export type BuildReport = { build: number; warnings: string[]; fill: FillInfo | null };
+/** What building a card reports. `build` names it; a fill made for it is given back with that number. `fillKept`: the art has not moved, so the fill already there was kept. */
+export type BuildReport = { build: number; warnings: string[]; fill: FillInfo | null; fillKept: boolean };
 /**
  * What to build: Scryfall's JSON for the card (as looked up, or as edited in
  * the card form) and the name of the face wanted, or card data already read from it.

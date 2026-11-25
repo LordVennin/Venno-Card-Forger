@@ -211,7 +211,7 @@
   let pending: ReturnType<typeof setTimeout> | undefined;
   function rebuild() {
     clearTimeout(pending);
-    pending = setTimeout(build, 300);
+    pending = setTimeout(() => build(), 300);
   }
 
   function edit(field: string, value: string, on: "side" | "card" = "side") {
@@ -323,7 +323,8 @@
     }
   }
 
-  async function build() {
+  /** Build the card. `refill` asks for a new fill even when the one there still suits the art. */
+  async function build(refill = false) {
     clearTimeout(pending);
     if (!raw || !folder) {
       if (raw && !folder) say("Choose a template to build the card on.");
@@ -341,31 +342,60 @@
       fail("The card could not be built")(err);
       return;
     }
-    if (report.fill && tier !== "none" && artPath) await fill(report);
+    // Editing the card's text leaves the art, and so its fill, alone.
+    if (report.fill && tier !== "none" && artPath && (refill || !report.fillKept)) await fill(report);
   }
+
+  // One fill is made at a time. If the art has moved again before it is done, one more is
+  // made afterwards for where the art is now; requests in between are dropped.
+  let fillRunning = false;
+  let fillWanted: BuildReport | null = null;
 
   async function fill(report: BuildReport) {
     if (!report.fill) return;
+    if (fillRunning) {
+      fillWanted = report;
+      return;
+    }
+    fillRunning = true;
     filling = `Filling around the art…`;
     try {
       const made = await native.fill(artPath, report.fill, tier, seed, prompt);
-      if (made.ticket === null) return;
-      const added = core.addFill(report.build, await native.fillImage(made.ticket), made.provider, { seed, workWidth: made.workWidth, ...(prompt ? { prompt } : {}) });
-      if (!added) return; // The card changed while this was being made; its own fill is on the way.
-      changed();
-      await loadImages();
-      const fell = (tier === "sd" || tier === "lama") && made.notices.length ? ` (${made.notices.join("; ")})` : "";
-      say(`Filled around the art with ${TIER_NAMES[made.provider === "sdcpp" ? "sd" : made.provider] ?? made.provider} in ${(made.ms / 1000).toFixed(1)} s${fell}`);
+      if (made.ticket !== null) {
+        // Still right if the card was rebuilt meanwhile with its art in the same place; turned away otherwise.
+        const added = core.addFill(report.build, await native.fillImage(made.ticket), made.provider, { seed, workWidth: made.workWidth, ...(prompt ? { prompt } : {}) });
+        if (added) {
+          changed();
+          await loadImages();
+          const fell = (tier === "sd" || tier === "lama") && made.notices.length ? ` (${made.notices.join("; ")})` : "";
+          say(`Filled around the art with ${TIER_NAMES[made.provider === "sdcpp" ? "sd" : made.provider] ?? made.provider} in ${(made.ms / 1000).toFixed(1)} s${fell}`);
+        }
+      }
     } catch (err) {
       fail("The fill could not be made")(err);
     } finally {
+      fillRunning = false;
       filling = "";
+    }
+    const next = fillWanted;
+    fillWanted = null;
+    if (next) await fill(next);
+  }
+
+  /** A different way of filling was chosen: make the fill again that way, or take it away. */
+  function tierChanged() {
+    if (tier !== "none") return build(true);
+    try {
+      core.execute({ type: "removeLayer", id: "card-fill" }, "Remove the fill");
+      changed();
+    } catch {
+      // There was no fill to remove.
     }
   }
 
   function variation() {
     seed += 1;
-    build();
+    build(true);
   }
 </script>
 
@@ -469,7 +499,7 @@
   </div>
   <label
     >Fill around it
-    <select bind:value={tier} onchange={() => build()}>
+    <select bind:value={tier} onchange={tierChanged}>
       <option value="auto">Automatic</option>
       {#each tiers as t}
         <option value={t.id} title={t.reason ?? ""}>{TIER_NAMES[t.id]}{t.ok ? "" : " (not installed)"}</option>
@@ -478,7 +508,7 @@
     </select>
   </label>
   {#if tier === "sd"}
-    <label class="tall">Prompt <input placeholder="what should be there (optional)" bind:value={prompt} onchange={() => build()} /></label>
+    <label class="tall">Prompt <input placeholder="what should be there (optional)" bind:value={prompt} onchange={() => build(true)} /></label>
   {/if}
   <div class="row">
     <button onclick={variation} disabled={!raw || !artPath || tier === "none" || !!filling} title="Make the fill again, differently">Another variation</button>

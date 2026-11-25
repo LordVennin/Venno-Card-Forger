@@ -703,17 +703,32 @@ fn a_fill_goes_under_the_art_of_the_card_it_was_made_for_and_leaves_with_it() {
     let Layer::Fill(layer) = tree::find(session.doc(), "card-fill").unwrap() else { panic!() };
     assert_eq!((fills, layer.source.as_str(), layer.transform[0]), (1, "lama", 8.0));
 
-    // Changing the card takes the fill out with the build it belonged to...
+    // Changing the card's text leaves the art where it was, so the fill stays: nothing is made again.
     let renamed = card(json!({ "name": "bbbb", "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [] }));
     let next = bench.build(&mut session, &request(&renamed)).unwrap();
-    assert!(tree::find(session.doc(), "card-fill").is_none() && next.fill.is_some());
-    // ...and a fill that was still being made for the old card is turned away.
+    assert!(next.fill_kept && next.fill.is_some());
+    let order: Vec<&str> = session.doc().root.children.iter().map(|l| l.id()).take(3).collect();
+    assert_eq!(order, ["placeholder", "card-fill", "card-art"]);
+    let Layer::Fill(layer) = tree::find(session.doc(), "card-fill").unwrap() else { panic!() };
+    let kept = layer.asset.clone();
+    assert_eq!(layer.source, "lama");
+    // A fill that was still being made for the card as it was is as good for the card as it is.
+    assert!(bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
+    assert!(session.undo());
+    assert_frame_is_exact(&mut session, &[("card-art-1", picture(400, 300)), (kept.as_str(), picture(250, 375))]);
+
+    // Different art sits differently: the fill goes with the build it belonged to...
+    bench.set_art(&mut session, picture(400, 200)).unwrap();
+    let moved = bench.build(&mut session, &request(&renamed)).unwrap();
+    assert!(!moved.fill_kept && moved.fill.is_some() && tree::find(session.doc(), "card-fill").is_none());
+    // ...and one still being made for the old art is turned away.
     assert!(!bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
     assert!(tree::find(session.doc(), "card-fill").is_none());
-    assert_frame_is_exact(&mut session, &[("card-art-1", picture(400, 300))]);
-    // One step back, the old card has its fill again.
+    // One step back, the card has its fill again.
     assert!(session.undo());
     assert!(tree::find(session.doc(), "card-fill").is_some());
+    assert_eq!(runs(session.doc(), "name"), "bbbb");
+    assert!(session.undo());
     assert_eq!(runs(session.doc(), "name"), "ab");
     let fill = tree::find(session.doc(), "card-fill").and_then(|l| if let Layer::Fill(f) = l { Some(f.asset.clone()) } else { None }).unwrap();
     assert_frame_is_exact(&mut session, &[("card-art-1", picture(400, 300)), (fill.as_str(), picture(250, 375))]);
