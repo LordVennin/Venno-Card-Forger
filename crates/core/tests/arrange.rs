@@ -123,6 +123,11 @@ fn clicking_picks_the_topmost_layer_with_ink_there_and_its_box_is_known() {
     // The masked half of a shape is not there to be clicked: the background is.
     assert_eq!((s.hit(160.0, 20.0).as_deref(), s.hit(180.0, 20.0).as_deref()), (Some("masked"), Some("bg")));
     assert_eq!(s.hit(500.0, 5.0), None);
+    // Text is picked anywhere in the box around its ink, between the letters too.
+    let words = s.layer_box("words").unwrap();
+    for x in words.x + 1..words.x + words.w - 1 {
+        assert_eq!(s.hit(x as f64, (words.y + words.h / 2) as f64).as_deref(), Some("words"), "at x {x}");
+    }
     // Hidden layers are passed over.
     s.execute(cardsmith_core::commands::Edit::SetLayerProps { id: "square".into(), props: json!({ "visible": false }).as_object().unwrap().clone() }, "Hide").unwrap();
     assert_eq!(s.hit(30.0, 30.0).as_deref(), Some("bg"));

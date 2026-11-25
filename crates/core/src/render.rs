@@ -990,6 +990,13 @@ impl Renderer {
                     }
                     continue;
                 }
+                // Text is picked by the box around its ink: nobody aims for the strokes of a letter.
+                if let Layer::Text(text) = layer {
+                    if pass.text_bounds(text).is_some_and(|b| b.intersect(at).is_some()) {
+                        return Some(layer.id().to_string());
+                    }
+                    continue;
+                }
                 let Some(content) = pass.masked_content(layer, at) else { continue };
                 if content.region == *at && content.data[3] >= 16 {
                     return Some(layer.id().to_string());

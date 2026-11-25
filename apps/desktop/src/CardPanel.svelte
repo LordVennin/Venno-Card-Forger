@@ -10,12 +10,15 @@
   let {
     core,
     busy = $bindable(false),
+    focusField = $bindable(null),
     say,
     changed,
     opened,
   }: {
     core: Core;
     busy?: boolean;
+    /** A field of the card form to put the cursor in: set from outside, cleared here. */
+    focusField?: string | null;
     /** Show a line in the status bar. */
     say: (text: string) => void;
     /** The document changed: copy what was redrawn to the screen and re-read the layers. */
@@ -90,6 +93,15 @@
     await find();
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
   }
+
+  let panel = $state<HTMLElement>();
+  $effect(() => {
+    if (!focusField) return;
+    const field = panel?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-field="${focusField}"]`);
+    focusField = null;
+    field?.focus();
+    field?.select();
+  });
 
   // ---- folders ---------------------------------------------------------------------
 
@@ -413,7 +425,7 @@
   </div>
 {/snippet}
 
-<aside class="card">
+<aside class="card" bind:this={panel}>
   <h2>Folders</h2>
   <div class="row">
     <button onclick={() => choose("templatesDir")} title={settings.templatesDir || "The folder your imported templates are in"}>Templates…</button>
@@ -448,22 +460,22 @@
   <button class="quiet" onclick={blank}>…or write a card from nothing</button>
 
   {#if raw && side}
-    <label>Name <input value={side.name ?? ""} oninput={(e) => edit("name", e.currentTarget.value)} /></label>
+    <label>Name <input data-field="name" value={side.name ?? ""} oninput={(e) => edit("name", e.currentTarget.value)} /></label>
     <label title={"Type { for the symbols"}
       >Mana cost
-      <input value={side.mana_cost ?? ""} placeholder={"{1}{G}"} oninput={(e) => (edit("mana_cost", e.currentTarget.value), symbolsTyped("mana_cost", e.currentTarget))} />
+      <input data-field="mana_cost" value={side.mana_cost ?? ""} placeholder={"{1}{G}"} oninput={(e) => (edit("mana_cost", e.currentTarget.value), symbolsTyped("mana_cost", e.currentTarget))} />
       <button class="chip" onclick={(e) => togglePalette("mana_cost", e.currentTarget.previousElementSibling as HTMLInputElement)} title="Symbols">{"{ }"}</button>
     </label>
     {#if palette?.field === "mana_cost"}{@render symbols()}{/if}
-    <label>Type <input value={side.type_line ?? ""} oninput={(e) => edit("type_line", e.currentTarget.value)} onchange={setChanged} /></label>
+    <label>Type <input data-field="type_line" value={side.type_line ?? ""} oninput={(e) => edit("type_line", e.currentTarget.value)} onchange={setChanged} /></label>
     <label class="tall" title={"Type { for the symbols"}
       ><span class="row">Rules <button class="chip" onclick={(e) => togglePalette("oracle_text", e.currentTarget.closest("label")!.querySelector("textarea"))} title="Symbols">{"{ }"}</button></span>
-      <textarea rows="5" value={side.oracle_text ?? ""} oninput={(e) => (edit("oracle_text", e.currentTarget.value), symbolsTyped("oracle_text", e.currentTarget))}></textarea>
+      <textarea rows="5" data-field="oracle_text" value={side.oracle_text ?? ""} oninput={(e) => (edit("oracle_text", e.currentTarget.value), symbolsTyped("oracle_text", e.currentTarget))}></textarea>
     </label>
     {#if palette?.field === "oracle_text"}{@render symbols()}{/if}
     <label class="tall">Flavor <textarea rows="3" value={side.flavor_text ?? ""} oninput={(e) => edit("flavor_text", e.currentTarget.value)}></textarea></label>
     <div class="row">
-      <label>Power <input class="short" value={side.power ?? ""} oninput={(e) => edit("power", e.currentTarget.value)} /></label>
+      <label>Power <input class="short" data-field="power" value={side.power ?? ""} oninput={(e) => edit("power", e.currentTarget.value)} /></label>
       <label>Toughness <input class="short" value={side.toughness ?? ""} oninput={(e) => edit("toughness", e.currentTarget.value)} /></label>
     </div>
     <label>Artist <input value={side.artist ?? raw.artist ?? ""} oninput={(e) => edit("artist", e.currentTarget.value)} /></label>
@@ -474,7 +486,7 @@
     </label>
     <div class="row">
       <label>Code <input class="short" value={raw.set ?? ""} oninput={(e) => edit("set", e.currentTarget.value.toLowerCase(), "card")} onchange={setChanged} /></label>
-      <label>No. <input class="short" value={raw.collector_number ?? ""} oninput={(e) => edit("collector_number", e.currentTarget.value, "card")} /></label>
+      <label>No. <input class="short" data-field="collector_number" value={raw.collector_number ?? ""} oninput={(e) => edit("collector_number", e.currentTarget.value, "card")} /></label>
       <label
         >Rarity
         <select value={raw.rarity ?? "common"} onchange={(e) => (edit("rarity", e.currentTarget.value, "card"), setChanged())}>
