@@ -925,6 +925,16 @@ impl Session {
         Ok(())
     }
 
+    /// An image asset as file bytes, as it is now: a painted layer's picture is encoded afresh.
+    pub fn asset_bytes(&mut self, id: &str) -> Result<Vec<u8>> {
+        if self.painted.contains(id) {
+            if let Some(image) = self.renderer.image(id) {
+                return encode_png(image.w as u32, image.h as u32, &image.data);
+            }
+        }
+        self.assets.get(id).cloned().ok_or_else(|| err!("The picture \"{id}\" has not been loaded"))
+    }
+
     /// Supply an asset's bytes without redrawing: one that nothing shows yet,
     /// or one of several, drawn together when the last arrives through [`Session::add_asset`].
     pub fn stash_asset(&mut self, id: &str, bytes: Vec<u8>) {

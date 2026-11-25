@@ -14,6 +14,7 @@
     say,
     changed,
     opened,
+    demoFill,
   }: {
     core: Core;
     busy?: boolean;
@@ -25,6 +26,8 @@
     changed: () => void;
     /** A different document is open: fit it to the window. */
     opened: () => void;
+    /** For the app's own check (see `demo`): select the art, mark out this rectangle and fill it. */
+    demoFill?: (rect: [number, number, number, number]) => Promise<void>;
   } = $props();
 
   let settings = $state<Settings>({ templatesDir: "", fontsDir: "" });
@@ -87,7 +90,7 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string };
+    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string; fillSelection?: [number, number, number, number] };
     tier = want.tier ?? tier;
     folder = want.template;
     await openTemplate();
@@ -98,6 +101,7 @@
     search = want.card;
     await find();
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
+    if (want.fillSelection) await demoFill?.(want.fillSelection);
     if (want.save) await native.writeFile(want.save, core.saveAvailable());
     if (want.export) {
       await native.writeFile(want.export, core.exportPng());

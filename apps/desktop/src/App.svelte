@@ -22,7 +22,12 @@
   let busy = $state(false);
 
   // The tool in hand: moving layers about, or painting.
-  let tool = $state<"move" | "paint" | "pick">("move");
+  let tool = $state<"move" | "paint" | "pick" | "select">("move");
+  // A rectangle marked out with the selection tool, in document pixels.
+  let selection = $state.raw<Rect | null>(null);
+  let selecting: { x: number; y: number } | null = null;
+  let fillTier = $state("auto");
+  let fillSeed = 1;
   // The selected layer's box, in document pixels, for the outline and handles.
   let box = $state.raw<Rect | null>(null);
   // A text layer being typed into on the canvas.
@@ -519,6 +524,45 @@
   }
   const EFFECT_NAMES: Record<string, string> = { colorOverlay: "Color overlay", gradientOverlay: "Gradient overlay", stroke: "Stroke", dropShadow: "Drop shadow", innerShadow: "Inner shadow", outerGlow: "Outer glow", bevel: "Bevel" };
 
+  /**
+   * Paint over the selected rectangle of the selected layer's picture, made up from what is
+   * around it. The patch goes on a layer of its own just above, so the picture itself is untouched.
+   */
+  async function fillSelected() {
+    const found = active ? find(active) : null;
+    if (!core || !selection || !found) return;
+    const layer = found.layer;
+    if (layer.kind !== "pixel" && layer.kind !== "art" && layer.kind !== "fill") {
+      status = "Select an image layer (a picture, the art or a fill) to fill part of.";
+      return;
+    }
+    const [a, b, tx, c, d, ty] = layer.transform;
+    if (!layer.asset || b !== 0 || c !== 0 || Math.abs(a - d) > 1e-9 || a <= 0) {
+      status = "A turned or stretched layer cannot be filled this way yet.";
+      return;
+    }
+    // The rectangle in the picture's own pixels.
+    const hole: [number, number, number, number] = [(selection.x - tx) / a, (selection.y - ty) / a, (selection.x + selection.width - tx) / a, (selection.y + selection.height - ty) / a];
+    busy = true;
+    status = "Filling the selection…";
+    try {
+      const made = await native.fillSelection(core.assetBytes(layer.asset), hole, fillTier, fillSeed++);
+      const id = newId("fill");
+      core.addAsset(id, await native.fillImage(made.ticket), false);
+      const s = a * made.scale;
+      const fill = { ...base(id, "Fill"), kind: "fill", source: made.provider, params: { seed: fillSeed - 1, selection: hole }, asset: id, transform: [s, 0, tx + made.x * a, 0, s, ty + made.y * a] };
+      const edits: Edit[] = [{ type: "setAsset", id, asset: { kind: "image", path: `assets/${id}.png`, width: made.width, height: made.height } }, { type: "addLayer", parent: found.parent, layer: fill, index: found.index + 1 }];
+      core.execute({ type: "batch", edits }, "Fill the selection");
+      blit(core.dirty());
+      refresh();
+      status = `Filled the selection with ${made.provider} in ${(made.ms / 1000).toFixed(1)} s` + (made.notices.length && fillTier !== "auto" ? ` (${made.notices.join("; ")})` : "");
+    } catch (err) {
+      status = `The selection could not be filled: ${err instanceof Error ? err.message : err}`;
+    } finally {
+      busy = false;
+    }
+  }
+
   /** Take the brush color from what is on screen under the pointer. */
   function pickColor(e: PointerEvent) {
     if (!core || !canvas) return;
@@ -561,6 +605,11 @@
       pickColor(e);
       return;
     }
+    if (tool === "select") {
+      selecting = toDoc(e);
+      selection = null;
+      return;
+    }
     if (tool === "move") {
       if (typing) commitText(true);
       // Drag moves the selected layer wherever the pointer is; with none selected, or with Ctrl, what is under it.
@@ -594,6 +643,11 @@
       view = { ...view, x: view.x - ((e.clientX - panning.x) * dpr()) / view.scale, y: view.y - ((e.clientY - panning.y) * dpr()) / view.scale };
       panning = { x: e.clientX, y: e.clientY };
       applyView();
+    } else if (selecting) {
+      const p = toDoc(e);
+      const [x, y] = [Math.max(0, Math.min(selecting.x, p.x)), Math.max(0, Math.min(selecting.y, p.y))];
+      const [x1, y1] = [Math.min(doc!.width, Math.max(selecting.x, p.x)), Math.min(doc!.height, Math.max(selecting.y, p.y))];
+      selection = x1 - x > 1 && y1 - y > 1 ? { x: Math.round(x), y: Math.round(y), width: Math.round(x1 - x), height: Math.round(y1 - y) } : null;
     } else if (drag) {
       dragTo(e);
     } else if (painting) {
@@ -605,6 +659,7 @@
 
   function pointerUp(e?: PointerEvent) {
     panning = null;
+    selecting = null;
     endDrag(e);
     if (!painting || !core) return;
     painting = false;
@@ -648,6 +703,8 @@
       nudge(e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0, e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0);
     } else if (e.key.toLowerCase() === "v") tool = "move";
     else if (e.key.toLowerCase() === "i") tool = "pick";
+    else if (e.key.toLowerCase() === "m") tool = "select";
+    else if (e.key === "Escape" && selection) selection = null;
     else if (e.key.toLowerCase() === "t" && !mod) newText();
     else if (e.key === "[") size = Math.max(1, Math.round(size / 1.25));
     else if (e.key === "]") size = Math.min(1000, Math.round(size * 1.25) + 1);
@@ -697,6 +754,16 @@
     <button class:active={tool === "paint" && !erase} onclick={() => ((tool = "paint"), (erase = false))} title="Brush (B)">Brush</button>
     <button class:active={tool === "paint" && erase} onclick={() => ((tool = "paint"), (erase = true))} title="Eraser (E)">Eraser</button>
     <button class:active={tool === "pick"} onclick={() => (tool = "pick")} title="Take the brush color from the picture (I)">Eyedropper</button>
+    <button class:active={tool === "select"} onclick={() => (tool = "select")} title="Mark out a rectangle (M)">Select</button>
+    {#if hasNative && selection}
+      <button onclick={fillSelected} disabled={busy || !active} title="Paint over the selection on the selected image layer, made up from what is around it. The result is its own layer.">Fill selection</button>
+      <select bind:value={fillTier} title="How to make the fill">
+        <option value="auto">Automatic</option>
+        <option value="sd">Stable Diffusion</option>
+        <option value="lama">LaMa model</option>
+        <option value="patchmatch">PatchMatch</option>
+      </select>
+    {/if}
     <label title="Brush size in document pixels ([ and ])">Size <input type="range" min="1" max="800" bind:value={size} /> <output>{size}</output></label>
     <label>Hardness <input type="range" min="0" max="1" step="0.05" bind:value={hardness} /> <output>{Math.round(hardness * 100)}%</output></label>
     <label>Opacity <input type="range" min="0.05" max="1" step="0.05" bind:value={opacity} /> <output>{Math.round(opacity * 100)}%</output></label>
@@ -710,7 +777,12 @@
   </header>
 
   {#if hasNative && core}
-    <CardPanel bind:this={panel} {core} bind:busy bind:focusField say={(text) => (status = text)} changed={cardChanged} opened={cardOpened} />
+    <CardPanel bind:this={panel} {core} bind:busy bind:focusField say={(text) => (status = text)} changed={cardChanged} opened={cardOpened} demoFill={async ([x, y, width, height]) => {
+      select(layers.find((l) => l.layer.role === "card.art")?.layer.id);
+      selection = { x, y, width, height };
+      fillTier = "patchmatch";
+      await fillSelected();
+    }} />
   {/if}
 
   <section class="stage" bind:this={stage}>
@@ -759,6 +831,10 @@
           onpointerup={() => endDrag()}
         ></div>
       </div>
+    {/if}
+    {#if selection}
+      {@const at = onScreen(selection)}
+      <div class="marquee" style:left="{at.left}px" style:top="{at.top}px" style:width="{at.width}px" style:height="{at.height}px"></div>
     {/if}
     {#if typing}
       {@const at = onScreen(typing.box)}
@@ -951,6 +1027,8 @@
   canvas.moving { cursor: default; }
   .outline { position: absolute; border: 1px solid #5b9dff; outline: 1px solid rgba(0, 0, 0, 0.5); pointer-events: none; box-sizing: border-box; }
   .handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #fff; border: 1px solid #1f5fd0; pointer-events: auto; touch-action: none; }
+  .marquee { position: absolute; border: 1px dashed #fff; outline: 1px dashed #000; pointer-events: none; box-sizing: border-box; }
+  header select { background: #3a3d43; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 3px 6px; font: inherit; }
   .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
   .checks { display: flex; flex-wrap: wrap; gap: 2px 10px; }

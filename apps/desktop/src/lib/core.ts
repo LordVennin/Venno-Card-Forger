@@ -31,6 +31,7 @@ type Exports = {
   cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
   cs_font_names(): void;
   cs_export_png(): number;
+  cs_asset_bytes(ptr: number, len: number): number;
   cs_save(): number;
   cs_save_available(): number;
   cs_doc_json(): number;
@@ -217,6 +218,12 @@ export class Core {
   /** The document as `.cardsmith` file bytes, holding the images that are loaded: for a card built on a template, the ones it shows. */
   saveAvailable(): Uint8Array<ArrayBuffer> {
     this.check(this.x.cs_save_available());
+    return this.out().slice() as Uint8Array<ArrayBuffer>;
+  }
+
+  /** An image asset's file bytes, as the picture is now (a painted layer's is encoded afresh). */
+  assetBytes(id: string): Uint8Array<ArrayBuffer> {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_asset_bytes(ptr, len)));
     return this.out().slice() as Uint8Array<ArrayBuffer>;
   }
 

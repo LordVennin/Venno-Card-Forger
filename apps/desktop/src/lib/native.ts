@@ -18,6 +18,8 @@ export type Extras = { setSize: number | null; symbolSvg: string | null; waterma
 export type Found = { scryfall: Record<string, any>; name: string; extras: Extras };
 export type SetEntry = { code: string; name: string; released: string; kind: string };
 export type TierState = { id: "sd" | "lama" | "patchmatch"; ok: boolean; reason: string | null };
+/** A patch for a picture: where it goes in the picture's pixels, and how many of them one of its pixels covers. */
+export type PatchResult = { ticket: number; provider: string; notices: string[]; ms: number; x: number; y: number; width: number; height: number; scale: number };
 export type FillResult = { ticket: number | null; provider: string; notices: string[]; ms: number; workWidth: number };
 
 const bytes = async (command: string, args: Record<string, unknown>) => new Uint8Array(await invoke<ArrayBuffer>(command, args));
@@ -39,6 +41,9 @@ export const native = {
   fillTiers: () => invoke<TierState[]>("fill_tiers"),
   fill: (artPath: string, info: FillInfo, tier: string, seed: number, prompt: string) => invoke<FillResult>("fill", { artPath, info, tier, seed, prompt }),
   fillImage: (ticket: number) => bytes("fill_image", { ticket }),
+  /** Paint over a rectangle (left, top, right, bottom, in the picture's pixels) of a picture from its surroundings. */
+  fillSelection: (picture: Uint8Array, hole: [number, number, number, number], tier: string, seed: number, prompt = "") =>
+    invoke<PatchResult>("fill_selection", picture, { headers: { "x-args": encodeURIComponent(JSON.stringify({ hole, tier, seed, prompt })) } }),
 
   /** Ask where to save a picture, then write it there. Returns the path, or null if the user backed out. */
   async savePng(suggested: string, data: () => Uint8Array): Promise<string | null> {

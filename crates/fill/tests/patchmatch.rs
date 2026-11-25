@@ -167,3 +167,31 @@ fn the_model_tier_says_why_it_cannot_run_and_is_passed_over() {
     assert_eq!((outcome.provider, outcome.notices.len()), ("patchmatch", 1));
     assert!(outcome.notices[0].starts_with("lama is not available: "));
 }
+
+#[test]
+fn a_rectangle_cut_out_of_a_picture_is_filled_from_its_surroundings() {
+    use cardsmith_fill::{cut_out, FillProvider, PatchMatch};
+    // Vertical stripes with a black square stamped in the middle: filling the square should bring the stripes back.
+    let (w, h) = (300u32, 200u32);
+    let stripe = |x: u32| if (x / 10) % 2 == 0 { [200u8, 60, 60, 255] } else { [60u8, 60, 200, 255] };
+    let mut rgba: Vec<u8> = (0..h).flat_map(|_| (0..w).flat_map(stripe)).collect();
+    for y in 80..120 {
+        for x in 130..170 {
+            rgba[((y * w + x) * 4) as usize..((y * w + x) * 4 + 4) as usize].copy_from_slice(&[0, 0, 0, 255]);
+        }
+    }
+    let cut = cut_out(w, h, &rgba, [130.0, 80.0, 170.0, 120.0]).unwrap();
+    // The surroundings reach 64 pixels out on every side.
+    assert_eq!((cut.origin, cut.width, cut.height, cut.hole), ((66, 16), 168, 168, [64, 64, 104, 104]));
+    let filled = PatchMatch { work_width: cut.work_width() }.fill(&cut.request(1, None)).unwrap().expect("there is a hole to fill");
+    let patch = cut.patch(&filled);
+    assert_eq!((patch.x, patch.y, patch.width, patch.height, patch.scale), (130, 80, 40, 40, 1.0));
+    // Most of the patch is stripe-colored again, in the right columns.
+    let right = (0..40u32).flat_map(|y| (0..40u32).map(move |x| (x, y))).filter(|(x, y)| {
+        let p = &patch.rgba[((y * 40 + x) * 4) as usize..];
+        let want = stripe(130 + x);
+        (0..3).all(|c| (p[c] as i32 - want[c] as i32).abs() < 40)
+    }).count();
+    assert!(right > 1400, "only {right} of 1600 pixels continue the stripes");
+    assert!(cut_out(w, h, &rgba, [10.0, 10.0, 10.0, 50.0]).is_none() && cut_out(w, h, &rgba, [-5.0, -5.0, 400.0, 400.0]).is_none());
+}

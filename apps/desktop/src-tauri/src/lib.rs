@@ -178,18 +178,7 @@ fn document_file(path: String) -> Answer<Response> {
 /// are the request's body; the path comes in a header, percent-encoded.
 #[tauri::command(async)]
 fn write_file(request: tauri::ipc::Request) -> Answer<()> {
-    let path = request.headers().get("x-path").and_then(|v| v.to_str().ok()).ok_or("No place to save to was given.")?;
-    let mut decoded = Vec::new();
-    let mut bytes = path.bytes();
-    while let Some(b) = bytes.next() {
-        if b == b'%' {
-            let hex = [bytes.next().unwrap_or(b'0'), bytes.next().unwrap_or(b'0')];
-            decoded.push(u8::from_str_radix(std::str::from_utf8(&hex).unwrap_or("00"), 16).unwrap_or(b'?'));
-        } else {
-            decoded.push(b);
-        }
-    }
-    let path = PathBuf::from(String::from_utf8(decoded).map_err(|_| "The file name is not readable text.")?);
+    let path = PathBuf::from(header(&request, "x-path")?);
     let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("There was nothing to save.".into()) };
     std::fs::write(&path, data).map_err(|e| format!("{}: {e}", path.display()))
 }
@@ -314,6 +303,52 @@ fn fill(shared: State<Shared>, art_path: String, info: FillInfo, tier: String, s
     Ok(json!({ "ticket": ticket, "provider": outcome.provider, "notices": outcome.notices, "ms": started.elapsed().as_millis() as u64, "workWidth": work_width }))
 }
 
+/// A header value sent percent-encoded.
+fn header(request: &tauri::ipc::Request, name: &str) -> Answer<String> {
+    let raw = request.headers().get(name).and_then(|v| v.to_str().ok()).ok_or(format!("The request is missing {name}."))?;
+    let mut decoded = Vec::new();
+    let mut bytes = raw.bytes();
+    while let Some(b) = bytes.next() {
+        if b == b'%' {
+            let hex = [bytes.next().unwrap_or(b'0'), bytes.next().unwrap_or(b'0')];
+            decoded.push(u8::from_str_radix(std::str::from_utf8(&hex).unwrap_or("00"), 16).unwrap_or(b'?'));
+        } else {
+            decoded.push(b);
+        }
+    }
+    String::from_utf8(decoded).map_err(|_| format!("{name} is not readable text."))
+}
+
+#[derive(Deserialize)]
+struct SelectionFill {
+    /// The rectangle to paint over, in the picture's pixels: left, top, right, bottom.
+    hole: [f64; 4],
+    tier: String,
+    seed: u64,
+    prompt: Option<String>,
+}
+
+/// Paint over a rectangle of a picture from its surroundings. The picture's
+/// file bytes are the request's body; what to do is in the `x-args` header.
+/// Returns which tier did it, where the patch goes, and a ticket for the patch (`fill_image`).
+#[tauri::command(async)]
+fn fill_selection(shared: State<Shared>, request: tauri::ipc::Request) -> Answer<Value> {
+    let started = std::time::Instant::now();
+    let args: SelectionFill = serde_json::from_str(&header(&request, "x-args")?).map_err(|e| e.to_string())?;
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("There was no picture to fill.".into()) };
+    let image = cardsmith_core::render::decode_image(data).ok_or("The layer's picture could not be read.")?;
+    let cut = cardsmith_fill::cut_out(image.w as u32, image.h as u32, &image.data, args.hole).ok_or("Select part of the layer's picture, not all of it or none.")?;
+    let outcome = Tiers::new(&shared.cache).fill(&args.tier, &cut.request(args.seed, args.prompt.as_deref().filter(|p| !p.trim().is_empty())), cut.work_width())?;
+    let filled = outcome.filled.ok_or("There was nothing around the selection to fill it from.")?;
+    let patch = cut.patch(&filled);
+    let png = cardsmith_core::render::encode_png(patch.width, patch.height, &patch.rgba).map_err(|e| e.to_string())?;
+    let mut fills = shared.fills.lock().unwrap();
+    fills.0 += 1;
+    let ticket = fills.0;
+    fills.1.insert(ticket, png);
+    Ok(json!({ "ticket": ticket, "provider": outcome.provider, "notices": outcome.notices, "ms": started.elapsed().as_millis() as u64, "x": patch.x, "y": patch.y, "width": patch.width, "height": patch.height, "scale": patch.scale }))
+}
+
 /// The picture of a finished fill (PNG). A ticket is good once.
 #[tauri::command]
 fn fill_image(shared: State<Shared>, ticket: u64) -> Answer<Response> {
@@ -338,7 +373,7 @@ pub fn run() {
             app.manage(Shared { settings_file, settings: Mutex::new(settings), client: Mutex::new(Client::new(&cache)), cache, fills: Mutex::new((0, HashMap::new())) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, document_file, write_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
+        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, document_file, write_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_selection, fill_image])
         .run(tauri::generate_context!())
         .expect("error while running Cardsmith");
 }

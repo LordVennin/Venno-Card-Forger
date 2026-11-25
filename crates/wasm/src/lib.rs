@@ -352,6 +352,19 @@ pub extern "C" fn cs_font_names() {
     with(|s| s.out = serde_json::to_vec(&s.session.fonts().names()).unwrap_or_default());
 }
 
+/// An image asset's file bytes, as it is now, in the output buffer.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_asset_bytes(ptr: *const u8, len: usize) -> u32 {
+    let id = text(ptr, len);
+    attempt(|s| {
+        s.out = s.session.asset_bytes(id?).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
 /// The document drawn at full size as a PNG file, in the output buffer. This
 /// is the real picture, not the smaller copy the screen may be showing.
 #[no_mangle]

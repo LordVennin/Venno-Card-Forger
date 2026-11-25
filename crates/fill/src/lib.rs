@@ -206,3 +206,82 @@ pub fn fill_with_fallback(providers: &mut [&mut dyn FillProvider], request: &Fil
     }
     Err(if notices.is_empty() { "There is no fill provider to try.".into() } else { notices.join("; ") })
 }
+
+/// A patch that paints over part of a picture.
+pub struct Patch {
+    /// Where its top-left corner goes in the picture, in the picture's pixels.
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    /// Straight-alpha RGBA, fully opaque.
+    pub rgba: Vec<u8>,
+    /// How many of the picture's pixels one pixel of the patch covers.
+    pub scale: f64,
+}
+
+/// The surroundings of a rectangle of a picture, with the rectangle itself
+/// cut out, ready to be filled: the picture to give a provider, where it was
+/// cut from, and how wide to work. The surroundings reach as far out as the
+/// rectangle is big, so there is as much to copy from as there is to fill.
+pub struct Cutout {
+    pub rgba: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    /// The surroundings' top-left corner in the picture.
+    pub origin: (u32, u32),
+    /// The rectangle, within the surroundings: left, top, right, bottom.
+    pub hole: [u32; 4],
+}
+
+/// Cut `hole` (left, top, right, bottom, in the picture's pixels) out of a
+/// picture. None if the rectangle is empty or covers the whole picture.
+pub fn cut_out(width: u32, height: u32, rgba: &[u8], hole: [f64; 4]) -> Option<Cutout> {
+    let clamp = |v: f64, max: u32| v.round().clamp(0.0, max as f64) as u32;
+    let (x0, y0, x1, y1) = (clamp(hole[0], width), clamp(hole[1], height), clamp(hole[2], width), clamp(hole[3], height));
+    if x1 <= x0 || y1 <= y0 || (x0 == 0 && y0 == 0 && x1 == width && y1 == height) {
+        return None;
+    }
+    let margin = (x1 - x0).max(y1 - y0).max(64);
+    let (cx0, cy0) = (x0.saturating_sub(margin), y0.saturating_sub(margin));
+    let (cx1, cy1) = ((x1 + margin).min(width), (y1 + margin).min(height));
+    let (w, h) = (cx1 - cx0, cy1 - cy0);
+    let mut out = Vec::with_capacity((w * h * 4) as usize);
+    for y in cy0..cy1 {
+        let row = ((y * width + cx0) * 4) as usize;
+        out.extend_from_slice(&rgba[row..row + (w * 4) as usize]);
+    }
+    for y in y0..y1 {
+        for x in x0..x1 {
+            out[(((y - cy0) * w + (x - cx0)) * 4 + 3) as usize] = 0;
+        }
+    }
+    Some(Cutout { rgba: out, width: w, height: h, origin: (cx0, cy0), hole: [x0 - cx0, y0 - cy0, x1 - cx0, y1 - cy0] })
+}
+
+impl Cutout {
+    /// The request that fills the rectangle from its surroundings.
+    pub fn request<'a>(&'a self, seed: u64, prompt: Option<&'a str>) -> FillRequest<'a> {
+        let art = Placed { width: self.width, height: self.height, rgba: &self.rgba, x: 0.0, y: 0.0, scale: 1.0 };
+        FillRequest { art, canvas: (self.width, self.height), keep: [0.0, 0.0, self.width as f64, self.height as f64], seed, prompt }
+    }
+
+    /// How wide to work: the surroundings' own size, up to a limit that keeps it quick.
+    pub fn work_width(&self) -> u32 {
+        self.width.min(1024)
+    }
+
+    /// The part of a finished fill that covers the rectangle, as a patch for the picture.
+    pub fn patch(&self, filled: &Filled) -> Patch {
+        let s = filled.scale;
+        let (x0, y0) = ((self.hole[0] as f64 / s).floor() as u32, (self.hole[1] as f64 / s).floor() as u32);
+        let (x1, y1) = (((self.hole[2] as f64 / s).ceil() as u32).min(filled.width), ((self.hole[3] as f64 / s).ceil() as u32).min(filled.height));
+        let (w, h) = (x1.saturating_sub(x0).max(1), y1.saturating_sub(y0).max(1));
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for y in y0..y0 + h {
+            let row = ((y.min(filled.height - 1) * filled.width + x0) * 4) as usize;
+            rgba.extend_from_slice(&filled.rgba[row..row + (w * 4) as usize]);
+        }
+        Patch { x: self.origin.0 + (x0 as f64 * s).round() as u32, y: self.origin.1 + (y0 as f64 * s).round() as u32, width: w, height: h, rgba, scale: s }
+    }
+}
