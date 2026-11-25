@@ -30,6 +30,8 @@
   // A card field the card panel should put the cursor in (after a double-click on its text on the canvas).
   let focusField = $state<string | null>(null);
   let imageInput = $state<HTMLInputElement>();
+  // The card panel, which fetches a template's images as layers come to need them.
+  let panel = $state<{ loadImages(): Promise<void> }>();
 
   // Brush settings. Size is in document pixels.
   let erase = $state(false);
@@ -204,6 +206,8 @@
     const inCore = performance.now() - started;
     blit(core!.dirty());
     refresh();
+    // A layer just shown may need a picture that has not been loaded yet.
+    panel?.loadImages();
     status = `${label}: ${inCore.toFixed(1)} ms in the core, ${(performance.now() - started - inCore).toFixed(1)} ms to screen`;
   }
 
@@ -643,7 +647,7 @@
   </header>
 
   {#if hasNative && core}
-    <CardPanel {core} bind:busy bind:focusField say={(text) => (status = text)} changed={cardChanged} opened={cardOpened} />
+    <CardPanel bind:this={panel} {core} bind:busy bind:focusField say={(text) => (status = text)} changed={cardChanged} opened={cardOpened} />
   {/if}
 
   <section class="stage" bind:this={stage}>

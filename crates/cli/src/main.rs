@@ -19,7 +19,7 @@
 use cardsmith_core::doc::Doc;
 use cardsmith_core::render::{encode_png, render};
 use cardsmith_core::samples::samples;
-use cardsmith_core::serialize::{is_zip, load_cardsmith, parse_doc, save_cardsmith, AssetBytes};
+use cardsmith_core::serialize::{is_zip, parse_doc, save_cardsmith, AssetBytes};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
@@ -29,7 +29,8 @@ const USAGE: &str = "usage: cardsmith render <doc.json | file.cardsmith> -o <out
 fn load(file: &Path) -> Result<(Doc, AssetBytes), String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
     if is_zip(&bytes) {
-        return load_cardsmith(&bytes).map_err(|e| e.to_string());
+        // A card saved from the app holds only the images it shows; a layer whose image is absent draws nothing and says so.
+        return cardsmith_core::serialize::load_cardsmith_available(&bytes).map_err(|e| e.to_string());
     }
     let doc = parse_doc(&String::from_utf8_lossy(&bytes)).map_err(|e| e.to_string())?;
     let dir = file.parent().unwrap_or(Path::new("."));

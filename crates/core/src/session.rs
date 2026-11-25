@@ -976,6 +976,18 @@ impl Session {
 
     // ---- saving -------------------------------------------------------------------
 
+    /// As [`Session::save`], leaving out images that were never loaded (a
+    /// template's layers that the card does not show).
+    pub fn save_available(&mut self) -> Result<Vec<u8>> {
+        self.cancel_preview();
+        for id in std::mem::take(&mut self.painted) {
+            if let Some(image) = self.renderer.image(&id) {
+                self.assets.insert(id, encode_png(image.w as u32, image.h as u32, &image.data)?);
+            }
+        }
+        crate::serialize::save_cardsmith_available(&self.doc, &self.assets)
+    }
+
     /// The document as `.cardsmith` bytes, with painted layers encoded.
     pub fn save(&mut self) -> Result<Vec<u8>> {
         for id in std::mem::take(&mut self.painted) {

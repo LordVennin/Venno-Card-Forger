@@ -31,6 +31,10 @@
   let templates = $state<TemplateEntry[]>([]);
   let fontCount = $state(0);
   let folder = $state("");
+  // The template folder the open document's images come from: the chosen template's, or
+  // for a reopened card, the template it was built on, when that is in the templates folder.
+  let assetFolder = $state("");
+  let filePath = $state("");
   let tiers = $state<TierState[]>([]);
 
   // The card: Scryfall's JSON, edited in place by the form.
@@ -83,7 +87,7 @@
   async function demo() {
     const text = import.meta.env.VITE_CARDSMITH_DEMO as string | undefined;
     if (!text) return;
-    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string };
+    const want = JSON.parse(text) as { template: string; card: string; art?: string; tier?: string; symbols?: boolean; export?: string; save?: string };
     tier = want.tier ?? tier;
     folder = want.template;
     await openTemplate();
@@ -94,6 +98,7 @@
     search = want.card;
     await find();
     if (want.symbols) palette = { field: "oracle_text", filter: "" };
+    if (want.save) await native.writeFile(want.save, core.saveAvailable());
     if (want.export) {
       await native.writeFile(want.export, core.exportPng());
       say(`Exported to ${want.export}`);
@@ -152,6 +157,8 @@
     try {
       const pack = await native.template(folder);
       core.openTemplate(pack.doc, pack.manifest);
+      assetFolder = folder;
+      filePath = "";
       opened();
       await loadImages();
       if (raw) await build();
@@ -163,14 +170,56 @@
     }
   }
 
-  /** Fetch the images that layers now showing need. A template's other images are never loaded. */
-  async function loadImages() {
+  /**
+   * Fetch the images that layers now showing need. A template's other images are never
+   * loaded. Called after anything that can show a layer: a build, an undo, a tick in the list.
+   */
+  export async function loadImages() {
+    if (!assetFolder) return;
     const missing = core.missingAssets();
     if (!missing.length) return;
-    const files = await Promise.all(missing.map((m) => native.templateAsset(folder, m.path).catch(() => null)));
+    const files = await Promise.all(missing.map((m) => native.templateAsset(assetFolder, m.path).catch(() => null)));
     const got = missing.map((m, i) => ({ id: m.id, data: files[i] })).filter((f): f is { id: string; data: Uint8Array<ArrayBuffer> } => f.data !== null);
     got.forEach((f, i) => core.addAsset(f.id, f.data, i === got.length - 1));
-    changed();
+    if (got.length) changed();
+  }
+
+  // ---- files -----------------------------------------------------------------------
+
+  async function saveDocument() {
+    try {
+      const name = String(side?.name ?? raw?.name ?? "card").replace(/[\\/:*?"<>|]/g, "") || "card";
+      const path = await native.saveDocument(filePath || `${name}.cardsmith`, () => core.saveAvailable());
+      if (!path) return;
+      filePath = path;
+      say(`Saved ${fileName(path)}`);
+    } catch (err) {
+      fail("The card could not be saved")(err);
+    }
+  }
+
+  async function openDocument() {
+    try {
+      const file = await native.openDocument();
+      if (!file) return;
+      busy = true;
+      core.openCardsmith(file.data);
+      filePath = file.path;
+      // Its other images are in the template it was built on, if that is still in the templates folder.
+      const template = core.doc().templateId;
+      assetFolder = templates.find((t) => t.id === template)?.folder ?? "";
+      folder = "";
+      raw = null;
+      prints = [];
+      warnings = [];
+      opened();
+      await loadImages();
+      say(`Opened ${fileName(file.path)}` + (template && !assetFolder ? `. Its template (${template}) is not in the templates folder, so layers that were hidden when it was saved have no picture.` : ""));
+    } catch (err) {
+      fail("That file could not be opened")(err);
+    } finally {
+      busy = false;
+    }
   }
 
   // ---- finding a card ----------------------------------------------------------------
@@ -432,6 +481,16 @@
 {/snippet}
 
 <aside class="card" bind:this={panel}>
+  <h2>File</h2>
+  <div class="row">
+    <button onclick={openDocument} disabled={busy} title="Open a saved card (.cardsmith)">Open…</button>
+    <button onclick={saveDocument} disabled={busy} title="Save the card with its layers, to carry on with later">Save…</button>
+    <span class="path" title={filePath}>{filePath ? fileName(filePath) : ""}</span>
+  </div>
+  {#if filePath && !raw && !folder}
+    <p class="note">A reopened card keeps all its layers: move, restyle, paint and export as before. Its card form is not restored; to change the card's fields, build it again on its template.</p>
+  {/if}
+
   <h2>Folders</h2>
   <div class="row">
     <button onclick={() => choose("templatesDir")} title={settings.templatesDir || "The folder your imported templates are in"}>Templates…</button>
@@ -581,6 +640,7 @@
   button:disabled { opacity: 0.4; }
   .quiet { background: none; border: none; color: #8ea1e1; text-align: left; padding: 0; }
   .warning { color: #f0b232; margin: 0; }
+  .note { color: #9a9ca3; margin: 0; font-size: 12px; }
   .chip { padding: 0 6px; font-size: 11px; color: #b5b7bd; }
   .palette { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #1e1f22; border: 1px solid #50545c; border-radius: 4px; }
   .palette .row { gap: 3px; }

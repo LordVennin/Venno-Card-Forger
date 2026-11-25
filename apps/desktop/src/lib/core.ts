@@ -32,6 +32,7 @@ type Exports = {
   cs_font_names(): void;
   cs_export_png(): number;
   cs_save(): number;
+  cs_save_available(): number;
   cs_doc_json(): number;
   cs_state_json(): void;
   cs_execute(editPtr: number, editLen: number, labelPtr: number, labelLen: number): number;
@@ -210,6 +211,12 @@ export class Core {
     );
     this.check(ok);
     return decoder.decode(this.out()) === "true";
+  }
+
+  /** The document as `.cardsmith` file bytes, holding the images that are loaded: for a card built on a template, the ones it shows. */
+  saveAvailable(): Uint8Array<ArrayBuffer> {
+    this.check(this.x.cs_save_available());
+    return this.out().slice() as Uint8Array<ArrayBuffer>;
   }
 
   /** The document drawn at full size, as PNG file bytes. Takes a few seconds for a card. */

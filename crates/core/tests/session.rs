@@ -383,3 +383,28 @@ fn zoomed_in_only_what_is_on_screen_is_drawn_until_it_is_scrolled_to_or_wanted()
     assert_eq!((view_px(&s, 30, 30), frame_px(&mut s, 420, 260)), ([128, 128, 128, 255], [128, 128, 128, 255]));
     assert_frame_is_exact(&mut s);
 }
+
+#[test]
+fn a_document_saves_with_only_the_images_it_has_and_opens_again_without_the_rest() {
+    use cardsmith_core::serialize::load_cardsmith_available;
+    let png = |rgba: [u8; 4]| cardsmith_core::render::encode_png(4, 4, &rgba.repeat(16)).unwrap();
+    let mut doc = scene_doc();
+    for (id, path) in [("red", "assets/red.png"), ("blue", "assets/blue.png")] {
+        doc.assets.insert(id.into(), serde_json::from_value(json!({ "kind": "image", "path": path, "width": 4, "height": 4 })).unwrap());
+    }
+    doc.root.children.push(pixel("shown", "red", [1.0, 0.0, 2.0, 0.0, 1.0, 2.0]));
+    doc.root.children.push(patch(pixel("hidden", "blue", [1.0, 0.0, 10.0, 0.0, 1.0, 2.0]), json!({ "visible": false })));
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.add_asset("red", png([255, 0, 0, 255])).unwrap();
+    // The whole document cannot be saved, the hidden layer's image never having been loaded; what is there can.
+    assert!(s.save().is_err());
+    let file = s.save_available().unwrap();
+    assert!(load_cardsmith(&file).is_err());
+    let (doc, assets) = load_cardsmith_available(&file).unwrap();
+    assert_eq!(assets.keys().collect::<Vec<_>>(), ["red"]);
+    let mut reopened = Session::new(doc, assets);
+    assert!(reopened.frame() == s.frame());
+    // The hidden layer is still there and asks for its image when shown.
+    reopened.execute(Edit::SetLayerProps { id: "hidden".into(), props: json!({ "visible": true }).as_object().unwrap().clone() }, "Show").unwrap();
+    assert_eq!(reopened.missing_assets(), vec![("blue".to_string(), "assets/blue.png".to_string())]);
+}

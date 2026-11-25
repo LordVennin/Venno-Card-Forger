@@ -20,7 +20,7 @@ use cardsmith_core::doc::Doc;
 use cardsmith_core::paint::Brush;
 use cardsmith_core::raster::Region;
 use cardsmith_core::samples;
-use cardsmith_core::serialize::{load_cardsmith, parse_doc, AssetBytes};
+use cardsmith_core::serialize::{load_cardsmith_available, parse_doc, AssetBytes};
 use cardsmith_core::session::{Session, View};
 use cardsmith_engine::workbench::{BuildRequest, Workbench};
 use cardsmith_engine::Template;
@@ -137,7 +137,8 @@ pub extern "C" fn cs_open_sample(index: u32) -> u32 {
 pub unsafe extern "C" fn cs_open_cardsmith(ptr: *const u8, len: usize) -> u32 {
     let data = bytes(ptr, len);
     attempt(|s| {
-        let (doc, assets) = load_cardsmith(data).map_err(|e| e.to_string())?;
+        // A card saved from a template holds only the images it showed; the rest are asked for as needed.
+        let (doc, assets) = load_cardsmith_available(data).map_err(|e| e.to_string())?;
         open(s, doc, assets);
         Ok(())
     })
@@ -357,6 +358,15 @@ pub extern "C" fn cs_export_png() -> u32 {
     attempt(|s| {
         let (width, height) = (s.session.doc().width, s.session.doc().height);
         s.out = cardsmith_core::render::encode_png(width, height, s.session.frame()).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
+/// The document as `.cardsmith` bytes holding the images that are loaded, in the output buffer.
+#[no_mangle]
+pub extern "C" fn cs_save_available() -> u32 {
+    attempt(|s| {
+        s.out = s.session.save_available().map_err(|e| e.to_string())?;
         Ok(())
     })
 }

@@ -11,7 +11,7 @@ import type { FillInfo } from "./core";
 export const hasNative = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export type Settings = { templatesDir: string; fontsDir: string };
-export type TemplateEntry = { folder: string; name: string; buildable: boolean };
+export type TemplateEntry = { folder: string; id: string; name: string; buildable: boolean };
 export type Printing = { set: string; setName: string; number: string; year: string; rarity: string; artist: string; thumbnail: string | null };
 export type Extras = { setSize: number | null; symbolSvg: string | null; watermarkSvg: string | null };
 /** Scryfall's JSON for a card with its layout settled, the face wanted, and what goes with its set. */
@@ -46,6 +46,20 @@ export const native = {
     if (!path) return null;
     await native.writeFile(path, data());
     return path;
+  },
+
+  /** Ask where to save the document, then write it there. Returns the path, or null if the user backed out. */
+  async saveDocument(suggested: string, data: () => Uint8Array): Promise<string | null> {
+    const path = await save({ title: "Save the card", defaultPath: suggested, filters: [{ name: "Cardsmith document", extensions: ["cardsmith"] }] });
+    if (!path) return null;
+    await native.writeFile(path, data());
+    return path;
+  },
+
+  /** Ask for a saved document and read it. Null if the user backed out. */
+  async openDocument(): Promise<{ path: string; data: Uint8Array } | null> {
+    const path = await open({ title: "Open a card", filters: [{ name: "Cardsmith document", extensions: ["cardsmith"] }] });
+    return typeof path === "string" ? { path, data: await bytes("document_file", { path }) } : null;
   },
 
   /** Write bytes to a file. The bytes go as the request's body, not as JSON. */

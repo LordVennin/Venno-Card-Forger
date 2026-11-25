@@ -98,6 +98,18 @@ pub fn stringify_doc(doc: &Doc) -> Result<String> {
 
 /// Pack a document and its asset bytes into `.cardsmith` zip bytes.
 pub fn save_cardsmith(doc: &Doc, assets: &AssetBytes) -> Result<Vec<u8>> {
+    save(doc, assets, true)
+}
+
+/// As [`save_cardsmith`], but an asset with no data is left out of the file
+/// instead of refusing. A card built on a template holds only the images its
+/// showing layers needed; the rest stay in the template's folder, and a file
+/// saved this way is a fraction of the size. Open it with [`load_cardsmith_available`].
+pub fn save_cardsmith_available(doc: &Doc, assets: &AssetBytes) -> Result<Vec<u8>> {
+    save(doc, assets, false)
+}
+
+fn save(doc: &Doc, assets: &AssetBytes, whole: bool) -> Result<Vec<u8>> {
     use zip::write::SimpleFileOptions;
     use zip::CompressionMethod;
     let io = |e: std::io::Error| err!("Could not write the save file: {e}");
@@ -110,7 +122,12 @@ pub fn save_cardsmith(doc: &Doc, assets: &AssetBytes) -> Result<Vec<u8>> {
     // Images are already compressed; storing them is faster and no bigger.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     for (id, asset) in &doc.assets {
-        let bytes = assets.get(id).ok_or_else(|| err!("Cannot save: no data for asset \"{id}\" ({})", asset.path))?;
+        let Some(bytes) = assets.get(id) else {
+            if whole {
+                return Err(err!("Cannot save: no data for asset \"{id}\" ({})", asset.path));
+            }
+            continue;
+        };
         zip.start_file(asset.path.as_str(), stored).map_err(zipped)?;
         zip.write_all(bytes).map_err(io)?;
     }
@@ -119,6 +136,16 @@ pub fn save_cardsmith(doc: &Doc, assets: &AssetBytes) -> Result<Vec<u8>> {
 
 /// Unpack `.cardsmith` zip bytes. Fails if an asset the document names is absent.
 pub fn load_cardsmith(bytes: &[u8]) -> Result<(Doc, AssetBytes)> {
+    load(bytes, true)
+}
+
+/// As [`load_cardsmith`], but an asset the file does not hold is simply not
+/// loaded: its layers draw nothing until its data is supplied.
+pub fn load_cardsmith_available(bytes: &[u8]) -> Result<(Doc, AssetBytes)> {
+    load(bytes, false)
+}
+
+fn load(bytes: &[u8], whole: bool) -> Result<(Doc, AssetBytes)> {
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| err!("Not a .cardsmith file (it is not a zip archive)"))?;
     let mut read = |name: &str| -> Option<Vec<u8>> {
         let mut file = zip.by_name(name).ok()?;
@@ -130,8 +157,13 @@ pub fn load_cardsmith(bytes: &[u8]) -> Result<(Doc, AssetBytes)> {
     let doc = parse_doc(std::str::from_utf8(&json).map_err(|_| invalid("doc.json is not UTF-8".into()))?)?;
     let mut assets = AssetBytes::new();
     for (id, asset) in &doc.assets {
-        let data = read(&asset.path).ok_or_else(|| err!("Save file is missing asset \"{id}\" ({})", asset.path))?;
-        assets.insert(id.clone(), data);
+        match read(&asset.path) {
+            Some(data) => {
+                assets.insert(id.clone(), data);
+            }
+            None if whole => return Err(err!("Save file is missing asset \"{id}\" ({})", asset.path)),
+            None => {}
+        }
     }
     Ok((doc, assets))
 }

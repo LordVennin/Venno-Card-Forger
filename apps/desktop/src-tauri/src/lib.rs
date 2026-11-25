@@ -84,6 +84,8 @@ fn save_settings(shared: State<Shared>, settings: Settings) -> Answer<()> {
 struct TemplateEntry {
     /// The package's folder name, which is how it is asked for.
     folder: String,
+    /// The template's own id, which documents built on it carry.
+    id: String,
     name: String,
     /// False when the importer found none of the layers the card engine sets, so no card can be built on it.
     buildable: bool,
@@ -107,7 +109,8 @@ fn templates(shared: State<Shared>) -> Answer<Vec<TemplateEntry>> {
         let folder = entry.file_name().to_string_lossy().into_owned();
         let name = manifest["name"].as_str().unwrap_or(&folder).to_string();
         let buildable = manifest["bindings"].as_object().is_some_and(|b| !b.is_empty());
-        found.push(TemplateEntry { folder, name, buildable });
+        let id = manifest["id"].as_str().unwrap_or(&folder).to_string();
+        found.push(TemplateEntry { folder, id, name, buildable });
     }
     found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(found)
@@ -157,6 +160,16 @@ fn art_file(path: String) -> Answer<Response> {
     let is_picture = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp"));
     if !is_picture {
         return Err("Art has to be a PNG, JPEG or WebP picture.".into());
+    }
+    Ok(Response::new(read(&path)?))
+}
+
+/// A saved document the user picked to open, as bytes.
+#[tauri::command(async)]
+fn document_file(path: String) -> Answer<Response> {
+    let path = PathBuf::from(path);
+    if path.extension().and_then(|e| e.to_str()).is_none_or(|e| !e.eq_ignore_ascii_case("cardsmith")) {
+        return Err("That is not a .cardsmith file.".into());
     }
     Ok(Response::new(read(&path)?))
 }
@@ -325,7 +338,7 @@ pub fn run() {
             app.manage(Shared { settings_file, settings: Mutex::new(settings), client: Mutex::new(Client::new(&cache)), cache, fills: Mutex::new((0, HashMap::new())) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, write_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
+        .invoke_handler(tauri::generate_handler![settings, save_settings, templates, template, template_asset, fonts, font, art_file, document_file, write_file, autocomplete, printings, card, set_symbol, sets, fill_tiers, fill, fill_image])
         .run(tauri::generate_context!())
         .expect("error while running Cardsmith");
 }
