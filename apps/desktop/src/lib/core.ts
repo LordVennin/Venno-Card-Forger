@@ -25,6 +25,11 @@ type Exports = {
   cs_set_art(ptr: number, len: number): number;
   cs_build_card(ptr: number, len: number): number;
   cs_add_fill(build: number, ptr: number, len: number, sourcePtr: number, sourceLen: number, paramsPtr: number, paramsLen: number): number;
+  cs_hit(x: number, y: number): void;
+  cs_layer_box(ptr: number, len: number): number;
+  cs_drag(ptr: number, len: number, scale: number, tx: number, ty: number): number;
+  cs_drag_end(keep: number, labelPtr: number, labelLen: number): number;
+  cs_font_names(): void;
   cs_save(): number;
   cs_doc_json(): number;
   cs_state_json(): void;
@@ -238,6 +243,40 @@ export class Core {
 
   redo(): boolean {
     return this.x.cs_redo() === 1;
+  }
+
+  // ---- arranging ----------------------------------------------------------------
+
+  /** The topmost showing layer with ink at a document point, or null. */
+  hit(x: number, y: number): string | null {
+    this.x.cs_hit(x, y);
+    return decoder.decode(this.out()) || null;
+  }
+
+  /** A layer's box in document pixels, without the reach of its effects. Null if it shows nothing. */
+  layerBox(id: string): Rect | null {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_layer_box(ptr, len)));
+    return JSON.parse(decoder.decode(this.out()));
+  }
+
+  /**
+   * Show a layer moved and scaled, as a drag in progress: every point p of it,
+   * as it was when the drag began, goes to scale * p + (tx, ty). Call as often
+   * as the pointer moves, then `dragEnd`.
+   */
+  drag(id: string, scale: number, tx: number, ty: number): void {
+    this.check(this.passText(id, (ptr, len) => this.x.cs_drag(ptr, len, scale, tx, ty)));
+  }
+
+  /** Finish a drag: keep it as one undoable step, or put the layer back. */
+  dragEnd(keep: boolean, label = "Move"): void {
+    this.check(this.passText(label, (ptr, len) => this.x.cs_drag_end(keep ? 1 : 0, ptr, len)));
+  }
+
+  /** The PostScript names of the loaded fonts. */
+  fontNames(): string[] {
+    this.x.cs_font_names();
+    return JSON.parse(decoder.decode(this.out()));
   }
 
   // ---- painting ----------------------------------------------------------------

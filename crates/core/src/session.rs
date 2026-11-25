@@ -189,6 +189,10 @@ pub struct Session {
     painted: BTreeSet<String>,
     /// Assets supplied without redrawing, whose layers are still to be drawn.
     stashed: BTreeSet<String>,
+    /// An edit being tried out (a drag in progress): what it is, and how to take it back.
+    preview: Option<(Edit, Edit)>,
+    /// Copies of other sizes, kept for when the view or a drag wants them again.
+    spare: Vec<Proxy>,
     /// Present while the view is zoomed out far enough to be drawn from a smaller copy.
     proxy: Option<Proxy>,
     /// Areas of the full-size frame that changed and have not been drawn since:
@@ -222,6 +226,8 @@ impl Session {
             below: None,
             painted: BTreeSet::new(),
             stashed: BTreeSet::new(),
+            preview: None,
+            spare: Vec::new(),
             proxy: None,
             stale: Vec::new(),
         };
@@ -432,16 +438,8 @@ impl Session {
     pub fn set_view(&mut self, view: View) {
         self.view = View { scale: view.scale.max(1e-3), ..view };
         self.view_pixels = vec![0; view.w as usize * view.h as usize * 4];
-        // The smallest copy that still has a pixel or more for every screen pixel.
-        let level = if self.stroke.is_some() { self.proxy.as_ref().map_or(0, |p| p.level) } else { ((1.0 / self.view.scale).log2().floor() as i32).clamp(0, 3) as u32 };
-        if self.proxy.as_ref().map_or(0, |p| p.level) != level {
-            self.proxy = None;
-            if level > 0 {
-                let k = 1 << level;
-                let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
-                self.proxy = Some(Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() });
-                self.draw_small(self.whole());
-            }
+        if self.stroke.is_none() {
+            self.use_level(self.wanted_level());
         }
         if self.proxy.is_none() && self.stroke.is_none() {
             // What was left undrawn off screen and has come into view.
@@ -453,6 +451,50 @@ impl Session {
         }
         self.update_view(self.whole());
         self.dirty_view = Region::new(0, 0, view.w as i32, view.h as i32);
+    }
+
+    /// The size of copy the screen should be drawn from now: the smallest that
+    /// still has a pixel or more for every screen pixel, and one size smaller
+    /// than that while something is being dragged, when every step redraws a
+    /// large part of the card and speed matters more than sharpness.
+    fn wanted_level(&self) -> u32 {
+        let level = ((1.0 / self.view.scale).log2().floor() as i32).clamp(0, 3) as u32;
+        if self.preview.is_some() && level >= 1 {
+            (level + 1).min(3)
+        } else {
+            level
+        }
+    }
+
+    /// Draw the screen from the copy of this level (0: the real pixels) from now on. Returns true if that is a change.
+    fn use_level(&mut self, level: u32) -> bool {
+        if self.proxy.as_ref().map_or(0, |p| p.level) == level {
+            return false;
+        }
+        // The copy in use is put by: going back to it later costs one redraw, not making it again.
+        self.spare.extend(self.proxy.take());
+        if level > 0 {
+            let mut proxy = match self.spare.iter().position(|p| p.level == level) {
+                Some(at) => self.spare.swap_remove(at),
+                None => {
+                    let k = 1 << level;
+                    let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
+                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
+                }
+            };
+            proxy.doc_stale = true;
+            self.proxy = Some(proxy);
+            self.draw_small(self.whole());
+        } else {
+            // The real pixels on screen again: draw what changed while they were not shown.
+            let visible = self.visible();
+            let due: Vec<Region> = self.stale.iter().filter_map(|area| area.intersect(&visible)).collect();
+            for area in due {
+                self.draw_full(area);
+            }
+        }
+        self.update_view(self.whole());
+        true
     }
 
     /// The view's pixels: straight RGBA, `view.w × view.h`.
@@ -595,6 +637,7 @@ impl Session {
             // The document was resized: start the frame again.
             self.frame = Raster::new(Region::new(0, 0, size.0, size.1));
             self.proxy = None;
+            self.spare.clear();
             self.stale.clear();
             self.draw_full(self.whole());
             self.set_view(self.view);
@@ -605,11 +648,84 @@ impl Session {
         Ok(inverse)
     }
 
+    // ---- trying an edit out ------------------------------------------------------
+
+    /// Show an edit without making it a step of history yet: the state of a
+    /// drag. Each call replaces the one before, always starting from the
+    /// document as it was when the first was made. [`Session::commit_preview`]
+    /// keeps it as one step; [`Session::cancel_preview`] takes it back.
+    pub fn preview(&mut self, edit: Edit) -> Result<()> {
+        if self.stroke.is_some() {
+            return Err(err!("Finish the brush stroke first"));
+        }
+        let Some((_, back)) = self.preview.take() else {
+            let back = self.apply_and_redraw(&edit)?;
+            self.preview = Some((edit, back));
+            self.level_changed();
+            return Ok(());
+        };
+        // Back to the start and on to the new state as one change, so only what differs between
+        // the last state and this one is drawn.
+        match self.apply_and_redraw(&Edit::Batch { edits: vec![back.clone(), edit.clone()] }) {
+            Ok(Edit::Batch { mut edits }) if edits.len() == 2 => {
+                // The inverse of the pair is "undo the new edit, then redo the old": the first half takes this state back.
+                self.preview = Some((edit, edits.swap_remove(0)));
+                Ok(())
+            }
+            Ok(_) => unreachable!("a batch of two has an inverse of two"),
+            Err(e) => {
+                // Refused, so nothing changed: the earlier preview is still what shows. Take it back.
+                self.apply_and_redraw(&back).expect("a recorded inverse always applies");
+                Err(e)
+            }
+        }
+    }
+
+    /// A drag began or ended: change to the size of copy that suits, and if that
+    /// is a change, the whole screen has been redrawn.
+    fn level_changed(&mut self) {
+        if self.view_pixels.is_empty() {
+            return;
+        }
+        if self.use_level(self.wanted_level()) {
+            self.dirty_view = Region::new(0, 0, self.view.w as i32, self.view.h as i32);
+        }
+    }
+
+    /// Keep what [`Session::preview`] is showing as one undoable step. False if nothing was being tried.
+    pub fn commit_preview(&mut self, label: &str) -> bool {
+        let Some((edit, inverse)) = self.preview.take() else { return false };
+        self.push(Step::Edit { label: label.to_string(), edit, inverse });
+        self.dirty_view = Region::new(0, 0, 0, 0);
+        self.level_changed();
+        true
+    }
+
+    /// Take back what [`Session::preview`] is showing.
+    pub fn cancel_preview(&mut self) {
+        if let Some((_, back)) = self.preview.take() {
+            self.apply_and_redraw(&back).expect("a recorded inverse always applies");
+            self.level_changed();
+        }
+    }
+
+    /// The topmost showing layer with ink at a document point.
+    pub fn hit(&mut self, x: f64, y: f64) -> Option<String> {
+        self.renderer.hit(&self.doc, &self.assets, x.floor() as i32, y.floor() as i32)
+    }
+
+    /// A layer's bounds (left, top, width, height) without the reach of its effects.
+    pub fn layer_box(&mut self, id: &str) -> Option<Region> {
+        self.renderer.layer_box(&self.doc, &self.assets, id)
+    }
+
     /// Apply a structural edit. A refused edit changes nothing.
     pub fn execute(&mut self, edit: Edit, label: &str) -> Result<()> {
         if self.stroke.is_some() {
             return Err(err!("Finish the brush stroke first"));
         }
+        // A drag left unfinished is taken back before anything else changes the document.
+        self.cancel_preview();
         let inverse = self.apply_and_redraw(&edit)?;
         self.push(Step::Edit { label: label.to_string(), edit, inverse });
         Ok(())
@@ -645,6 +761,7 @@ impl Session {
         if self.stroke.is_some() {
             return false;
         }
+        self.cancel_preview();
         let Some(step) = self.done.pop() else { return false };
         self.replay(&step, false);
         self.undone.push(step);
@@ -655,6 +772,7 @@ impl Session {
         if self.stroke.is_some() {
             return false;
         }
+        self.cancel_preview();
         let Some(step) = self.undone.pop() else { return false };
         self.replay(&step, true);
         self.done.push(step);
@@ -696,6 +814,7 @@ impl Session {
 
     /// Start a brush stroke on a pixel layer.
     pub fn stroke_begin(&mut self, layer_id: &str, brush: Brush) -> Result<()> {
+        self.cancel_preview();
         if self.stroke.is_some() {
             return Err(err!("A brush stroke is already in progress"));
         }

@@ -9,6 +9,7 @@
 // counters in the pixel loops are clearer than zipped iterators there.
 #![allow(clippy::neg_cmp_op_on_partial_ord, clippy::explicit_counter_loop, clippy::large_enum_variant)]
 
+pub mod arrange;
 pub mod commands;
 pub mod compare;
 pub mod doc;

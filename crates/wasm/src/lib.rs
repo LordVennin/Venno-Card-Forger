@@ -14,6 +14,7 @@
 //!     with `putImageData` on a view of that memory, limited to the dirty
 //!     rectangle the last call reported. Pixels never cross a process boundary.
 
+use cardsmith_core::arrange::{place_edit, Placement};
 use cardsmith_core::commands::Edit;
 use cardsmith_core::doc::Doc;
 use cardsmith_core::paint::Brush;
@@ -27,6 +28,8 @@ use std::cell::RefCell;
 
 struct State {
     session: Session,
+    /// The document as it was when the drag in progress began: each position of the drag is worked out from it.
+    drag_from: Option<Doc>,
     /// Present while the open document is a template a card is being built on.
     bench: Option<Workbench>,
     /// Assets supplied after `cs_open_json`, until the session is (re)built with them.
@@ -34,7 +37,7 @@ struct State {
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), bench: None, out: Vec::new() });
+    static STATE: RefCell<State> = RefCell::new(State { session: Session::new(Doc::empty(1, 1, 72.0), AssetBytes::new()), drag_from: None, bench: None, out: Vec::new() });
 }
 
 fn with<T>(f: impl FnOnce(&mut State) -> T) -> T {
@@ -75,6 +78,7 @@ fn open(s: &mut State, doc: Doc, assets: AssetBytes) {
     let fonts = s.session.fonts().clone();
     s.session = Session::with_fonts(doc, assets, fonts);
     s.bench = None;
+    s.drag_from = None;
     s.session.set_view(View { scale: 1.0, x: 0.0, y: 0.0, ..view });
 }
 
@@ -281,6 +285,69 @@ pub unsafe extern "C" fn cs_add_fill(build: u32, ptr: *const u8, len: usize, sou
         s.out = added.to_string().into_bytes();
         Ok(())
     })
+}
+
+// ---- arranging -------------------------------------------------------------------
+
+/// The topmost showing layer with ink at a document point: its id in the
+/// output buffer, or nothing there.
+#[no_mangle]
+pub extern "C" fn cs_hit(x: f64, y: f64) {
+    with(|s| s.out = s.session.hit(x, y).unwrap_or_default().into_bytes());
+}
+
+/// A layer's box as JSON in the output buffer: `{ "x", "y", "width", "height" }`, or `null` if it has none.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_layer_box(ptr: *const u8, len: usize) -> u32 {
+    let id = text(ptr, len);
+    attempt(|s| {
+        let found = s.session.layer_box(id?).map(|b| serde_json::json!({ "x": b.x, "y": b.y, "width": b.w, "height": b.h }));
+        s.out = serde_json::to_vec(&found).unwrap_or_default();
+        Ok(())
+    })
+}
+
+/// Show a layer moved and scaled, as a drag in progress: every point `p` of it,
+/// as it was when the drag began, goes to `scale * p + (tx, ty)`. Nothing is
+/// added to history until `cs_drag_end`.
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_drag(ptr: *const u8, len: usize, scale: f64, tx: f64, ty: f64) -> u32 {
+    let id = text(ptr, len);
+    attempt(|s| {
+        let from = s.drag_from.get_or_insert_with(|| s.session.doc().clone());
+        let edit = place_edit(from, id?, &Placement { scale, tx, ty }).map_err(|e| e.to_string())?;
+        s.session.preview(edit).map_err(|e| e.to_string())
+    })
+}
+
+/// Finish the drag: keep it as one undoable step (`keep` 1) or put the layer back (0).
+///
+/// # Safety
+/// `(ptr, len)` must be valid as described in the module docs.
+#[no_mangle]
+pub unsafe extern "C" fn cs_drag_end(keep: u32, label_ptr: *const u8, label_len: usize) -> u32 {
+    let label = text(label_ptr, label_len);
+    attempt(|s| {
+        s.drag_from = None;
+        if keep == 1 {
+            s.session.commit_preview(label?);
+        } else {
+            s.session.cancel_preview();
+        }
+        Ok(())
+    })
+}
+
+/// The PostScript names of the loaded fonts, as a JSON list in the output buffer.
+#[no_mangle]
+pub extern "C" fn cs_font_names() {
+    with(|s| s.out = serde_json::to_vec(&s.session.fonts().names()).unwrap_or_default());
 }
 
 // ---- state -----------------------------------------------------------------------

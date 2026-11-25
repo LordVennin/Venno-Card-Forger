@@ -56,3 +56,16 @@ if (art2) {
   console.log(`${((performance.now() - started) / 10).toFixed(0).padStart(6)} ms  each step of dragging the art behind the frame`);
   time("the full-size picture catching up afterwards (as before saving or exporting)", () => core.frameHash());
 }
+if (art2) {
+  const started = performance.now();
+  for (let i = 1; i <= 20; i++) core.drag(art2.id, 1, i * 6, i * 4);
+  console.log(`${((performance.now() - started) / 20).toFixed(0).padStart(6)} ms  each step of a live drag of the art (the move tool)`);
+  core.dragEnd(true, "Move the art");
+  const name = find(core.doc().root.children, (l) => l.role === "card.name");
+  if (name) {
+    const t0 = performance.now();
+    for (let i = 1; i <= 20; i++) core.drag(name.id, 1, i * 6, i * 4);
+    console.log(`${((performance.now() - t0) / 20).toFixed(0).padStart(6)} ms  each step of a live drag of the name`);
+    core.dragEnd(false);
+  }
+}

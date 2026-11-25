@@ -1,0 +1,133 @@
+//! Moving and scaling layers.
+//!
+//! Every kind of layer keeps its place differently: an image in a transform, a
+//! shape in its path, text in its box, a group in its children. These
+//! functions work out the edit that moves or scales any of them, masks
+//! included, so the editor can drag whatever is selected.
+
+use crate::commands::Edit;
+use crate::doc::*;
+use crate::{err, tree, Result};
+use serde_json::{Map, Value};
+
+/// Move every point `p` of a layer to `scale * p + (tx, ty)`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub scale: f64,
+    pub tx: f64,
+    pub ty: f64,
+}
+
+impl Placement {
+    pub fn shift(dx: f64, dy: f64) -> Placement {
+        Placement { scale: 1.0, tx: dx, ty: dy }
+    }
+
+    /// Scale about a point that stays where it is.
+    pub fn scale_about(scale: f64, x: f64, y: f64) -> Placement {
+        Placement { scale, tx: x * (1.0 - scale), ty: y * (1.0 - scale) }
+    }
+
+    fn point(&self, x: f64, y: f64) -> (f64, f64) {
+        (self.scale * x + self.tx, self.scale * y + self.ty)
+    }
+
+    fn path(&self, d: &str) -> Result<String> {
+        let mut path = kurbo::BezPath::from_svg(d).map_err(|_| err!("A vector path could not be read, so its layer cannot be moved"))?;
+        path.apply_affine(kurbo::Affine::new([self.scale, 0.0, 0.0, self.scale, self.tx, self.ty]));
+        Ok(path.to_svg())
+    }
+
+    fn matrix(&self, m: &Mat3) -> Mat3 {
+        let s = self.scale;
+        [m[0] * s, m[1] * s, m[2] * s + self.tx, m[3] * s, m[4] * s, m[5] * s + self.ty]
+    }
+}
+
+fn place(layer: &mut Layer, to: &Placement) -> Result<()> {
+    let s = to.scale;
+    let name = layer.base().name.clone();
+    {
+        let base = match layer {
+            Layer::Group(l) => &mut l.base,
+            Layer::Pixel(l) => &mut l.base,
+            Layer::Fill(l) => &mut l.base,
+            Layer::Art(l) => &mut l.base,
+            Layer::Shape(l) => &mut l.base,
+            Layer::Text(l) => &mut l.base,
+        };
+        if let Some(mask) = &mut base.mask {
+            if s != 1.0 {
+                return Err(err!("\"{name}\" has a pixel mask, which cannot be scaled yet. It can still be moved."));
+            }
+            let (x, y) = to.point(mask.offset.x, mask.offset.y);
+            mask.offset = Vec2 { x, y };
+        }
+        if let Some(mask) = &mut base.vector_mask {
+            mask.path.d = to.path(&mask.path.d)?;
+        }
+    }
+    match layer {
+        Layer::Group(_) => {}
+        Layer::Pixel(l) => l.transform = to.matrix(&l.transform),
+        Layer::Fill(l) => l.transform = to.matrix(&l.transform),
+        Layer::Art(l) => l.transform = to.matrix(&l.transform),
+        Layer::Shape(l) => {
+            l.path.d = to.path(&l.path.d)?;
+            if let Some(stroke) = &mut l.stroke {
+                stroke.width *= s;
+            }
+        }
+        Layer::Text(l) => {
+            let (x, y) = to.point(l.bounds.x, l.bounds.y);
+            l.bounds = Rect { x, y, w: l.bounds.w * s, h: l.bounds.h * s };
+            if let Some(origin) = l.origin {
+                let (x, y) = to.point(origin.x, origin.y);
+                l.origin = Some(Vec2 { x, y });
+            }
+            l.style.size *= s;
+            l.style.leading = l.style.leading.map(|v| v * s);
+            l.style.paragraph_spacing = l.style.paragraph_spacing.map(|v| v * s);
+            for run in &mut l.content.runs {
+                run.size = run.size.map(|v| v * s);
+            }
+            for paragraph in &mut l.content.paragraphs {
+                paragraph.space_before = paragraph.space_before.map(|v| v * s);
+                paragraph.indent = paragraph.indent.map(|v| v * s);
+                paragraph.first_line_indent = paragraph.first_line_indent.map(|v| v * s);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The properties of `after` that differ from `before`, as a property patch.
+fn changed_props(before: &Layer, after: &Layer) -> Map<String, Value> {
+    let fields = |layer: &Layer| serde_json::to_value(layer).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    let (old, new) = (fields(before), fields(after));
+    new.into_iter().filter(|(key, value)| key != "children" && old.get(key) != Some(value)).collect()
+}
+
+fn collect(layer: &Layer, to: &Placement, edits: &mut Vec<Edit>) -> Result<()> {
+    let mut placed = layer.clone();
+    place(&mut placed, to)?;
+    let props = changed_props(layer, &placed);
+    if !props.is_empty() {
+        edits.push(Edit::SetLayerProps { id: layer.id().to_string(), props });
+    }
+    for child in layer.children() {
+        collect(child, to, edits)?;
+    }
+    Ok(())
+}
+
+/// The edit that moves and scales a layer, and everything in it if it is a group.
+pub fn place_edit(doc: &Doc, id: &str, to: &Placement) -> Result<Edit> {
+    if !(to.scale.is_finite() && to.scale > 0.0 && to.tx.is_finite() && to.ty.is_finite()) {
+        return Err(err!("A layer can only be scaled by a size above nothing"));
+    }
+    let layer = tree::find(doc, id).ok_or_else(|| err!("There is no layer \"{id}\""))?;
+    let mut edits = Vec::new();
+    collect(layer, to, &mut edits)?;
+    Ok(Edit::Batch { edits })
+}

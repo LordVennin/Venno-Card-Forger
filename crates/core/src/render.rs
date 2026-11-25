@@ -971,6 +971,46 @@ impl Renderer {
         grow(pass.layer_bounds(layer)?, margin + 1).intersect(&doc_region)
     }
 
+    /// The topmost showing layer with ink at a document point, for picking a
+    /// layer by clicking on it. Groups are looked into, never picked themselves.
+    pub fn hit(&mut self, doc: &Doc, assets: &AssetBytes, x: i32, y: i32) -> Option<String> {
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        let at = Region::new(x, y, 1, 1);
+        at.intersect(&doc_region)?;
+        let mut pass = RenderPass { assets, cache: self, doc: doc_region, warnings: Vec::new(), split: None };
+        fn find(pass: &mut RenderPass, group: &GroupLayer, at: &Region) -> Option<String> {
+            for layer in group.children.iter().rev().filter(|l| l.base().visible && l.base().opacity > 0.0) {
+                // A group's own mask hides what is in it.
+                if let Layer::Group(inner) = layer {
+                    let hidden = pass.mask_coverage(layer, at, MaskPart::All).is_some_and(|cover| cover[0] < 16);
+                    if !hidden {
+                        if let Some(found) = find(pass, inner, at) {
+                            return Some(found);
+                        }
+                    }
+                    continue;
+                }
+                let Some(content) = pass.masked_content(layer, at) else { continue };
+                if content.region == *at && content.data[3] >= 16 {
+                    return Some(layer.id().to_string());
+                }
+            }
+            None
+        }
+        find(&mut pass, &doc.root, &at)
+    }
+
+    /// A layer's bounds from its geometry, without the reach of its effects. `None` if it has none.
+    pub fn layer_box(&mut self, doc: &Doc, assets: &AssetBytes, id: &str) -> Option<Region> {
+        let layer = crate::tree::find(doc, id)?;
+        let doc_region = Region::new(0, 0, doc.width as i32, doc.height as i32);
+        // Not cut to the document: a layer dragged half off the card still has its whole box.
+        let wide = Region::new(-(1 << 20), -(1 << 20), 1 << 21, 1 << 21);
+        let _ = doc_region;
+        let mut pass = RenderPass { assets, cache: self, doc: wide, warnings: Vec::new(), split: None };
+        pass.layer_bounds(layer)
+    }
+
     /// Put a decoded image in the cache under an asset id, replacing what the
     /// asset bytes would decode to. This is how painted layers are stored.
     pub fn set_image(&mut self, id: &str, image: Image) {
