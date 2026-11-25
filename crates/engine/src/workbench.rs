@@ -87,6 +87,8 @@ pub struct Workbench {
     /// How to take each build out again, and where its fill goes.
     inverses: BTreeMap<u64, Edit>,
     plans: BTreeMap<u64, FillPlan>,
+    /// The document as each recent build left it, to tell afterwards what was changed by hand.
+    built: BTreeMap<u64, Doc>,
     next: u64,
 }
 
@@ -94,7 +96,7 @@ const FILL_LAYER: &str = "card-fill";
 
 impl Workbench {
     pub fn new(template: Template) -> Workbench {
-        Workbench { template, art: None, inverses: BTreeMap::new(), plans: BTreeMap::new(), next: 1 }
+        Workbench { template, art: None, inverses: BTreeMap::new(), plans: BTreeMap::new(), built: BTreeMap::new(), next: 1 }
     }
 
     /// The document to open a session with: the template as imported.
@@ -182,6 +184,12 @@ impl Workbench {
             return Err("This document holds a card built in an earlier session. Open its template again to change the card.".into());
         }
         edits.push(built.edit);
+        // What was changed by hand on the card's layers since the last build (the art dragged
+        // somewhere, a text restyled, a layer hidden) is put back on top of the new build,
+        // wherever the new build did not itself change the same thing.
+        if let Some(before) = showing.and_then(|n| self.built.get(&n)) {
+            edits.extend(by_hand(before, session.doc(), &scratch));
+        }
         let fill_kept = kept.is_some();
         if let (Some(layer), Some(plan)) = (kept, &built.fill) {
             edits.push(Edit::AddLayer { parent: plan.parent.clone(), layer, index: Some(plan.index) });
@@ -193,6 +201,11 @@ impl Workbench {
         let label = if showing.is_some() { format!("Update {}", card.name) } else { format!("Build {}", card.name) };
         session.execute(Edit::Batch { edits }, &label).map_err(|e| format!("The card could not be rebuilt, because a layer it sets was changed by hand ({e}). Undo that change, or open the template again."))?;
         self.inverses.insert(build, inverse);
+        self.built.insert(build, scratch);
+        // Enough to step back through a long run of edits; older builds are simply rebuilt plainly.
+        while self.built.len() > 24 {
+            self.built.pop_first();
+        }
         let fill = built.fill.map(|plan| {
             let info = FillInfo { art_position: plan.art_position, art_scale: plan.art_scale, canvas: plan.canvas, keep: plan.keep };
             self.plans.insert(build, plan);
@@ -226,4 +239,34 @@ impl Workbench {
         session.execute(Edit::Batch { edits }, "Fill around the art").map_err(|e| e.to_string())?;
         Ok(true)
     }
+}
+
+/// Edits that carry hand-made changes over to a new build: for every layer
+/// the last build and the new one both have, each property that differs now
+/// from what the last build left, and that the new build leaves as the last
+/// one did. Where the engine itself changes a property, the engine's value stands.
+fn by_hand(last_build: &Doc, now: &Doc, new_build: &Doc) -> Vec<Edit> {
+    let fields = |layer: &cardsmith_core::doc::Layer| {
+        let mut own = serde_json::to_value(layer).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+        own.remove("children");
+        own
+    };
+    let mut edits = Vec::new();
+    tree::walk(&last_build.root, &mut |layer| {
+        let (Some(mine), Some(theirs)) = (tree::find(now, layer.id()), tree::find(new_build, layer.id())) else { return };
+        let (base, mine, theirs) = (fields(layer), fields(mine), fields(theirs));
+        let mut props = serde_json::Map::new();
+        for key in base.keys().chain(mine.keys()) {
+            if key == "id" || key == "kind" || props.contains_key(key) {
+                continue;
+            }
+            if mine.get(key) != base.get(key) && theirs.get(key) == base.get(key) {
+                props.insert(key.clone(), mine.get(key).cloned().unwrap_or(Value::Null));
+            }
+        }
+        if !props.is_empty() {
+            edits.push(Edit::SetLayerProps { id: layer.id().to_string(), props });
+        }
+    });
+    edits
 }

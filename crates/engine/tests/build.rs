@@ -759,3 +759,51 @@ fn a_card_can_be_built_straight_from_scryfalls_json_so_edits_to_it_change_the_fr
     assert_eq!(session.doc().card.as_ref().unwrap()["frame"]["background"], "U");
     assert!(bench.build(&mut session, &serde_json::from_value(json!({})).unwrap()).unwrap_err().contains("no card"));
 }
+
+#[test]
+fn what_was_changed_by_hand_on_the_cards_layers_survives_a_rebuild_unless_the_engine_changes_it_too() {
+    use cardsmith_core::arrange::{place_edit, Placement};
+    use cardsmith_core::commands::Edit;
+    let (mut bench, mut session) = bench();
+    bench.set_art(&mut session, picture(400, 300)).unwrap();
+    let eldrazi = json!({ "mana_cost": "{7}", "type_line": "Creature — Eldrazi", "colors": [] });
+    let report = bench.build(&mut session, &request(&card(eldrazi.clone()))).unwrap();
+    assert!(bench.add_fill(&mut session, report.build, picture(500, 750), "patchmatch", json!({})).unwrap());
+    let Layer::Art(art) = layer(session.doc(), "card-art") else { panic!() };
+    let placed = art.transform;
+
+    // The art is dragged, the type line recolored, the collector line hidden, and the name moved.
+    let drag = place_edit(session.doc(), "card-art", &Placement::shift(30.0, -20.0)).unwrap();
+    session.execute(drag, "Move art").unwrap();
+    let Layer::Text(kind) = layer(session.doc(), "type") else { panic!() };
+    let mut style = serde_json::to_value(&kind.style).unwrap();
+    style["color"] = json!([1.0, 0.0, 0.0, 1.0]);
+    let props = |v: Value| v.as_object().unwrap().clone();
+    session.execute(Edit::SetLayerProps { id: "type".into(), props: props(json!({ "style": style })) }, "Recolor").unwrap();
+    session.execute(Edit::SetLayerProps { id: "col-top".into(), props: props(json!({ "visible": false })) }, "Hide").unwrap();
+
+    // The rules text is edited: a rebuild.
+    let mut edited = eldrazi.clone();
+    edited["oracle_text"] = json!("a\nb");
+    let next = bench.build(&mut session, &request(&card(edited.clone()))).unwrap();
+    let Layer::Art(art) = layer(session.doc(), "card-art") else { panic!() };
+    assert_eq!(art.transform, [placed[0], placed[1], placed[2] + 30.0, placed[3], placed[4], placed[5] - 20.0], "the art stays where it was dragged");
+    let Layer::Text(kind) = layer(session.doc(), "type") else { panic!() };
+    assert_eq!(kind.style.color, [1.0, 0.0, 0.0, 1.0]);
+    assert!(!layer(session.doc(), "col-top").base().visible);
+    // The fill was made for where the engine put the art, and the engine's plan has not changed, so it stays too.
+    assert!(next.fill_kept);
+    assert!(runs(session.doc(), "rules-c").contains('b'));
+
+    // Where the engine changes the same thing, the engine wins: a new type line replaces the old words, but keeps the hand-picked color only if the style is untouched by it.
+    edited["type_line"] = json!("Creature — Cat");
+    bench.build(&mut session, &request(&card(edited))).unwrap();
+    assert_eq!(runs(session.doc(), "type"), "Creature — Cat");
+    let Layer::Art(art) = layer(session.doc(), "card-art") else { panic!() };
+    assert_eq!(art.transform[2], placed[2] + 30.0);
+    // Undo steps back through the rebuilds and the hand changes in order.
+    assert!(session.undo() && session.undo());
+    assert!(!layer(session.doc(), "col-top").base().visible);
+    assert!(session.undo());
+    assert!(layer(session.doc(), "col-top").base().visible);
+}
