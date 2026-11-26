@@ -453,3 +453,58 @@ fn a_host_that_scales_the_frame_itself_is_told_only_what_changed_and_moving_the_
     assert_eq!(at(&s, 105, 65), [128, 128, 128, 255]);
     assert_frame_is_exact(&mut s);
 }
+
+#[test]
+fn zooming_out_and_in_to_another_part_hands_the_host_what_was_drawn_there() {
+    // The host keeps its own copy of each frame and is sent only what changed. Mirror that here:
+    // whatever the session says changed is copied, and the copy must match the frame where it is on screen.
+    let mut doc = Doc::empty(960, 640, 72.0);
+    doc.root.children = vec![rect("bg", 0.0, 0.0, 960.0, 640.0, WHITE), rect("near", 40.0, 40.0, 100.0, 100.0, GRAY), rect("far", 700.0, 440.0, 200.0, 150.0, GRAY)];
+    let mut s = Session::new(doc, AssetBytes::new());
+    s.set_direct(true);
+    let mut host: std::collections::HashMap<u32, Vec<u8>> = std::collections::HashMap::new();
+    fn take(s: &mut Session, host: &mut std::collections::HashMap<u32, Vec<u8>>) {
+        let dirty = s.take_display_dirty();
+        let (pixels, w, h, per) = s.display();
+        let copy = host.entry(per).or_insert_with(|| vec![0; (w * h * 4) as usize]);
+        if let Some(d) = dirty {
+            for y in d.y..d.y + d.h {
+                let row = ((y as u32 * w + d.x as u32) * 4) as usize;
+                copy[row..row + d.w as usize * 4].copy_from_slice(&pixels[row..row + d.w as usize * 4]);
+            }
+        }
+    }
+    let shows = |s: &Session, host: &std::collections::HashMap<u32, Vec<u8>>, x: u32, y: u32| -> [u8; 4] {
+        let (_, w, _, per) = s.display();
+        let i = ((y / per * w + x / per) * 4) as usize;
+        host[&per][i..i + 4].try_into().unwrap()
+    };
+    // Zoomed in on the top-left corner, out, and quickly in again on the bottom-right, several times over.
+    for round in 0..3 {
+        s.set_view(View { scale: 1.0, x: 0.0, y: 0.0, w: 300, h: 200 });
+        take(&mut s, &mut host);
+        assert_eq!(shows(&s, &host, 90, 90), [128, 128, 128, 255], "round {round}");
+        s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 300, h: 200 });
+        s.set_view(View { scale: 0.6, x: 0.0, y: 0.0, w: 300, h: 200 });
+        s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 300, h: 200 });
+        take(&mut s, &mut host);
+        assert_eq!(shows(&s, &host, 800, 500), [128, 128, 128, 255], "round {round}");
+        // Straight from the small copy to the real pixels somewhere not yet drawn.
+        s.set_view(View { scale: 1.0, x: 660.0, y: 440.0, w: 300, h: 200 });
+        take(&mut s, &mut host);
+        assert_eq!((shows(&s, &host, 800, 500), shows(&s, &host, 680, 460)), ([128, 128, 128, 255], [255, 255, 255, 255]), "round {round}");
+        // And with an edit made while zoomed out.
+        s.set_view(View { scale: 0.25, x: 0.0, y: 0.0, w: 300, h: 200 });
+        take(&mut s, &mut host);
+        let props = json!({ "visible": round % 2 == 1 }).as_object().unwrap().clone();
+        s.execute(Edit::SetLayerProps { id: "far".into(), props }, "Toggle").unwrap();
+        take(&mut s, &mut host);
+        s.set_view(View { scale: 1.0, x: 660.0, y: 440.0, w: 300, h: 200 });
+        take(&mut s, &mut host);
+        let expected = if round % 2 == 1 { [128, 128, 128, 255] } else { [255, 255, 255, 255] };
+        assert_eq!(shows(&s, &host, 800, 500), expected, "round {round}");
+        let props = json!({ "visible": true }).as_object().unwrap().clone();
+        s.execute(Edit::SetLayerProps { id: "far".into(), props }, "Show").unwrap();
+        take(&mut s, &mut host);
+    }
+}

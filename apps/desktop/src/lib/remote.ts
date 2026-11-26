@@ -24,15 +24,19 @@ export type RemoteCore = Async<Omit<Core, "display" | "viewPixels" | "dirty" | "
 
 /**
  * Start the core in its worker. `onFrame` is given each part of the picture
- * a call changed, before that call's promise settles.
+ * a call changed, and `onDisplay` which frame is on display after each call
+ * (by how many document pixels one of its pixels covers), before that call's
+ * promise settles.
  */
-export function startCore(onFrame: (part: FramePart) => void): RemoteCore {
+export function startCore(onFrame: (part: FramePart) => void, onDisplay: (per: number) => void): RemoteCore {
   const worker = new Worker(new URL("./core.worker.ts", import.meta.url), { type: "module" });
   const waiting = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>();
   let next = 1;
   worker.onmessage = (event: MessageEvent<Reply>) => {
-    const { id, result, error, frame } = event.data;
+    const { id, result, error, frame, on } = event.data;
     if (frame) onFrame(frame);
+    // Which frame is on display can change with nothing in it changing: zooming back to one the window already has.
+    if (on !== undefined) onDisplay(on);
     const call = waiting.get(id);
     waiting.delete(id);
     if (error !== undefined) call?.reject(new Error(error));

@@ -73,7 +73,7 @@
   };
 
   {
-    const started = startCore((part) => takeFrame(part));
+    const started = startCore(takeFrame, onDisplay);
     started
       .sampleNames()
       .then((names) => {
@@ -106,9 +106,20 @@
       canvasFor.height = part.height;
     }
     canvasFor.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(part.pixels), part.at.width, part.at.height), part.at.x, part.at.y);
-    // The latest part says which frame is on display now.
+    painting_due ||= requestAnimationFrame(paint);
+  }
+
+  /**
+   * The core says which of its frames is on display after every call. It can change with
+   * nothing to send: zooming back out to a copy this window already has. The frame shown
+   * here has to follow, or the screen keeps drawing the zoomed-in frame, which is only
+   * filled in where it has been looked at.
+   */
+  function onDisplay(shown: number) {
+    const canvasFor = backings.get(shown);
+    if (!canvasFor || (backing === canvasFor && per === shown)) return;
     backing = canvasFor;
-    per = part.per;
+    per = shown;
     painting_due ||= requestAnimationFrame(paint);
   }
 
@@ -816,6 +827,15 @@
     status = `Brush color ${color}`;
   }
 
+  // The menu a right-click on a layer's row opens.
+  let menu = $state<{ x: number; y: number; id: string } | null>(null);
+  const menuLayer = $derived(menu && doc ? (find(menu.id)?.layer ?? null) : null);
+  /** Do one of the menu's actions on its layer, which the right-click selected. */
+  function fromMenu(action: () => unknown) {
+    menu = null;
+    action();
+  }
+
   function duplicateSelected() {
     if (!active) return;
     const id = active;
@@ -1056,7 +1076,7 @@
   const cursorSize = $derived((size * view.scale) / dpr());
 </script>
 
-<svelte:window onkeydown={key} />
+<svelte:window onkeydown={key} onpointerdown={(e) => menu && !(e.target as HTMLElement).closest(".menu") && (menu = null)} onblur={() => (menu = null)} />
 
 <main class:with-card={hasNative}>
   <header>
@@ -1303,6 +1323,11 @@
           class:drop-below={dropAt?.id === layer.id && dropAt.where === "below"}
           class:drop-inside={dropAt?.id === layer.id && dropAt.where === "inside"}
           onpointerdown={(e) => rowDown(e, layer.id)}
+          oncontextmenu={(e) => {
+            e.preventDefault();
+            select(layer.id);
+            menu = { x: e.clientX, y: e.clientY, id: layer.id };
+          }}
         >
           <span class="grip" title="Drag a row to another place in the list: onto the top half of a row to go above it, the bottom half to go below (or into a group)">⠿</span>
           <input type="checkbox" checked={layer.visible} onchange={() => toggle(layer)} title="Visible" />
@@ -1325,6 +1350,17 @@
       </ol>
     {/if}
   </aside>
+
+  {#if menu && menuLayer}
+    <div class="menu" style:left="{Math.min(menu.x, window.innerWidth - 190)}px" style:top="{Math.min(menu.y, window.innerHeight - 190)}px" role="menu">
+      <button role="menuitem" onclick={() => fromMenu(duplicateSelected)}>Duplicate layer <kbd>Ctrl+J</kbd></button>
+      <button role="menuitem" onclick={() => fromMenu(() => toggle(menuLayer))}>{menuLayer.visible ? "Hide" : "Show"}</button>
+      <button role="menuitem" onclick={() => fromMenu(() => step(1))}>Move up <kbd>Ctrl+]</kbd></button>
+      <button role="menuitem" onclick={() => fromMenu(() => step(-1))}>Move down <kbd>Ctrl+[</kbd></button>
+      {#if menuLayer.kind === "text"}<button role="menuitem" onclick={() => fromMenu(() => editText(menuLayer.id))}>Edit the text…</button>{/if}
+      <button role="menuitem" class="danger" onclick={() => fromMenu(removeSelected)}>Delete layer <kbd>Del</kbd></button>
+    </div>
+  {/if}
 
   <footer>
     <span>{status}</span>
@@ -1393,6 +1429,11 @@
   header select { background: #3a3d43; color: inherit; border: 1px solid #50545c; border-radius: 4px; padding: 3px 6px; font: inherit; }
   .handle.turn { left: 50%; top: -22px; border-radius: 50%; cursor: grab; }
   .typing { position: absolute; background: rgba(255, 255, 255, 0.92); color: #111; border: 1px solid #5b9dff; padding: 2px 4px; resize: both; font-family: inherit; z-index: 2; }
+  .menu { position: fixed; z-index: 10; min-width: 170px; display: flex; flex-direction: column; padding: 4px; background: #2b2d31; border: 1px solid #50545c; border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); font-size: 13px; }
+  .menu button { display: flex; justify-content: space-between; gap: 16px; background: none; border: none; border-radius: 4px; padding: 5px 8px; text-align: left; }
+  .menu button:hover { background: #3d4270; }
+  .menu button.danger:hover { background: #7a2e2e; }
+  .menu kbd { color: #8a8d94; font: inherit; font-size: 11px; }
   .grip { cursor: grab; color: #6d7078; padding: 0 2px; user-select: none; }
   aside ul li { touch-action: none; user-select: none; -webkit-user-select: none; }
   aside.reordering, aside.reordering * { cursor: grabbing !important; }

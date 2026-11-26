@@ -152,6 +152,9 @@ struct Proxy {
     frame: Raster,
     /// The host has been handed this copy's frame before, so it only needs what changed since.
     shown: bool,
+    /// What changed in this copy's frame, in its own pixels, that the host has not been handed
+    /// yet: noted while it was on display and not collected before another frame took its place.
+    unsent: Option<Region>,
     /// Areas of the document that changed and have not been drawn in this copy: what was
     /// off screen during a drag, and everything that changed while the copy was put by.
     stale: Vec<Region>,
@@ -624,35 +627,48 @@ impl Session {
         }
         // The copy in use is put by with a note of what changes meanwhile: going back to it
         // later costs drawing those areas, not the whole of it.
+        // What the host was still owed of the frame going off display is kept with that frame:
+        // a quick zoom out and in changes frames faster than the host collects.
+        let owed = self.display_dirty.take();
+        match &mut self.proxy {
+            Some(proxy) => proxy.unsent = union(proxy.unsent, owed),
+            None => self.full_unshown = union(self.full_unshown, owed),
+        }
         self.spare.extend(self.proxy.take());
-        // What the host needs of the frame now coming on display: all of it the first time,
-        // and afterwards only what is drawn into it from here on.
-        self.display_dirty = None;
+        // What the host needs of the frame now coming on display: all of it the first time, and
+        // afterwards what it was still owed and what is drawn into it from here on.
         if level > 0 {
             let proxy = match self.spare.iter().position(|p| p.level == level) {
                 Some(at) => self.spare.swap_remove(at),
                 None => {
                     let k = 1 << level;
                     let size = Region::new(0, 0, (self.doc.width as i32 + k - 1) / k, (self.doc.height as i32 + k - 1) / k);
-                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, shown: false, stale: vec![self.whole()], renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
+                    Proxy { level, doc: Doc::empty(1, 1, 72.0), doc_stale: true, shown: false, unsent: None, stale: vec![self.whole()], renderer: Renderer::new(), frame: Raster::new(size), made: HashMap::new(), texts: TextOutlines::new() }
                 }
             };
+            let mut proxy = proxy;
             let seen = proxy.shown;
+            let owed = proxy.unsent.take();
             let frame = proxy.frame.region;
             self.proxy = Some(proxy);
             self.catch_up();
-            if self.direct && !seen {
-                self.display_dirty = Some(frame);
+            if self.direct {
+                self.display_dirty = if seen { union(self.display_dirty, owed) } else { Some(frame) };
             }
         } else {
             // The real pixels on screen again: draw what changed while they were not shown.
             let visible = self.visible();
             let due: Vec<Region> = self.stale.iter().filter_map(|area| area.intersect(&visible)).collect();
+            // What is drawn here is new to the host as well as what was drawn while the frame was
+            // off display. (Left out, a quick zoom out and in to another part of the card showed
+            // that part as it last was, or empty: drawn here, never sent.)
+            let mut fresh = None;
             for area in due {
                 self.draw_full(area);
+                fresh = union(fresh, Some(area));
             }
             if self.direct {
-                self.display_dirty = if self.full_shown { self.full_unshown.take() } else { Some(self.whole()) };
+                self.display_dirty = if self.full_shown { union(self.full_unshown.take(), fresh) } else { Some(self.whole()) };
                 self.full_unshown = None;
             }
         }

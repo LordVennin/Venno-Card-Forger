@@ -18,7 +18,8 @@ import wasmUrl from "../wasm/cardsmith.wasm?url";
 /** The part of the frame a call changed: where it goes in the frame, and its pixels (straight RGBA). */
 export type FramePart = { per: number; width: number; height: number; at: Rect; pixels: ArrayBuffer };
 export type Call = { id: number; method: string; args: unknown[] };
-export type Reply = { id: number; result?: unknown; error?: string; frame?: FramePart };
+/** `on` says which frame is on display after the call, whether or not any of it changed. */
+export type Reply = { id: number; result?: unknown; error?: string; frame?: FramePart; on?: number };
 
 let core: Core | undefined;
 const ready = fetch(wasmUrl)
@@ -29,9 +30,10 @@ const ready = fetch(wasmUrl)
     core = loaded;
   });
 
-/** What changed in the frame on display since last asked, cut out of the core's memory. */
-function changed(core: Core): FramePart | undefined {
+/** Which frame is on display, and what changed in it since last asked, cut out of the core's memory. */
+function changed(core: Core, reply: Reply): FramePart | undefined {
   const shown = core.display();
+  reply.on = shown.per;
   const at = shown.dirty;
   if (!at || at.width <= 0 || at.height <= 0) return undefined;
   const out = new Uint8ClampedArray(at.width * at.height * 4);
@@ -75,12 +77,12 @@ self.onmessage = async (event: MessageEvent<Call>) => {
     // Bytes made for the caller (a saved file, an exported picture) are handed over, not copied.
     reply.result = made;
     if (made instanceof Uint8Array) transfer.push(made.buffer);
-    reply.frame = changed(core!);
+    reply.frame = changed(core!, reply);
     if (reply.frame) transfer.push(reply.frame.pixels);
   } catch (err) {
     reply.error = err instanceof Error ? err.message : String(err);
     // Whatever was drawn before the call failed still has to reach the screen.
-    if (core) reply.frame = changed(core);
+    if (core) reply.frame = changed(core, reply);
     if (reply.frame) transfer.push(reply.frame.pixels);
   }
   (self as unknown as Worker).postMessage(reply, transfer);
