@@ -209,7 +209,7 @@ fn frame_layers_follow_the_cards_colors_and_kind() {
     assert_eq!(runs(&doc, "type-shift"), "Creature — Cat");
     // A color the template has no layer for is reported, not fatal.
     let (_, warnings) = build(&card(json!({ "mana_cost": "{B}" })), &Options::default());
-    assert!(warnings.iter().any(|w| w.contains("no \"B\" layer among its twins layers")), "{warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("no \"B\" layer in its \"Name & Title Boxes\" group")), "{warnings:?}");
 }
 
 #[test]

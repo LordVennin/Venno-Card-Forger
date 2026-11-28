@@ -36,6 +36,7 @@ type Exports = {
   cs_stroke_through(ptr: number, count: number): void;
   cs_prepare_stroke(ptr: number, len: number, budget: number): number;
   cs_font_names(): void;
+  cs_template_styles(): void;
   cs_export_png(): number;
   cs_asset_bytes(ptr: number, len: number): number;
   cs_save(): number;
@@ -84,6 +85,8 @@ export type BuildRequest = {
   setSize?: number | null;
   /** Whether the card's text casts a shadow. Left out or null, the template decides. */
   textShadows?: boolean | null;
+  /** Which of the template's looks; left out, the first that draws the card. */
+  style?: string | null;
   removeFlavor?: boolean;
   removeReminder?: boolean;
   hideFlavorDivider?: boolean;
@@ -347,6 +350,12 @@ export class Core {
   duplicate(id: string): string {
     this.check(this.passText(id, (ptr, len) => this.x.cs_duplicate(ptr, len)));
     return decoder.decode(this.out());
+  }
+
+  /** The looks the open template offers ("Normal", "Fullart"…); fewer than two means nothing to choose. */
+  templateStyles(): string[] {
+    this.x.cs_template_styles();
+    return JSON.parse(decoder.decode(this.out()));
   }
 
   /** The PostScript names of the loaded fonts. */

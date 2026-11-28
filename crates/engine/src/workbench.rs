@@ -55,6 +55,9 @@ pub struct BuildRequest {
     /// Whether the card's text casts a shadow; left out, the template decides.
     #[serde(default)]
     pub text_shadows: Option<bool>,
+    /// Which of the template's looks ("Fullart", "Stargazing"); left out, the first that draws the card.
+    #[serde(default)]
+    pub style: Option<String>,
     #[serde(default)]
     pub remove_flavor: bool,
     #[serde(default)]
@@ -111,6 +114,11 @@ impl Workbench {
         self.template.doc.clone()
     }
 
+    /// The looks the template offers ("Normal", "Fullart", "Stargazing"); one or none means there is nothing to choose.
+    pub fn styles(&self) -> Vec<String> {
+        crate::classes::styles(&self.template.file).iter().map(|s| s.name.to_string()).collect()
+    }
+
     pub fn template_id(&self) -> &str {
         &self.template.id
     }
@@ -157,6 +165,7 @@ impl Workbench {
             basic_watermark: read(&request.watermark_svg),
             set_size: request.set_size,
             text_shadows: request.text_shadows,
+            style: request.style.clone(),
             ..Options::default()
         };
         Ok((card, options))

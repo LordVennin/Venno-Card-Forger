@@ -2,371 +2,441 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Ported from Proxyshop src/templates/normal.py (BorderlessVectorTemplate),
-// src/templates/_vector.py (VectorTemplate), src/helpers/colors.py
-// (get_pinline_gradient) and src/schema/colors.py (pinlines_color_map).
+// Ported from Proxyshop src/templates/_vector.py (VectorTemplate),
+// src/templates/_core.py (create_blended_layer, create_blended_solid_color,
+// generate_layer), src/templates/normal.py (EtchedTemplate,
+// ClassicRemasteredTemplate, UniversesBeyondTemplate, LOTRTemplate),
+// src/helpers/colors.py (get_pinline_gradient), src/schema/colors.py (the
+// color maps) and src/_state.py (masks, gradient_locations).
 
-//! The frame of Proxyshop's borderless vector template.
+//! Proxyshop's vector templates: the frame is shapes, each part of it a
+//! group whose look comes from texture layers inside it (one per color,
+//! blended through masks for two colors) or from a flat color or a
+//! left-to-right blend laid over it.
 //!
-//! Its frame is drawn with shapes that carry no color of their own. The card
-//! picks which shapes show (the textbox comes in four heights) and each part
-//! of the frame is then colored by a layer clipped to it: a flat color, or a
-//! left-to-right blend for a two-color card.
-//!
-//! Layers are found by name, as Proxyshop's script finds them, starting from
-//! the groups the importer bound.
-//!
-//! Built: cards of the normal layout, with or without rules text, and the
-//! color indicator. Not yet: nicknames, tokens, and the transform and modal
-//! faces.
+//! The steps are VectorTemplate's; each template class changes which shapes,
+//! masks and colors are used, as its Proxyshop class does.
 
-use super::{plain, Builder, Options, Plan};
-use cardsmith_cards::frame_logic::GOLD;
+use super::borderless::{color, copy_mask, rgb, Paint};
+use super::{Builder, Plan};
+use crate::classes::Class;
 use cardsmith_cards::layout::CardData;
-use cardsmith_cards::rules_text::strip_reminder_text;
 use cardsmith_core::commands::Edit;
-use cardsmith_core::doc::{build::rect_path, Color, Layer};
-use cardsmith_core::text::layout_text;
+use cardsmith_core::doc::Color;
 use cardsmith_core::tree;
-use serde_json::{json, Value};
+use serde_json::json;
 
-fn rgb(r: u8, g: u8, b: u8) -> Color {
-    [r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0, 1.0]
+/// A color map: a frame color by its name ("W", "Gold", "Land").
+type Map = &'static [(&'static str, [u8; 3])];
+
+const PINLINES: Map = &[("W", [246, 246, 239]), ("U", [0, 117, 190]), ("B", [39, 38, 36]), ("R", [239, 56, 39]), ("G", [0, 123, 67]), ("Gold", [246, 210, 98]), ("Land", [174, 151, 135]), ("Artifact", [230, 236, 242]), ("Colorless", [230, 236, 242]), ("Vehicle", [77, 45, 5])];
+const INDICATOR: Map = &[("W", [248, 244, 240]), ("U", [0, 109, 174]), ("B", [57, 52, 49]), ("R", [222, 60, 35]), ("G", [0, 109, 66]), ("Artifact", [181, 197, 205]), ("Colorless", [214, 214, 220]), ("Land", [165, 150, 132])];
+const CROWN: Map = &[("W", [248, 244, 240]), ("U", [0, 109, 174]), ("B", [57, 52, 49]), ("R", [222, 60, 35]), ("G", [0, 109, 66]), ("Gold", [239, 209, 107]), ("Land", [165, 150, 132]), ("Artifact", [181, 197, 205]), ("Colorless", [214, 214, 220])];
+const ETCHED: Map = &[("W", [252, 254, 255]), ("U", [0, 117, 190]), ("B", [39, 38, 36]), ("R", [239, 56, 39]), ("G", [0, 123, 67]), ("Gold", [246, 210, 98]), ("Land", [136, 120, 98]), ("Artifact", [194, 210, 221]), ("Colorless", [194, 210, 221]), ("Vehicle", [77, 45, 5])];
+const UNIVERSES: Map = &[("W", [246, 247, 241]), ("U", [0, 131, 193]), ("B", [44, 40, 33]), ("R", [237, 66, 31]), ("G", [5, 129, 64]), ("Gold", [239, 209, 107]), ("Land", [165, 150, 132]), ("Artifact", [227, 228, 230]), ("Colorless", [227, 228, 230]), ("Vehicle", [77, 45, 5])];
+const LOTR_LIGHT: Map = &[("W", [230, 220, 185]), ("U", [72, 142, 191]), ("B", [126, 128, 127]), ("R", [217, 94, 76]), ("G", [97, 143, 102]), ("Gold", [246, 213, 125]), ("Land", [181, 162, 149]), ("Artifact", [210, 219, 227]), ("Colorless", [210, 219, 227]), ("Vehicle", [77, 45, 5])];
+const LOTR_DARK: Map = &[("W", [134, 123, 105]), ("U", [44, 51, 103]), ("B", [44, 43, 39]), ("R", [118, 34, 34]), ("G", [13, 68, 45]), ("Gold", [158, 124, 78]), ("Land", [103, 90, 74]), ("Artifact", [61, 88, 109]), ("Colorless", [78, 91, 101]), ("Vehicle", [76, 51, 20])];
+
+fn lookup(map: Map, key: &str) -> Color {
+    map.iter().find(|(k, _)| *k == key).map_or([0.0, 0.0, 0.0, 1.0], |(_, c)| rgb(c[0], c[1], c[2]))
 }
 
-fn hex(code: u32) -> Color {
-    rgb((code >> 16) as u8, (code >> 8) as u8, code as u8)
-}
-
-/// Name boxes, P/T box and textbox: dark, so the white text reads.
-fn dark(key: &str) -> Option<Color> {
-    Some(hex(match key {
-        "W" => 0x958676,
-        "U" => 0x045482,
-        "B" => 0x282523,
-        "R" => 0x93362a,
-        "G" => 0x134f23,
-        "Gold" => 0x9a883f,
-        "Land" | "Hybrid" => 0xa79c8e,
-        "Artifact" => 0x48555c,
-        "Colorless" => 0x74726b,
-        "Vehicle" => 0x4c3314,
-        _ => return None,
-    }))
-}
-
-fn pinlines(key: &str) -> Option<Color> {
-    Some(match key {
-        "W" => rgb(246, 246, 239),
-        "U" => rgb(0, 117, 190),
-        "B" => rgb(39, 38, 36),
-        "R" => rgb(239, 56, 39),
-        "G" => rgb(0, 123, 67),
-        "Gold" => rgb(246, 210, 98),
-        "Land" => rgb(174, 151, 135),
-        "Artifact" | "Colorless" => rgb(230, 236, 242),
-        "Vehicle" => rgb(77, 45, 5),
-        _ => return None,
-    })
-}
-
-fn crown(key: &str) -> Option<Color> {
-    Some(hex(match key {
-        "W" => 0xf8f4f0,
-        "U" => 0x006dae,
-        "B" => 0x393431,
-        "R" => 0xde3c23,
-        "G" => 0x006d42,
-        "Gold" => 0xefd16b,
-        "Land" => 0xa59684,
-        "Artifact" => 0xb5c5cd,
-        "Colorless" => 0xd6d6dc,
-        _ => return None,
-    }))
-}
-
-/// What a part of the frame is colored with.
-#[derive(Debug, PartialEq)]
-enum Paint {
-    Flat(Color),
-    /// Stops across the card from left to right, as (position 0..1, color).
-    Blend(Vec<(f64, Color)>),
-}
-
-/// The color or blend for a color string: a name ("Gold", "Land"), one color
-/// letter, or two to four letters blended left to right. Unknown colors are black.
-fn paint(colors: &str, map: fn(&str) -> Option<Color>) -> Paint {
-    const BLACK: Color = [0.0, 0.0, 0.0, 1.0];
-    let of = |key: &str| map(key).unwrap_or(BLACK);
+/// Proxyshop's `get_pinline_gradient`: one color flat, two to four blended left to right.
+pub(crate) fn gradient(colors: &str, map: Map) -> Paint {
     if colors.is_empty() {
-        return Paint::Flat(of("Artifact"));
+        return Paint::Flat(lookup(map, "Artifact"));
     }
     let letters: Vec<String> = colors.chars().map(String::from).collect();
-    // Where one color has fully given way to the next, as shares of the width.
     let places: &[f64] = match letters.len() {
-        2 => &[0.40, 0.60],
-        3 => &[0.29, 0.40, 0.60, 0.71],
-        4 if colors != "Land" && colors != GOLD => &[0.20, 0.30, 0.45, 0.55, 0.70, 0.80],
-        _ => return Paint::Flat(of(colors)),
+        2 if multicolor(colors) => &[0.40, 0.60],
+        3 if multicolor(colors) => &[0.26, 0.36, 0.64, 0.74],
+        4 if multicolor(colors) => &[0.20, 0.30, 0.45, 0.55, 0.70, 0.80],
+        5 if multicolor(colors) => &[0.20, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.80],
+        _ => return Paint::Flat(lookup(map, colors)),
     };
-    // Each color holds from the end of the blend before it to the start of the one after.
-    Paint::Blend(places.iter().enumerate().map(|(i, at)| (*at, of(&letters[i.div_ceil(2)]))).collect())
+    Paint::Blend(places.iter().enumerate().map(|(i, at)| (*at, lookup(map, &letters[i.div_ceil(2)]))).collect())
 }
 
-/// Color a group: a layer just above it, clipped to it, covering the card.
-fn color(build: &mut Builder, group: &str, what: &str, paint: Paint) -> Option<String> {
-    let path = tree::locate(&build.doc, group)?;
-    let (at, parent) = path.split_last()?;
-    let parent = if parent.is_empty() { build.doc.root.base.id.clone() } else { tree::layer_at(&build.doc, parent).id().to_string() };
-    let (w, h) = (build.doc.width as f64, build.doc.height as f64);
-    let slug: String = what.to_lowercase().replace(' ', "-");
-    let mut layer = json!({
-        "kind": "shape", "id": format!("card-color-{slug}"), "name": format!("{what} color"), "visible": true, "opacity": 1, "blend": "normal",
-        "clip": true, "role": "frame.color", "path": { "d": rect_path(0.0, 0.0, w, h) }, "fill": { "type": "solid", "color": [0, 0, 0, 1] }
-    });
-    match paint {
-        Paint::Flat(color) => layer["fill"]["color"] = json!(color),
-        Paint::Blend(stops) => {
-            let stops: Vec<Value> = stops.iter().map(|(offset, color)| json!({ "offset": offset, "color": color })).collect();
-            layer["effects"] = json!([{ "type": "gradientOverlay", "enabled": true, "blend": "normal", "opacity": 1, "gradient": { "stops": stops }, "style": "linear", "angle": 0, "scale": 1 }]);
-        }
-    }
-    match serde_json::from_value::<Layer>(layer) {
-        Ok(layer) => {
-            build.edit(Edit::AddLayer { parent, layer, index: Some(at + 1) });
-            Some(format!("card-color-{slug}"))
-        }
-        Err(e) => {
-            build.warn(format!("The {what} color layer could not be made: {e}"));
-            None
-        }
-    }
+/// A string of color letters ("WU"), not a name ("Gold").
+fn multicolor(colors: &str) -> bool {
+    !colors.is_empty() && colors.chars().all(|c| "WUBRG".contains(c))
 }
 
-/// Give `to` the mask of `from`, optionally set to hide the layer's effects too.
-fn copy_mask(build: &mut Builder, from: &str, to: &str, hides_effects: bool) {
-    let Some(mut mask) = tree::find(&build.doc, from).and_then(|l| serde_json::to_value(l).ok()).map(|v| v["mask"].clone()).filter(Value::is_object) else { return };
-    mask["enabled"] = json!(true);
-    if hides_effects {
-        mask["hidesEffects"] = json!(true);
-    }
-    build.set(to, json!({ "mask": mask }));
+/// What a part of the frame is made of.
+enum Look {
+    /// Texture layers in the group, by name: one, or several blended through masks.
+    Textures(String),
+    /// Several named texture layers, blended.
+    TextureList(Vec<String>),
+    /// A flat color or blend laid over the group.
+    Paint(Paint),
 }
 
-/// The dot beside the type line of a card whose color is not in its cost.
-fn indicator(key: &str) -> Option<Color> {
-    Some(match key {
-        "W" => rgb(248, 244, 240),
-        "U" => rgb(0, 109, 174),
-        "B" => rgb(57, 52, 49),
-        "R" => rgb(222, 60, 35),
-        "G" => rgb(0, 109, 66),
-        "Artifact" => rgb(181, 197, 205),
-        "Colorless" => rgb(214, 214, 220),
-        "Land" => rgb(165, 150, 132),
-        _ => return None,
-    })
+struct Vector<'a, 'b> {
+    build: &'a mut Builder<'b>,
+    /// Colors at or above this count fall back to the pinlines color (gold).
+    color_limit: usize,
 }
 
-fn center_y(build: &mut Builder, id: Option<&String>) -> Option<f64> {
-    build.area(id?).map(|a| (a[1] + a[3]) / 2.0)
-}
-
-/// Switch on and color the frame of the borderless vector template for a card.
-pub(crate) fn frame(build: &mut Builder, card: &CardData, options: &Options) -> Plan {
-    let b = &build.template.bindings;
-    let f = &card.frame;
-    let kind = if card.is_creature { "rulesCreature" } else { "rulesNoncreature" };
-
-    // ---- how tall a textbox ----------------------------------------------------------
-
-    let oracle = if options.remove_reminder { strip_reminder_text(&card.oracle_text) } else { card.oracle_text.clone() };
-    let flavor = if options.remove_flavor { "" } else { card.flavor_text.as_str() };
-    // Nothing to write and not a basic land: no textbox at all, and the type line at the foot of the card.
-    let textless = oracle.is_empty() && flavor.is_empty() && !card.is_basic_land;
-    let size = if textless {
-        "Textless"
-    } else if card.is_basic_land {
-        "Short"
-    } else {
-        // By how many lines the text takes in the tallest textbox, counting one more for flavor text.
-        let test = build.bound(&b.text, &format!("{kind}.tall")).and_then(|id| build.text(&id));
-        let lines = test.map_or(0, |mut layer| {
-            layer.content = plain(&if flavor.is_empty() { oracle.clone() } else { format!("{oracle}\n{flavor}") });
-            layout_text(&layer, build.fonts).lines + usize::from(!flavor.is_empty())
-        });
-        match lines {
-            0..=4 => "Short",
-            5 => "Medium",
-            6 => "Normal",
-            _ => "Tall",
-        }
-    };
-    let key = size.to_lowercase();
-
-    // ---- which shapes ----------------------------------------------------------------
-
-    let group = |name: &str| build.bound(&b.groups, name);
-    let (pin, twins, textbox, pt, crown_outer, masks, border) = (group("pinlinesShapes"), group("twinsShapes"), group("textboxShapes"), group("ptBoxShapes"), group("crownShapes"), group("masks"), group("border"));
-    let type_shape = build.named(pin.as_deref(), &["Shape", "Typeline", size]);
-    let mut shapes = vec![
-        build.named(pin.as_deref(), &["Shape", "Card Name", "Normal"]),
-        type_shape.clone(),
-        build.named(twins.as_deref(), &["Shape", "Card Name", "Normal"]),
-        build.named(twins.as_deref(), &["Shape", "Typeline", size]),
-    ];
-    if !textless {
-        shapes.push(build.named(pin.as_deref(), &["Shape", "Textbox", size]));
-        shapes.push(build.named(textbox.as_deref(), &["Shape", size]));
-    }
-    for shape in &shapes {
-        match shape {
-            Some(id) => build.show(id),
-            None => build.warn(format!("The template is missing one of the shapes of its {} frame.", size.to_lowercase())),
-        }
-    }
-    // With no textbox the border is cut differently at the foot of the card.
-    if textless {
-        if let (Some(cut), Some(border)) = (build.named(masks.as_deref(), &["Border", "Textless"]), border) {
-            copy_mask(build, &cut, &border, false);
-        }
+impl Vector<'_, '_> {
+    fn group(&self, name: &str) -> Option<String> {
+        self.build.named(None, &[name])
     }
 
-    // The pinlines are cut where this textbox height needs them cut, stroke and all.
-    let cut = build.named(masks.as_deref(), &["Pinlines", size]);
-    if let (Some(cut), Some(pin)) = (&cut, &pin) {
-        copy_mask(build, cut, pin, true);
+    fn under(&self, group: Option<&str>, path: &[&str]) -> Option<String> {
+        group.and_then(|g| self.build.named(Some(g), path))
     }
 
-    // ---- colors ----------------------------------------------------------------------
-
-    // One or two colors are shown as themselves; more than that is gold.
-    let few = (1..3).contains(&f.identity.chars().count());
-    let lines = if f.is_hybrid || few {
-        f.identity.as_str()
-    } else if (2..=5).contains(&f.pinlines.chars().count()) && f.pinlines.chars().all(|c| "WUBRG".contains(c)) {
-        GOLD
-    } else {
-        f.pinlines.as_str()
-    };
-    let boxes = if f.is_hybrid { f.identity.as_str() } else { f.twins.as_str() };
-    let pt_color = match (f.is_hybrid, boxes) {
-        (true, _) => &f.identity[f.identity.len().saturating_sub(1)..],
-        (false, "Artifact") if card.is_vehicle => "Vehicle",
-        (false, other) => other,
-    };
-    // An artifact's textbox stays artifact-colored whatever its color.
-    let text_color = if card.is_artifact { "Artifact" } else if f.is_hybrid || few { f.identity.as_str() } else { f.twins.as_str() };
-
-    // Without a textbox a creature's power and toughness go on the type line when there is a set symbol
-    // (the symbol has the corner); otherwise in a P/T box of their own, lower down.
-    let pt_in_type = textless && options.symbol.is_some();
-    let mut pt_shift = (0.0, 0.0);
-    if card.is_creature && !pt_in_type {
-        let lower = if textless { build.named(None, &["PT Box Textless"]) } else { None };
-        if let (Some(lower), Some(usual)) = (&lower, &pt) {
-            // The numbers move with the box: by the distance between the two boxes' shapes.
-            let center = |build: &mut Builder, id: &str| build.named(Some(id), &["Shape", "PT Box"]).and_then(|shape| build.area(&shape)).map(|a| ((a[0] + a[2]) / 2.0, (a[1] + a[3]) / 2.0));
-            if let (Some(to), Some(from)) = (center(build, lower), center(build, usual)) {
-                pt_shift = (to.0 - from.0, to.1 - from.1);
-            }
-        }
-        if let Some(pt) = lower.as_ref().or(pt.as_ref()) {
-            build.show(pt);
-            color(build, pt, "PT Box", paint(pt_color, dark));
-        }
-    }
-    if let Some(pin) = &pin {
-        build.show(pin);
-        color(build, pin, "Pinlines", paint(lines, pinlines));
-    }
-    if let Some(twins) = &twins {
-        color(build, twins, "Name and Title Boxes", paint(boxes, dark));
-    }
-    if let (Some(textbox), false) = (&textbox, textless) {
-        color(build, textbox, "Textbox", paint(text_color, dark));
-    }
-    if card.is_legendary {
-        if let Some(outer) = &crown_outer {
-            // The crown is cut by the same mask as the pinlines, and the pinlines make way for it.
-            if let Some(cut) = &cut {
-                copy_mask(build, cut, outer, true);
-            }
-            if let Some(mut vector) = pin.as_deref().and_then(|id| tree::find(&build.doc, id)).and_then(|l| serde_json::to_value(l).ok()).map(|v| v["vectorMask"].clone()).filter(Value::is_object) {
-                vector["enabled"] = json!(true);
-                build.set(pin.as_deref().unwrap_or_default(), json!({ "vectorMask": vector }));
-            }
-            match build.named(Some(outer), &["Legendary Crown"]) {
-                Some(inner) => {
-                    build.show(&inner);
-                    color(build, &inner, "Legendary Crown", paint(lines, crown));
-                }
-                None => build.warn("The template's legendary crown could not be found.".into()),
-            }
-        }
-    }
-    // ---- what the later steps need ---------------------------------------------------
-
-    // One type line serves every textbox height: it moves with its bar.
-    let tall_shape = build.named(pin.as_deref(), &["Shape", "Typeline", "Tall"]);
-    let type_dy = match (center_y(build, type_shape.as_ref()), center_y(build, tall_shape.as_ref())) {
-        (Some(this), Some(tall)) => this - tall,
-        _ => 0.0,
-    };
-    // At the foot of the card the type line sits a little further left and the symbol a little further right.
-    let nudge = if textless { (10.0 * build.doc.width as f64 / 3264.0).round() } else { 0.0 };
-
-    // The color indicator: a dot in the card's color, split in halves or thirds for two or three.
-    let letters: Vec<String> = card.color_indicator.chars().map(String::from).collect();
-    if let (false, Some(dot)) = (letters.is_empty(), build.named(None, &["Color Indicator"])) {
-        build.show(&dot);
-        let divider = match letters.len() {
-            2 => Some("2"),
-            3 => Some("3"),
-            _ => None,
-        };
-        if let Some(lines) = divider.and_then(|name| build.named(Some(&dot), &[name])) {
-            build.show(&lines);
-        }
-        let cuts: &[&str] = match letters.len() {
+    /// The masks that split a part of the frame between `n` colors.
+    fn masks(&self, n: usize) -> Vec<String> {
+        let names: &[&str] = match n {
             2 => &["1/2"],
             3 => &["1/3", "2/3"],
+            4 => &["1/4", "1/2", "3/4"],
+            5 => &["1/5", "2/5", "3/5", "4/5"],
             _ => &[],
         };
-        // The last color goes on top, cut away to show the ones under it.
-        if let Some(shape) = build.named(Some(&dot), &["Shape"]) {
-            // Each is added just above the shape, so adding them last color first leaves the first color at the bottom.
-            for (from_top, letter) in letters.iter().rev().enumerate() {
-                let Some(layer) = color(build, &shape, &format!("Color Indicator {letter}"), Paint::Flat(indicator(letter).unwrap_or([0.0, 0.0, 0.0, 1.0]))) else { continue };
-                if let Some(cut) = cuts.get(from_top).and_then(|name| build.named(masks.as_deref(), &["Color Indicator", name])) {
-                    copy_mask(build, &cut, &layer, false);
+        let masks = self.group("Masks");
+        names.iter().filter_map(|name| self.under(masks.as_deref(), &[name])).collect()
+    }
+
+    /// Proxyshop's `create_blended_layer`: show the texture for each color and blend them through the masks.
+    fn blend_textures(&mut self, group: &str, colors: Vec<String>, masks: &[String], pinlines: &str) {
+        let colors = if colors.len() >= self.color_limit { vec![pinlines.to_string()] } else { colors };
+        let mut shown: Vec<String> = Vec::new();
+        for (i, key) in colors.iter().enumerate() {
+            let Some(layer) = self.build.named(Some(group), &[key]) else {
+                let name = tree::find(&self.build.doc, group).map(|l| l.base().name.clone()).unwrap_or_default();
+                self.build.missing(&name, key);
+                continue;
+            };
+            self.build.show(&layer);
+            if let (Some(previous), Some(mask)) = (shown.last(), i.checked_sub(1).and_then(|m| masks.get(m))) {
+                // Under the one before, which is cut by the mask to let it show.
+                if let Some(path) = tree::locate(&self.build.doc, previous) {
+                    let index = *path.last().unwrap_or(&0);
+                    let parent = self.build.parent_of(previous).unwrap_or_else(|| self.build.doc.root.base.id.clone());
+                    let from = tree::locate(&self.build.doc, &layer).and_then(|p| p.last().copied()).unwrap_or(0);
+                    // Removing a layer below the target shifts the target down by one.
+                    let index = if from < index { index - 1 } else { index };
+                    self.build.edit(Edit::MoveLayer { id: layer.clone(), parent, index });
+                }
+                copy_mask(self.build, mask, previous, false);
+            }
+            shown.push(layer);
+        }
+    }
+
+    /// Proxyshop's `generate_layer`.
+    fn generate(&mut self, group: Option<&str>, what: &str, look: Look, masks: &[String], pinlines: &str) {
+        let Some(group) = group else { return };
+        match look {
+            Look::Textures(colors) => {
+                let list = if multicolor(&colors) { colors.chars().map(String::from).collect() } else { vec![colors] };
+                self.blend_textures(group, list, masks, pinlines);
+            }
+            Look::TextureList(list) => self.blend_textures(group, list, masks, pinlines),
+            Look::Paint(paint) => {
+                color(self.build, group, what, paint);
+            }
+        }
+    }
+
+    /// Proxyshop's `create_blended_solid_color` for the color indicator: the last color at the bottom, the others cut by masks above it.
+    fn indicator(&mut self, card: &CardData) {
+        let letters: Vec<String> = card.color_indicator.chars().rev().map(String::from).collect();
+        let Some(dot) = self.group("Color Indicator") else { return };
+        let Some(shape) = self.build.named(Some(&dot), &["Shape"]) else { return };
+        self.build.show(&dot);
+        let (outline, masks): (Option<&str>, &[&str]) = match letters.len() {
+            2 => (Some("2"), &["1/2"]),
+            3 => (Some("3"), &["1/3", "2/3"]),
+            _ => (None, &[]),
+        };
+        if let Some(id) = outline.and_then(|name| self.build.named(Some(&dot), &[name])) {
+            self.build.show(&id);
+        }
+        let mask_group = self.group("Masks");
+        let masks: Vec<String> = masks.iter().filter_map(|name| self.under(mask_group.as_deref(), &["Color Indicator", name])).collect();
+        // Each new color is laid just above the shape, under the ones before it, and the one before is cut by the next mask.
+        let mut previous: Option<String> = None;
+        for (i, letter) in letters.iter().enumerate() {
+            let Some(layer) = color(self.build, &shape, &format!("Color Indicator {letter} {i}"), Paint::Flat(lookup(INDICATOR, letter))) else { continue };
+            if let (Some(previous), Some(mask)) = (&previous, i.checked_sub(1).and_then(|m| masks.get(m))) {
+                copy_mask(self.build, mask, previous, false);
+            }
+            previous = Some(layer);
+        }
+    }
+}
+
+/// Copy a layer's effects onto another.
+fn copy_effects(build: &mut Builder, from: &str, to: &str) {
+    let Some(effects) = tree::find(&build.doc, from).and_then(|l| serde_json::to_value(&l.base().effects).ok()) else { return };
+    build.set(to, json!({ "effects": effects, "effectsEnabled": true }));
+}
+
+/// Switch on and color the frame of a vector template for a card.
+pub(crate) fn frame(build: &mut Builder, card: &CardData, class: Class) -> Plan {
+    let mut plan = Plan::new(build, card);
+    let f = &card.frame;
+    let identity = f.identity.clone();
+    let pinlines = f.pinlines.clone();
+    let twins = f.twins.clone();
+    let is_vehicle = card.is_vehicle && class != Class::ClassicRemastered;
+    let background = if !is_vehicle && f.background == "Vehicle" { "Artifact".to_string() } else { f.background.clone() };
+    // Classic Remastered blends up to three colors (Proxyshop's "Max.Colors" setting, 3 unless changed).
+    let color_limit = if class == Class::ClassicRemastered { 4 } else { 3 };
+    let mut v = Vector { build, color_limit };
+    let within = |n: usize| 1 < n && n < color_limit;
+    let n = identity.chars().count();
+    let blended = if within(n) { identity.clone() } else { pinlines.clone() };
+    let half = v.masks(2);
+    let default_masks = if half.is_empty() { Vec::new() } else { half.clone() };
+
+    // ---- groups ------------------------------------------------------------------------
+
+    let mut pinlines_group = v.group(if class == Class::ClassicRemastered { "Pinlines & Textbox" } else { "Pinlines" });
+    let twins_group = if class == Class::ClassicRemastered { None } else { v.group("Name & Title Boxes") };
+    let mut textbox_group = v.group("Textbox");
+    let background_group = match class {
+        Class::Etched => None,
+        Class::UniversesBeyond if f.is_colorless => None,
+        _ => v.group("Background"),
+    };
+    let crown_group = v.group("Legendary Crown");
+    let pt_group = v.group("PT Box");
+    let border_group = v.group("Border");
+
+    // ---- colors ------------------------------------------------------------------------
+
+    let pinlines_map = match class {
+        Class::Etched => ETCHED,
+        Class::UniversesBeyond => UNIVERSES,
+        Class::Lotr => LOTR_LIGHT,
+        _ => PINLINES,
+    };
+    let has_pinlines = card.is_land || card.is_artifact; // Classic Remastered: only lands and artifacts have colored pinlines
+    let pinlines_look: Option<Paint> = match class {
+        Class::Etched => Some(gradient(if card.is_artifact && !card.is_land { "Artifact" } else { &pinlines }, ETCHED)),
+        Class::ClassicRemastered if !has_pinlines => None,
+        Class::ClassicRemastered if n >= color_limit => Some(gradient(if n == 2 { "Gold" } else { &pinlines }, PINLINES)),
+        Class::ClassicRemastered => Some(gradient(&identity, PINLINES)),
+        _ => Some(gradient(&blended, pinlines_map)),
+    };
+    let twins_look = match class {
+        Class::Lotr => Look::Paint(gradient(&twins, LOTR_DARK)),
+        _ => Look::Textures(twins.clone()),
+    };
+    // Classic Remastered's background and textbox are lists of texture names.
+    let cr_background: Vec<String> = if within(n) && !has_pinlines {
+        identity.chars().map(String::from).collect()
+    } else if n == 2 && !has_pinlines {
+        vec!["Gold".into()]
+    } else {
+        vec![background.clone()]
+    };
+    let textbox_look = match class {
+        Class::Etched => Look::Textures(pinlines.clone()),
+        Class::Lotr => Look::Textures(twins.clone()),
+        Class::ClassicRemastered => Look::TextureList(if card.is_land {
+            if within(n) {
+                identity.chars().map(|c| format!("{c} Land")).collect()
+            } else if n == 2 {
+                vec!["Gold Land".into()]
+            } else if pinlines == "Land" {
+                vec!["Land".into()]
+            } else {
+                vec![format!("{pinlines} Land")]
+            }
+        } else if f.is_hybrid {
+            if within(n) {
+                identity.chars().map(String::from).collect()
+            } else if n == 2 {
+                vec!["Gold".into()]
+            } else {
+                vec![pinlines.clone()]
+            }
+        } else {
+            vec![background.clone()]
+        }),
+        _ => Look::Textures(blended.clone()),
+    };
+    let background_look = match class {
+        Class::Lotr => Look::Textures(pinlines.clone()),
+        Class::ClassicRemastered => Look::TextureList(cr_background.clone()),
+        _ => Look::Textures(background.clone()),
+    };
+    let pt_look = match class {
+        Class::Lotr => Look::Paint(gradient(if is_vehicle { "Vehicle" } else { &twins }, LOTR_DARK)),
+        // The last of the background's colors (Proxyshop's "Gold.PT" setting off).
+        Class::ClassicRemastered => Look::Textures(cr_background.last().cloned().unwrap_or(twins.clone())),
+        // Proxyshop compares a flag with a name here, so the vehicle box is never chosen.
+        Class::UniversesBeyond => Look::Textures(twins.clone()),
+        _ if is_vehicle && background == "Vehicle" => {
+            plan.pt_white = true;
+            Look::Textures("Vehicle".into())
+        }
+        _ => Look::Textures(twins.clone()),
+    };
+    let masks = match class {
+        Class::ClassicRemastered => {
+            if within(n) {
+                v.masks(n)
+            } else {
+                Vec::new()
+            }
+        }
+        _ => default_masks,
+    };
+
+    // ---- Classic Remastered's nested groups --------------------------------------------
+
+    let mut pinlines_groups: Vec<String> = pinlines_group.iter().cloned().collect();
+    if class == Class::ClassicRemastered {
+        let outer = pinlines_group.clone();
+        textbox_group = v.under(outer.as_deref(), &["Textbox"]);
+        if let Some(textbox) = &textbox_group {
+            if let Some(effects) = v.build.named(Some(textbox), &[if pinlines_look.is_some() { "EFFECTS LAND" } else { "EFFECTS" }]) {
+                copy_effects(v.build, &effects, textbox);
+            }
+        }
+        pinlines_groups = if pinlines_look.is_some() {
+            let mut groups: Vec<String> = ["Pinlines Top", "Pinlines Bottom"].iter().filter_map(|name| v.under(outer.as_deref(), &[name])).collect();
+            if card.is_legendary {
+                groups.extend(v.under(crown_group.as_deref(), &["Pinlines"]));
+            }
+            groups
+        } else {
+            Vec::new()
+        };
+        pinlines_group = pinlines_groups.first().cloned();
+        if pinlines_look.is_some() {
+            if let Some(id) = v.build.named(None, &["Text and Icons", "Textbox Reference Pinlines"]).and_then(|id| v.build.area(&id)) {
+                plan.textbox = Some(id);
+            }
+        }
+    }
+    if class == Class::Lotr && card.is_legendary {
+        pinlines_groups.extend(crown_group.clone());
+    }
+
+    // ---- shapes ------------------------------------------------------------------------
+
+    let shapes: Vec<Option<String>> = match class {
+        Class::Etched => vec![card.is_legendary.then(|| v.under(pinlines_group.as_deref(), &["Shape", "Legendary"])).flatten()],
+        Class::Lotr => Vec::new(),
+        Class::ClassicRemastered => vec![v.under(pinlines_group.as_deref(), &["Shape", "Normal"]), v.under(textbox_group.as_deref(), &["Shape", "Normal"])],
+        _ => vec![
+            v.under(border_group.as_deref(), &[if card.is_legendary { "Legendary" } else { "Normal" }]),
+            v.under(pinlines_group.as_deref(), &["Shape", "Normal"]),
+            v.under(twins_group.as_deref(), &["Shape", "Normal"]),
+            v.under(textbox_group.as_deref(), &["Shape", "Normal"]),
+        ],
+    };
+    for id in shapes.into_iter().flatten() {
+        v.build.show(&id);
+    }
+
+    // ---- masks -------------------------------------------------------------------------
+
+    match class {
+        Class::Etched if card.is_legendary => {
+            if let Some(id) = v.under(pinlines_group.as_deref(), &["Shape", "Normal"]) {
+                v.build.enable_mask(&id);
+            }
+        }
+        Class::Lotr if card.is_legendary => {
+            if let Some(id) = &pinlines_group {
+                v.build.enable_mask(id);
+            }
+        }
+        Class::UniversesBeyond => {
+            let mask = v.group("Masks");
+            if let (Some(from), Some(to)) = (v.under(mask.as_deref(), &["Pinlines", "Normal"]), &pinlines_group) {
+                copy_mask(v.build, &from, to, false);
+            }
+        }
+        _ => {}
+    }
+
+    // ---- frame parts -------------------------------------------------------------------
+
+    if card.is_creature {
+        if let Some(pt) = &pt_group {
+            v.build.show(pt);
+            v.generate(Some(pt), "PT Box", pt_look, &masks, &pinlines);
+        }
+    }
+    if !card.color_indicator.is_empty() {
+        v.indicator(card);
+    }
+    if let Some(look) = pinlines_look {
+        for group in pinlines_groups.clone() {
+            v.build.show(&group);
+            v.generate(Some(&group), &format!("Pinlines {}", tree::find(&v.build.doc, &group).map(|l| l.base().name.clone()).unwrap_or_default()), Look::Paint(clone_paint(&look)), &masks, &pinlines);
+        }
+    }
+    v.generate(twins_group.as_deref(), "Name and Title Boxes", twins_look, &masks, &pinlines);
+    v.generate(textbox_group.as_deref(), "Textbox", textbox_look, &masks, &pinlines);
+    v.generate(background_group.as_deref(), "Background", background_look, &masks, &pinlines);
+
+    // Colorless Universes Beyond cards show the art through their boxes.
+    if class == Class::UniversesBeyond && f.is_colorless {
+        for group in [&twins_group, &textbox_group].into_iter().flatten() {
+            v.build.set(group, json!({ "fillOpacity": 0.6 }));
+        }
+    }
+
+    // ---- legendary crown ---------------------------------------------------------------
+
+    if card.is_legendary {
+        match class {
+            Class::Etched => {
+                if let Some(id) = v.group("Legendary Shadows") {
+                    v.build.show(&id);
+                }
+            }
+            Class::Lotr => {
+                if let Some(id) = &crown_group {
+                    v.build.show(id);
+                }
+            }
+            Class::UniversesBeyond => {
+                if let Some(id) = &crown_group {
+                    v.build.show(id);
+                    v.generate(Some(id), "Legendary Crown", Look::Paint(gradient(&pinlines, CROWN)), &[], &pinlines);
+                }
+                if let Some(id) = v.under(pinlines_group.as_deref(), &["Shape", "Legendary"]) {
+                    v.build.show(&id);
+                }
+            }
+            _ => {
+                if let Some(id) = &crown_group {
+                    v.build.show(id);
+                    let look = match class {
+                        Class::ClassicRemastered => Look::TextureList(cr_background.clone()),
+                        _ => Look::Textures(blended.clone()),
+                    };
+                    v.generate(Some(id), "Legendary Crown", look, &masks, &pinlines);
                 }
             }
         }
-        build.translate(&dot, -nudge, type_dy);
     }
-    let textbox_ref = build.bound(&b.text_refs, "textbox").and_then(|id| build.named(Some(&id), &[size])).and_then(|id| build.area(&id));
-    Plan {
-        pt_white: false,
-        rules: if textless { None } else { build.bound(&b.text, &format!("{kind}.{key}")) },
-        textbox: textbox_ref,
-        art_ref: build.bound(&b.art_refs, &key).or_else(|| build.bound(&b.art_refs, "normal")),
-        type_dy,
-        // White text on art needs its shadow; a basic land has no rules text to shadow.
-        shadows: true,
-        shadow_rules: !card.is_basic_land,
-        textless,
-        type_dx: -nudge,
-        symbol_dx: if card.is_creature && !pt_in_type { 0.0 } else { nudge },
-        pt_in_type,
-        pt_shift,
-        // Proxyshop sizes the bevel to the textbox.
-        watermark_bevel: match size {
-            "Short" => 20.0,
-            "Medium" => 22.0,
-            "Normal" => 25.0,
-            _ => 28.0,
-        },
+
+    // ---- what the text steps need ------------------------------------------------------
+
+    if class == Class::Etched {
+        // The divider is a group here.
+        plan.divider = v.build.named(None, &["Text and Icons", "Divider"]);
+    }
+    plan
+}
+
+fn clone_paint(paint: &Paint) -> Paint {
+    match paint {
+        Paint::Flat(c) => Paint::Flat(*c),
+        Paint::Blend(stops) => Paint::Blend(stops.clone()),
     }
 }
 
@@ -375,15 +445,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn one_color_or_a_name_is_flat_and_several_colors_blend_left_to_right() {
-        assert_eq!(paint("U", pinlines), Paint::Flat(rgb(0, 117, 190)));
-        assert_eq!(paint("Gold", pinlines), Paint::Flat(rgb(246, 210, 98)));
-        assert_eq!(paint("Land", dark), Paint::Flat(hex(0xa79c8e)));
-        assert_eq!(paint("", crown), Paint::Flat(hex(0xb5c5cd)));
-        assert_eq!(paint("WU", pinlines), Paint::Blend(vec![(0.40, rgb(246, 246, 239)), (0.60, rgb(0, 117, 190))]));
-        let three = paint("WUB", pinlines);
-        assert_eq!(three, Paint::Blend(vec![(0.29, rgb(246, 246, 239)), (0.40, rgb(0, 117, 190)), (0.60, rgb(0, 117, 190)), (0.71, rgb(39, 38, 36))]));
-        // A color the map does not have is black rather than a failure.
-        assert_eq!(paint("X", pinlines), Paint::Flat([0.0, 0.0, 0.0, 1.0]));
+    fn gradients_follow_proxyshops_locations_and_names_stay_flat() {
+        assert_eq!(gradient("U", PINLINES), Paint::Flat(rgb(0, 117, 190)));
+        assert_eq!(gradient("Gold", PINLINES), Paint::Flat(rgb(246, 210, 98)));
+        assert_eq!(gradient("WU", PINLINES), Paint::Blend(vec![(0.40, rgb(246, 246, 239)), (0.60, rgb(0, 117, 190))]));
+        assert_eq!(gradient("WUB", ETCHED), Paint::Blend(vec![(0.26, rgb(252, 254, 255)), (0.36, rgb(0, 117, 190)), (0.64, rgb(0, 117, 190)), (0.74, rgb(39, 38, 36))]));
+        assert_eq!(gradient("", PINLINES), Paint::Flat(rgb(230, 236, 242)));
     }
 }

@@ -61,6 +61,9 @@
   let warnings = $state<string[]>([]);
   // Whether the card's text casts a shadow: the template's own choice, or the user's.
   let shadows = $state<"template" | "on" | "off">("template");
+  /** The template's looks, and the one chosen ("" for the first that draws the card). */
+  let styles = $state<string[]>([]);
+  let look = $state("");
 
   // Sets to choose from by name, and a symbol of the user's own in place of the set's.
   let sets = $state.raw<SetEntry[]>([]);
@@ -177,6 +180,8 @@
     try {
       const pack = await native.template(folder);
       await core.openTemplate(pack.doc, pack.manifest);
+      styles = await core.templateStyles();
+      if (!styles.includes(look)) look = "";
       assetFolder = folder;
       filePath = "";
       await opened();
@@ -241,6 +246,8 @@
         try {
           const pack = await native.template(assetFolder);
           const request = await core.resumeCard(pack.doc, pack.manifest);
+          styles = await core.templateStyles();
+          look = request.style ?? "";
           if (request.scryfall) {
             raw = request.scryfall;
             face = request.name ?? "";
@@ -441,7 +448,7 @@
     let report: BuildReport;
     try {
       const started = performance.now();
-      report = await core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, artPath: artPath || null, textShadows: shadows === "template" ? null : shadows === "on" });
+      report = await core.buildCard({ scryfall: $state.snapshot(raw), name: face, ...extras, artPath: artPath || null, textShadows: shadows === "template" ? null : shadows === "on", style: look || null });
       warnings = report.warnings;
       await changed();
       await loadImages();
@@ -626,6 +633,16 @@
       <label class="file quiet">Use an SVG… <input type="file" accept=".svg,image/svg+xml" onchange={ownSymbolChosen} /></label>
       {#if ownSymbol}<button class="quiet" onclick={setsSymbolAgain}>Use the set's</button>{/if}
     </div>
+  {/if}
+
+  {#if styles.length > 1}
+    <label title="Some templates hold several looks, such as the normal frame's full-art and Stargazing versions.">
+      Look
+      <select bind:value={look} onchange={() => raw && build()}>
+        <option value="">{styles[0]}</option>
+        {#each styles.slice(1) as name (name)}<option value={name}>{name}</option>{/each}
+      </select>
+    </label>
   {/if}
 
   {#if raw}

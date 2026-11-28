@@ -210,6 +210,12 @@ pub unsafe extern "C" fn cs_open_template(doc_ptr: *const u8, doc_len: usize, ma
     })
 }
 
+/// The looks the open template offers, as a JSON list of names, in the output buffer.
+#[no_mangle]
+pub extern "C" fn cs_template_styles() {
+    with(|s| s.out = serde_json::to_vec(&s.bench.as_ref().map(|b| b.styles()).unwrap_or_default()).unwrap_or_default());
+}
+
 /// Take up a saved card again: the open document was built on this template
 /// (its `doc.json` and `manifest.json`) in an earlier session. The request it
 /// was built from is in the output buffer, for the card form.

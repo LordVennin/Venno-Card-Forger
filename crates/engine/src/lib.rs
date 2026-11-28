@@ -32,9 +32,15 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
+pub mod classes;
+mod dfc;
+mod raster;
+mod borderless;
 pub mod svg;
 pub mod workbench;
 mod vector;
+
+use classes::Class;
 
 /// Which of a template's layers play which part. Written by the importer into
 /// the template's manifest.
@@ -62,6 +68,8 @@ pub struct Bindings {
 #[derive(Clone, Debug)]
 pub struct Template {
     pub id: String,
+    /// The name of the file it was imported from, without `.psd`: it says which of Proxyshop's classes draw on it.
+    pub file: String,
     pub doc: Doc,
     pub bindings: Bindings,
 }
@@ -72,7 +80,9 @@ impl Template {
         let doc = cardsmith_core::serialize::parse_doc(doc).map_err(|e| e.to_string())?;
         let manifest: Value = serde_json::from_str(manifest).map_err(|e| format!("manifest.json: {e}"))?;
         let bindings = serde_json::from_value(manifest["bindings"].clone()).map_err(|e| format!("manifest.json bindings: {e}"))?;
-        Ok(Template { id: manifest["id"].as_str().unwrap_or("template").to_string(), doc, bindings })
+        let id = manifest["id"].as_str().unwrap_or("template").to_string();
+        let file = manifest["source"]["file"].as_str().map(|f| f.trim_end_matches(".psd").trim_end_matches(".psb").to_string()).unwrap_or_else(|| id.clone());
+        Ok(Template { id, file, doc, bindings })
     }
 }
 
@@ -111,12 +121,14 @@ pub struct Options {
     pub font_italic: String,
     pub font_bold: String,
     pub font_symbol: String,
+    /// Which of the template's looks to use ("Fullart", "Stargazing"), when it has several. The first that draws the card otherwise.
+    pub style: Option<String>,
 }
 
 impl Default for Options {
     fn default() -> Options {
         let fonts = RulesFormat::for_dpi(72.0);
-        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, basic_watermark: None, set_size: None, text_shadows: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol }
+        Options { flavor_divider: true, remove_flavor: false, remove_reminder: false, vertical_fullart: false, art: None, symbol: None, basic_watermark: None, set_size: None, text_shadows: None, font_italic: fonts.font_italic, font_bold: fonts.font_bold, font_symbol: fonts.font_symbol, style: None }
     }
 }
 
@@ -195,6 +207,8 @@ fn replace_text(content: &mut RichText, find: &str, with: &str) -> bool {
 
 pub(crate) struct Builder<'a> {
     template: &'a Template,
+    #[allow(dead_code)] // read by the template classes still to come
+    class: Class,
     fonts: &'a Fonts,
     /// The template's document with the edits so far applied, for measuring.
     doc: Doc,
@@ -233,13 +247,36 @@ impl Builder<'_> {
         map.get(key).filter(|id| tree::find(&self.doc, id).is_some()).cloned()
     }
 
-    /// The layer of a toggle set for a color, with a warning when the template has none.
-    fn toggle(&mut self, set: &str, key: &str) -> Option<String> {
-        let found = self.template.bindings.toggles.get(set).and_then(|layers| self.bound(layers, key));
-        if found.is_none() && self.template.bindings.toggles.contains_key(set) {
-            self.warn(format!("The template has no \"{key}\" layer among its {set} layers."));
-        }
-        found
+    /// Say that the template has no layer for a color in one of its groups.
+    fn missing(&mut self, group: &str, key: &str) {
+        self.warn(format!("The template has no \"{key}\" layer in its \"{group}\" group."));
+    }
+
+    /// The group of text layers: bound by the importer, or found by Proxyshop's name.
+    fn text_group(&self) -> Option<String> {
+        self.bound(&self.template.bindings.groups, "text").or_else(|| self.named(None, &["Text and Icons"]))
+    }
+
+    /// Draw a text layer in white and switch its effects on, as Proxyshop does for text on glass.
+    fn whiten(&mut self, id: &str) {
+        self.color_text(id, [1.0, 1.0, 1.0, 1.0]);
+        self.set(id, json!({ "effectsEnabled": true }));
+    }
+
+    /// Set a text layer's color. Runs with a color of their own (mana symbols) keep it.
+    fn color_text(&mut self, id: &str, color: cardsmith_core::doc::Color) {
+        let Some(text) = self.text(id) else { return };
+        let mut style = text.style;
+        style.color = color;
+        self.set(id, json!({ "style": style }));
+    }
+
+    /// Switch a layer's vector mask on, if it has one.
+    fn enable_vector_mask(&mut self, id: &str) {
+        let Some(layer) = tree::find(&self.doc, id) else { return };
+        let Some(mut mask) = serde_json::to_value(layer).ok().map(|v| v["vectorMask"].clone()).filter(Value::is_object) else { return };
+        mask["enabled"] = json!(true);
+        self.set(id, json!({ "vectorMask": mask }));
     }
 
     fn text(&self, id: &str) -> Option<TextLayer> {
@@ -268,6 +305,11 @@ impl Builder<'_> {
                 let (x, y) = (pixel.transform[2], pixel.transform[5]);
                 Some([x, y, x + asset.width? as f64, y + asset.height? as f64])
             }
+            // A group: everything in it.
+            Layer::Group(group) => {
+                let ids: Vec<String> = group.children.iter().map(|c| c.id().to_string()).collect();
+                ids.iter().filter_map(|id| self.area(id)).reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])])
+            }
             _ => None,
         }
     }
@@ -285,12 +327,13 @@ impl Builder<'_> {
         };
         let (last, groups) = names.split_last()?;
         for name in groups {
-            group = group.children.iter().find_map(|c| match c {
+            group = group.children.iter().rev().find_map(|c| match c {
                 Layer::Group(g) if g.base.name == *name => Some(g),
                 _ => None,
             })?;
         }
-        group.children.iter().find(|c| c.base().name == *last).map(|c| c.id().to_string())
+        // From the top down, as Photoshop finds a layer by name.
+        group.children.iter().rev().find(|c| c.base().name == *last).map(|c| c.id().to_string())
     }
 
     /// Move a layer, and everything in it, by a number of pixels.
@@ -414,85 +457,64 @@ pub(crate) struct Plan {
     pub pt_shift: (f64, f64),
     /// Size of the bevel on a basic land's watermark.
     pub watermark_bevel: f64,
+    /// Name, type line and rules text drawn white, with their effects on (text on glass over the art).
+    pub white_name: bool,
+    pub white_type: bool,
+    pub white_rules: bool,
+    /// Rules text moves clear of the P/T box.
+    pub pt_ref: bool,
+    /// Where the set symbol goes, when not the bound reference; its size against that area, and a nudge down.
+    pub expansion: Option<String>,
+    pub symbol_scale: f64,
+    pub symbol_dy: f64,
+    /// The 1997 frame's collector line: "012/280 • SET" in one layer.
+    pub classic_collector: bool,
+    /// The flavor divider, when not the bound one (a group in some templates).
+    pub divider: Option<String>,
+    /// The name moves over for a two-faced card's transform icon or modal icon.
+    pub name_shifted: bool,
+    /// Name, type line and P/T drawn black (the pale back of an Eldrazi moon card).
+    pub black_text: bool,
+    /// The P/T's own effects switched on.
+    pub pt_effects: bool,
 }
 
-/// Frame layers of a template whose colors are pre-drawn layers.
-fn frame_raster(build: &mut Builder, card: &CardData) -> Plan {
-    let b = &build.template.bindings;
-    let frame = &card.frame;
-    // Name and type boxes.
-    if let Some(id) = build.toggle("twins", &frame.twins) {
-        build.show(&id);
-    }
-
-    // P/T box. A vehicle's is dark, so its numbers are white.
-    let vehicle = card.is_vehicle && frame.background == "Vehicle";
-    let mut pt_white = false;
-    if card.is_creature {
-        let own = vehicle.then(|| b.toggles.get("ptBox").and_then(|set| build.bound(set, "Vehicle"))).flatten();
-        pt_white = own.is_some();
-        if let Some(id) = own.or_else(|| build.toggle("ptBox", &frame.twins)) {
-            build.show(&id);
+impl Plan {
+    /// What the template's bindings give, before the frame step changes any of it.
+    pub(crate) fn new(build: &mut Builder, card: &CardData) -> Plan {
+        let b = &build.template.bindings;
+        let rules = build.bound(&b.text, if card.is_creature { "rulesCreature" } else { "rulesNoncreature" });
+        let textbox = build.bound(&b.text_refs, "textbox").and_then(|id| build.area(&id));
+        let art_ref = build.bound(&b.art_refs, "normal");
+        let expansion = build.bound(&b.text_refs, "expansion");
+        Plan {
+            pt_white: false,
+            rules,
+            textbox,
+            art_ref,
+            type_dy: 0.0,
+            shadows: false,
+            shadow_rules: false,
+            textless: false,
+            type_dx: 0.0,
+            symbol_dx: 0.0,
+            pt_in_type: false,
+            pt_shift: (0.0, 0.0),
+            watermark_bevel: 28.0,
+            white_name: false,
+            white_type: false,
+            white_rules: false,
+            pt_ref: true,
+            expansion,
+            symbol_scale: 1.0,
+            symbol_dy: 0.0,
+            classic_collector: false,
+            divider: None,
+            name_shifted: card.is_transform || card.is_mdfc,
+            black_text: false,
+            pt_effects: false,
         }
     }
-
-    // Pinlines and textbox: lands have their own set.
-    let pinlines = build.toggle(if card.is_land { "landPinlines" } else { "pinlines" }, &frame.pinlines);
-    if let Some(id) = &pinlines {
-        build.show(id);
-    }
-
-    // Color indicator, for cards whose color is not in their cost.
-    if !card.color_indicator.is_empty() {
-        if let Some(id) = build.toggle("colorIndicator", &card.color_indicator) {
-            build.show(&id);
-        }
-    }
-
-    // Background. Only vehicles get the vehicle one; enchantment creatures get the starry Nyx one where there is one.
-    let background = if !card.is_vehicle && frame.background == "Vehicle" { "Artifact" } else { frame.background.as_str() };
-    let nyx = card.is_nyx.then(|| b.toggles.get("nyx").and_then(|set| build.bound(set, background))).flatten();
-    let plain_background = if vehicle { b.toggles.get("background").and_then(|set| build.bound(set, "Vehicle").or_else(|| build.bound(set, "Artifact"))) } else { None };
-    if let Some(id) = nyx.or(plain_background).or_else(|| build.toggle("background", background)) {
-        build.show(&id);
-    }
-
-    // Legendary crown, and the border that makes room for it.
-    if card.is_legendary {
-        if let Some(crown) = build.toggle("crown", &frame.pinlines) {
-            build.show(&crown);
-            if let Some(borders) = b.toggles.get("border") {
-                if let (Some(normal), Some(legendary)) = (build.bound(borders, "Normal Border"), build.bound(borders, "Legendary Border")) {
-                    build.hide(&normal);
-                    build.show(&legendary);
-                }
-            }
-            // Nyx and companion cards have a hollow crown: masks cut the frame away behind it.
-            if card.is_nyx || card.is_companion {
-                if let Some(shadows) = build.bound(&b.layers, "shadows") {
-                    build.enable_mask(&shadows);
-                }
-                for inside in [Some(&crown), pinlines.as_ref()].into_iter().flatten() {
-                    if let Some(group) = build.parent_of(inside) {
-                        build.enable_mask(&group);
-                    }
-                }
-                if let Some(shadow) = build.bound(&b.layers, "crownShadow") {
-                    build.show(&shadow);
-                }
-            }
-            if card.is_companion {
-                if let Some(id) = b.toggles.get("companion").and_then(|set| build.bound(set, &frame.pinlines)) {
-                    build.show(&id);
-                }
-            }
-        }
-    }
-
-
-    let rules = build.bound(&b.text, if card.is_creature { "rulesCreature" } else { "rulesNoncreature" });
-    let textbox = build.bound(&b.text_refs, "textbox").and_then(|id| build.area(&id));
-    Plan { pt_white, rules, textbox, art_ref: build.bound(&b.art_refs, "normal"), type_dy: 0.0, shadows: false, shadow_rules: false, textless: false, type_dx: 0.0, symbol_dx: 0.0, pt_in_type: false, pt_shift: (0.0, 0.0), watermark_bevel: 28.0 }
 }
 
 /// Work out the edits that make `card` out of `template`.
@@ -505,7 +527,8 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     if b.kind != "raster" && b.kind != "vector" {
         return Err(format!("\"{}\" has no layer bindings the card engine understands; import it again with `pnpm import:psd`.", template.id));
     }
-    let mut build = Builder { template, fonts, doc: template.doc.clone(), edits: Vec::new(), warnings: Vec::new() };
+    let class = classes::class_for(&template.file, options.style.as_deref(), card.layout, card.is_front || !(card.is_transform || card.is_mdfc), b.kind == "vector")?;
+    let mut build = Builder { template, class, fonts, doc: template.doc.clone(), edits: Vec::new(), warnings: Vec::new() };
     let frame = &card.frame;
     // Photoshop lengths in Proxyshop are for a 3264 px wide card.
     let scale = template.doc.width as f64 / 3264.0;
@@ -513,7 +536,18 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
 
     // ---- frame layers ----------------------------------------------------------------
 
-    let mut plan = if b.kind == "vector" { vector::frame(&mut build, card, options) } else { frame_raster(&mut build, card) };
+    let mut plan = match class {
+        Class::BorderlessVector => borderless::frame(&mut build, card, options),
+        Class::M15 | Class::Fullart | Class::Stargazing | Class::Extended | Class::Invention | Class::Expedition | Class::Snow | Class::Miracle | Class::Classic | Class::Transform | Class::Mdfc => {
+            raster::frame(&mut build, card, class)
+        }
+        Class::Etched | Class::ClassicRemastered | Class::UniversesBeyond | Class::Lotr => vector::frame(&mut build, card, class),
+        other => return Err(format!("The {other:?} template class is not drawn yet.")),
+    };
+    if class == Class::ClassicRemastered {
+        plan.name_shifted = false;
+    }
+    dfc::frame(&mut build, card, class, &mut plan);
     // The template decides whether text casts a shadow, unless the user has said.
     if let Some(wanted) = options.text_shadows {
         plan.shadows = wanted;
@@ -538,6 +572,22 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     }).unwrap_or_default();
     let child = |name: &str| children.iter().find(|(n, _)| n == name).map(|(_, id)| id.clone());
     match (collector.as_deref(), child("Top"), child("Bottom")) {
+        // The 1997 frame: number and set in one layer, in place of the set layer.
+        (Some(info), _, _) if plan.classic_collector && !collector_line.is_empty() => {
+            let line = card.collector_data();
+            let number = if line.contains('/') { line[..line.len().saturating_sub(2)].to_string() } else { line.get(2..).unwrap_or("").to_string() };
+            if let Some(id) = &set {
+                build.hide(id);
+            }
+            build.show(info);
+            fill_basic(&mut build, info, "SET", &card.set);
+            fill_basic(&mut build, info, "NUM", &number);
+            build.set(info, json!({ "role": "card.collector" }));
+            if let Some(id) = &artist {
+                fill_basic(&mut build, id, "Artist", &card.artist);
+                build.set(id, json!({ "role": "card.artist" }));
+            }
+        }
         // Number and rarity above; set, language and artist below.
         (Some(group), Some(top), Some(bottom)) if !collector_line.is_empty() => {
             for id in [&artist, &set].into_iter().flatten() {
@@ -563,8 +613,11 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
                     fill_basic(&mut build, id, "EN", &card.lang);
                 }
                 if let Some(mut text) = build.text(id) {
-                    if let Some(first) = text.content.runs.first_mut() {
-                        first.text.insert_str(0, &card.set);
+                    // Most templates' set layer reads " • EN" and the set goes in front; some have a "SET" to replace.
+                    if !replace_text(&mut text.content, "SET", &card.set) {
+                        if let Some(first) = text.content.runs.first_mut() {
+                            first.text.insert_str(0, &card.set);
+                        }
                     }
                     build.set(id, json!({ "content": text.content, "role": "card.set" }));
                 }
@@ -597,13 +650,29 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         }
         build.write(id, &plain(text), role, more);
     };
-    if let Some(id) = build.bound(&b.text, "name") {
+    let name_layer = if plan.name_shifted {
+        let text = build.text_group();
+        let shifted = build.bound(&b.text, "nameShift").or_else(|| build.named(text.as_deref(), &["Card Name Shift"]));
+        if let (Some(_), Some(usual)) = (&shifted, build.bound(&b.text, "name")) {
+            build.hide(&usual);
+        }
+        shifted.or_else(|| build.bound(&b.text, "name"))
+    } else {
+        build.bound(&b.text, "name")
+    };
+    if let Some(id) = name_layer {
         // Basic lands have no mana cost to avoid.
         let right = match (&mana, card.is_basic_land) {
             (Some(mana), false) => build.layout(mana).and_then(|l| l.ink).map(|ink| ink[0]).or_else(|| build.text(mana).and_then(|t| t.origin).map(|o| o.x)),
             _ => None,
         };
         fitted_line(&mut build, &id, &card.name, "card.name", right);
+        if plan.black_text {
+            build.color_text(&id, [0.0, 0.0, 0.0, 1.0]);
+        }
+        if plan.white_name {
+            build.whiten(&id);
+        }
         if plan.shadows {
             build.shadow(&id);
         }
@@ -614,8 +683,13 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         build.show(shift);
     }
     // The set symbol: as tall as its reference area, against the area's right edge, centered on its height.
-    let expansion = build.bound(&b.text_refs, "expansion");
-    let symbol_area = expansion.as_deref().and_then(|id| build.area(id)).map(|a| [a[0] + plan.symbol_dx, a[1] + plan.type_dy, a[2] + plan.symbol_dx, a[3] + plan.type_dy]);
+    let expansion = plan.expansion.clone();
+    let symbol_area = expansion.as_deref().and_then(|id| build.area(id)).map(|a| {
+        // Some classes draw the symbol smaller than its area, about the area's middle.
+        let (inset_x, inset_y) = ((a[2] - a[0]) * (1.0 - plan.symbol_scale) / 2.0, (a[3] - a[1]) * (1.0 - plan.symbol_scale) / 2.0);
+        let dy = plan.type_dy + plan.symbol_dy;
+        [a[0] + plan.symbol_dx + inset_x, a[1] + dy + inset_y, a[2] + plan.symbol_dx - inset_x, a[3] + dy - inset_y]
+    });
     let mut symbol_left = None;
     if let (Some(symbol), Some(area), Some(reference)) = (&options.symbol, symbol_area, &expansion) {
         for skipped in &symbol.unsupported {
@@ -644,16 +718,23 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         // With no box for them, power and toughness end the type line.
         let line = if plan.pt_in_type && card.is_creature { format!("{} — {}/{}", card.type_line, card.power, card.toughness) } else { card.type_line.clone() };
         fitted_line(&mut build, &id, &line, "card.type", right);
+        if plan.black_text {
+            build.color_text(&id, [0.0, 0.0, 0.0, 1.0]);
+        }
+        if plan.white_type {
+            build.whiten(&id);
+        }
         if plan.shadows {
             build.shadow(&id);
         }
     }
+    dfc::hint(&mut build, card, class, &format, gap, step);
 
     // ---- rules text and P/T ----------------------------------------------------------
 
     let oracle = if options.remove_reminder { strip_reminder_text(&card.oracle_text) } else { card.oracle_text.clone() };
     let flavor = if options.remove_flavor { String::new() } else { card.flavor_text.clone() };
-    let divider = build.bound(&b.layers, "divider").filter(|_| options.flavor_divider && !oracle.is_empty() && !flavor.is_empty());
+    let divider = plan.divider.clone().or_else(|| build.bound(&b.layers, "divider")).filter(|_| options.flavor_divider && !oracle.is_empty() && !flavor.is_empty());
     // A few words alone in the box are centered.
     let centered = flavor.chars().count() <= 1 && oracle.chars().count() <= 70 && !oracle.contains('\n');
     // A basic land shows its land type's symbol, large, instead of rules text.
@@ -706,6 +787,9 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         let mut props = fit.clone();
         props["box"] = area.clone();
         build.write(id, &formatted.content, "card.rules", props);
+        if plan.white_rules {
+            build.whiten(id);
+        }
         if plan.shadow_rules {
             build.shadow(id);
         }
@@ -716,7 +800,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
         // type line. Here, if the lifted text would leave the top of the
         // textbox, the room it is fitted to is made shorter and it is fitted
         // again, until it clears the P/T box and stays inside.
-        let pt_area = card.is_creature.then(|| build.bound(&b.text_refs, "pt")).flatten().and_then(|id| build.area(&id));
+        let pt_area = (card.is_creature && plan.pt_ref).then(|| build.bound(&b.text_refs, "pt")).flatten().and_then(|id| build.area(&id));
         if let Some(pt) = pt_area {
             // The same margin from the top that fitting leaves.
             let top = textbox.map_or(layer.bounds.y, |t| t[1] + spare / 2.0);
@@ -750,11 +834,26 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
                 Some(Layer::Pixel(pixel)) => build.doc.assets.get(&pixel.asset).and_then(|a| a.height).map(|h| (pixel.transform, h as f64)),
                 _ => None,
             };
-            if let (Some(above), Some(below), Some((transform, height))) = (above, below, height) {
+            if let (Some(above), Some(below)) = (above, below) {
                 let middle = (above[3] + below[1]) / 2.0;
-                let mut moved = transform;
-                moved[5] = (middle - height / 2.0).round();
-                build.set(divider, json!({ "transform": moved, "visible": true, "role": "card.divider" }));
+                match height {
+                    Some((transform, height)) => {
+                        let mut moved = transform;
+                        moved[5] = (middle - height / 2.0).round();
+                        build.set(divider, json!({ "transform": moved, "visible": true, "role": "card.divider" }));
+                    }
+                    // A divider made of several layers: moved as a whole.
+                    None => {
+                        if let Some(area) = build.area(divider) {
+                            build.translate(divider, 0.0, (middle - (area[1] + area[3]) / 2.0).round());
+                        }
+                        build.set(divider, json!({ "visible": true, "role": "card.divider" }));
+                    }
+                }
+                // On glass the divider's effects make it white.
+                if plan.white_rules {
+                    build.set(divider, json!({ "effectsEnabled": true }));
+                }
             }
         }
     }
@@ -763,6 +862,12 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
             build.translate(&id, plan.pt_shift.0, plan.pt_shift.1);
             let more = if plan.pt_white { json!({ "style": build.text(&id).map(|t| { let mut s = t.style; s.color = [1.0, 1.0, 1.0, 1.0]; s }) }) } else { json!({}) };
             build.write(&id, &plain(&format!("{}/{}", card.power, card.toughness)), "card.pt", more);
+            if plan.black_text {
+                build.color_text(&id, [0.0, 0.0, 0.0, 1.0]);
+            }
+            if plan.pt_effects {
+                build.set(&id, json!({ "effectsEnabled": true }));
+            }
             if plan.shadows {
                 build.shadow(&id);
             }
@@ -775,7 +880,7 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
     if let Some(art) = &options.art {
         // Tall art, or a full-art frame when asked, goes in the full-art area if the template has one.
         let tall = art.height as f64 > art.width as f64 * 1.1;
-        let fullart = (frame.is_colorless || b.kind == "vector") && options.vertical_fullart;
+        let fullart = (frame.is_colorless || class.is_vector()) && options.vertical_fullart;
         let reference = (tall || fullart).then(|| build.bound(&b.art_refs, "fullArt")).flatten().or(plan.art_ref.clone()).and_then(|id| build.area(&id));
         match reference {
             Some(r) if art.width > 0 && art.height > 0 => {
@@ -798,9 +903,10 @@ pub fn build_card(template: &Template, card: &CardData, fonts: &Fonts, options: 
                 match layer {
                     Ok(layer) => {
                         build.edit(Edit::AddLayer { parent: parent.clone(), layer, index: Some(index) });
-                        // Extended and borderless frames always show past the art; a full-art frame (a colorless card) does
+                        // Extended and borderless frames always show past the art, and so does the glass of the full-art looks
+                        // (Proxyshop's FullartMod fills unless the art came in the full-art area); a full-art frame (a colorless card) does
                         // when its art sits in the ordinary art area.
-                        let always = b.kind == "vector" || b.art_fill.as_deref() == Some("always") || template.id.ends_with("-extended");
+                        let always = class.is_vector() || matches!(class, Class::Fullart | Class::Stargazing) || b.art_fill.as_deref() == Some("always") || template.id.ends_with("-extended");
                         let in_full_area = (tall || fullart) && build.bound(&b.art_refs, "fullArt").is_some();
                         if always || (frame.is_colorless && !in_full_area) {
                             let (cw, ch) = (template.doc.width as f64, template.doc.height as f64);

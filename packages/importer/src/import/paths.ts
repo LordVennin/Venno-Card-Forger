@@ -83,14 +83,15 @@ export function convertVectorPath(mask: Pick<LayerVectorMask, "paths" | "fillSta
   if (all("exclude")) return { d: paths.map((p) => subpath(knots(p))).join(""), fillRule: "evenodd", inverted: startsFull };
   if (all("combine")) return startsFull ? null : { d: union(), fillRule: "nonzero", inverted: false };
 
-  // Mixed operations. Added shapes wind one way and subtracted ones the other, which is
-  // right wherever added shapes do not overlap each other.
+  // Mixed operations. Added shapes wind one way and subtracted or excluded ones the other,
+  // which is right wherever added shapes do not overlap each other: an excluded shape then
+  // cuts a hole where it lies on an added one and adds itself elsewhere, as Photoshop's xor does.
   warn(`vector path mixes operations (${ops.join(", ")}); overlapping shapes may differ from Photoshop`);
   const d = paths
     .map((p, i) => {
       const k = knots(p);
       const clockwise = signedArea(k) >= 0;
-      const wantClockwise = ops[i] !== "subtract";
+      const wantClockwise = ops[i] !== "subtract" && ops[i] !== "exclude";
       return subpath(clockwise === wantClockwise ? k : reversed(k));
     })
     .join("");

@@ -98,7 +98,7 @@ cargo run --release -p cardsmith-cli -- samples <dir>                           
 cargo run --release -p cardsmith-cli -- text <suite.json> -o <dir> --fonts <dir>     # render a suite of rules text boxes
 cargo run --release -p cardsmith-cli -- card "<name or art file name>" [--set <code>] [--number <n>] [--raw]   # a card from Scryfall (cached); --raw for Scryfall's own JSON
 cargo run --release -p cardsmith-cli -- bulk <oracle | default>                      # download Scryfall bulk data for offline lookups
-cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.json> -o <png | .cardsmith> [--fonts <dir>] [--art <image>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--text-shadows on|off]   # build a card from an imported template, filling around the art where the frame shows past it
+cargo run --release -p cardsmith-cli -- build <template-dir> "<name>" | <card.json> -o <png | .cardsmith> [--fonts <dir>] [--art <image>] [--no-symbol] [--fill auto|sd|lama|patchmatch|none] [--seed <n>] [--prompt <text>] [--sd-cli <path>] [--text-shadows on|off] [--style <look>]   # build a card from an imported template, filling around the art where the frame shows past it
 cargo run --release -p cardsmith-cli -- symbols [--cache <dir>]                      # download set symbols and set data from hexproof.io for offline use
 cargo run --release -p cardsmith-cli -- models [--cache <dir>]                       # download the LaMa fill model and ONNX Runtime (about 240 MB) for the model-based fill tier
 cargo run --release -p cardsmith-cli -- models sd [--cache <dir>]                    # download the Stable Diffusion 1.5 inpainting model (4.3 GB) for --fill sd; see docs/TIER3.md

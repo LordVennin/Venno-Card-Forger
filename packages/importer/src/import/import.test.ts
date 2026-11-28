@@ -64,6 +64,9 @@ describe("convertVectorPath", () => {
     expect(warnings.join()).toMatch(/mixes operations/);
     // The subtracted square winds against the added one, so non-zero filling cuts a hole.
     expect(path.d).toContain("M5 10C5 10 10 10 10 10");
+    // An excluded shape inside an added one cuts a hole the same way (the Lord of the Rings background's window).
+    const window = convertVectorPath({ paths: [square(0, 0, 20, "combine"), square(5, 5, 5, "exclude")] }, () => {})!;
+    expect(window.d).toContain("M5 10C5 10 10 10 10 10");
   });
 });
 
